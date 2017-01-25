@@ -1,4 +1,4 @@
-// By Aidan Hunt, first created 24/1/17
+// By Aidan Hunt, first created 24/1/17, last edited 25/1/17
 // [Project description here]
 // Current Features:
 /*
@@ -16,6 +16,9 @@
 #include <stdio.h> // standard input/output for debugging
 #include <stdlib.h> // constains several useful various features
 #include <SDL.h> // sdl library for graphics features
+#include <SDL_image.h> // sdl library for using PNGs and other image formats
+#include <string> // tools for string manipulations
+#include <iostream> // contains cout output method
 #include "game.h" // contains program constants to avoid cluttering main file
 
 /* -------------------------- STRUCTS --------------------------- */
@@ -36,7 +39,7 @@ bool init(SDL_Window** window) { // initialize important SDL functionalities
         printf("Error Initializing SDL./n SDL_Error %s\n", SDL_GetError());
         success = false;
     } else {
-        *window = SDL_CreateWindow(WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED, 
+        *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, 
             SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
              SDL_WINDOW_SHOWN);
         if (window == NULL) {
@@ -47,10 +50,25 @@ bool init(SDL_Window** window) { // initialize important SDL functionalities
     return success;
 }
 
+void loadImage(std::string path, SDL_Surface** surface) {
+    SDL_Surface* surfaceAtPath = IMG_Load(path.c_str());
+    if (surfaceAtPath == NULL) { //ensure the image loaded correctly
+        std::cout << "Image failed to load\nSDL_image error " << IMG_GetError();
+    } else {
+        *surface = SDL_ConvertSurface(surfaceAtPath, (*surface)->format, 0);
+        if (*surface == NULL) {
+            std::cout << "Image failed conversion\nSDL_Error " << SDL_GetError();
+        }
+        SDL_FreeSurface(surfaceAtPath);
+    }
+}
+
 
 
 
 /* -------------------------- CLASSES --------------------------- */
+
+// Class to represent all player controlled characters
 class Player {
     // details about the characters location
     int posx = 0;
@@ -71,27 +89,33 @@ void Player::updatePosition(void) {
 
 int main(int argc, char const *argv[])
 {
-    int red = 0;
-    int blue = 0;
-    int green = 0;
-    int rounds = 0;
-
+    // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
     SDL_Window* window = NULL;
     SDL_Surface* background = NULL;
+    SDL_Surface* image = NULL;
+    SDL_Event eventHandler;
+
+
+    Player character;
+
     init(&window);
     background = SDL_GetWindowSurface(window);
 
 
-    while (rounds < 1000) {
-        SDL_FillRect(background, NULL, SDL_MapRGB(background->format, red, green, blue));
-        
-        red = (green * 2)%255;
-        green = (green + 2)%255;
-        blue = (blue + 1)%255;
-        rounds += 1;
-    
-        SDL_Delay(10);
+    loadImage(CHARACTER_IMAGE_LOCATION, &image);
+
+    while (gameRunning == true) {
+        while (SDL_PollEvent(&eventHandler) != 0) {
+            if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
+                gameRunning = false;
+            }
+
+        }
+        SDL_FillRect(background, NULL, SDL_MapRGB(background->format, 255, 255, 255));
+        SDL_BlitSurface(image, NULL, background, NULL);
+
+        SDL_Delay(MILLISECONDS_PER_SECOND/FRAMES_PER_SECOND);
         SDL_UpdateWindowSurface(window);
     }
 
