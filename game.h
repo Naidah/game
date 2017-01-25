@@ -10,7 +10,7 @@ const int MILLISECONDS_PER_SECOND = 100;
 const int FRAMES_PER_SECOND = 30; // desired framerate of the game
 
 // Character related constants
-const std::string CHARACTER_IMAGE_LOCATION = "Images/triangle.png";
+const std::string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
 
 // Screen Parameters
 const int SCREEN_WIDTH = 1280; // size of screen

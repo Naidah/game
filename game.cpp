@@ -50,17 +50,20 @@ bool init(SDL_Window** window) { // initialize important SDL functionalities
     return success;
 }
 
-void loadImage(std::string path, SDL_Surface** surface) {
+SDL_Surface* loadImage(std::string path, SDL_PixelFormat* format) {
+    SDL_Surface* output = NULL;
+    //SDL_Surface* surfaceAtPath = NULL;
     SDL_Surface* surfaceAtPath = IMG_Load(path.c_str());
     if (surfaceAtPath == NULL) { //ensure the image loaded correctly
-        std::cout << "Image failed to load\nSDL_image error " << IMG_GetError();
+        std::cout << "Image failed to load\nSDL_image error " << SDL_GetError();
     } else {
-        *surface = SDL_ConvertSurface(surfaceAtPath, (*surface)->format, 0);
-        if (*surface == NULL) {
+        output = SDL_ConvertSurface(surfaceAtPath, format, 0);
+        if (output == NULL) {
             std::cout << "Image failed conversion\nSDL_Error " << SDL_GetError();
         }
         SDL_FreeSurface(surfaceAtPath);
     }
+    return output;
 }
 
 
@@ -102,8 +105,7 @@ int main(int argc, char const *argv[])
     init(&window);
     background = SDL_GetWindowSurface(window);
 
-
-    loadImage(CHARACTER_IMAGE_LOCATION, &image);
+    image = loadImage(CHARACTER_IMAGE_LOCATION, background->format);
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
