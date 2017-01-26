@@ -75,7 +75,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
         cout << "Image failed to load\nSDL_image error " << SDL_GetError();
     } else {
         SDL_SetColorKey(surfaceAtPath, SDL_TRUE, SDL_MapRGB(
-            surfaceAtPath->format, colorKeyRed, colorKeyGreen, colorKeyBlue));
+         surfaceAtPath->format, COLOUR_KEY_RED, COLOUR_KEY_GREEN, COLOUR_KEY_BLUE));
         output = SDL_CreateTextureFromSurface(renderer, surfaceAtPath);
         if (output == NULL) {
             cout << "Surface failed conversion to texture.\nSDL_Error " << SDL_GetError();
@@ -97,8 +97,13 @@ class Player {
     int angle;
 
     // players velocity
-    int velx = 0;
-    int vely = 0;
+    int velx;
+    int vely;
+
+    // color of the players sprite
+    int red;
+    int green;
+    int blue;
 
     // the sprite sheet for the player
     SDL_Texture* playerImage;
@@ -120,13 +125,29 @@ public:
     void render(SDL_Renderer* renderer);
 };
 
-Player::Player(SDL_Renderer* renderer) {
+Player::Player(SDL_Renderer* renderer) { // initialization function for the player class
+    //set the players default coordinated
     playerRect.x = SCREEN_WIDTH/2;
     playerRect.y = SCREEN_HEIGHT/2;
+
+    // set the size of the players sprite
     playerRect.w = CHARACTER_WIDTH;
     playerRect.h = CHARACTER_HEIGHT;
+
+    // set the default direction the player is looking
     angle = 0;
+
+    // load in the players spritesheet
     playerImage = loadImage(CHARACTER_IMAGE_LOCATION, renderer);
+
+    // set the players default speed
+    velx = 0;
+    vely = 0;
+
+    // set the players color scheme for themself
+    red = CHARACTER_RED;
+    green = CHARACTER_GREEN;
+    blue = CHARACTER_BLUE;
 }
 
 void Player::updateState(void) {
@@ -158,6 +179,7 @@ void Player::move(void) {
 }
 
 void Player::render(SDL_Renderer* renderer) {
+    SDL_SetTextureColorMod(playerImage, red, green, blue);
     SDL_RenderCopy(renderer, playerImage, NULL, &playerRect);
 }
 
