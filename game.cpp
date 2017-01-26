@@ -74,6 +74,8 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
     if (surfaceAtPath == NULL) { //ensure the image loaded correctly
         cout << "Image failed to load\nSDL_image error " << SDL_GetError();
     } else {
+        SDL_SetColorKey(surfaceAtPath, SDL_TRUE, SDL_MapRGB(
+            surfaceAtPath->format, colorKeyRed, colorKeyGreen, colorKeyBlue));
         output = SDL_CreateTextureFromSurface(renderer, surfaceAtPath);
         if (output == NULL) {
             cout << "Surface failed conversion to texture.\nSDL_Error " << SDL_GetError();
@@ -128,20 +130,25 @@ Player::Player(SDL_Renderer* renderer) {
 }
 
 void Player::updateState(void) {
+    // get the keyboard state containing which keys are actively pressed
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
+
+    // update velocity in the y direction
     if (keyboardState[SDL_SCANCODE_UP]) {
         vely = max(vely-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
     } else if (keyboardState[SDL_SCANCODE_DOWN]) {
         vely = min(vely+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
     } else {
-        vely = floor(vely*CHARACTER_DECEL_PER_FRAME);
+        vely = vely*CHARACTER_DECEL_PER_FRAME;
     }
+
+    // update velocity in the x direction
     if (keyboardState[SDL_SCANCODE_LEFT]) {
         velx = max(velx-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
     } else if (keyboardState[SDL_SCANCODE_RIGHT]) {
         velx = min(velx+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
     } else {
-        velx = floor(velx*CHARACTER_DECEL_PER_FRAME);
+        velx = velx*CHARACTER_DECEL_PER_FRAME;
     }
 }
 
@@ -189,7 +196,7 @@ int main(int argc, char const *argv[])
         character.move();
 
         // reset the screen for the next frame
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
         SDL_RenderClear(renderer);
 
         // render all objects to the screen

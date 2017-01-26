@@ -9,9 +9,13 @@
 const int MILLISECONDS_PER_SECOND = 100;
 const int FRAMES_PER_SECOND = 30; // desired framerate of the game
 
+const int colorKeyRed = 255;
+const int colorKeyGreen = 255;
+const int colorKeyBlue = 255;
+
 // Character related constants
 const std::string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
-const int CHARACTER_VEL_MAX = 5;
+const int CHARACTER_VEL_MAX = 2;
 const int CHARACTER_ACCEL_PER_FRAME = 1;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
 const int CHARACTER_WIDTH = 32;
