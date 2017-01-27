@@ -7,8 +7,6 @@
 
 // TODO
 /*
-    - Replace printf with cout
-    - Add walls and collision detection
     - Start artwork for objects and background
 
 */
@@ -41,14 +39,14 @@ void quitGame(SDL_Window* window) { // Terminates SDL and Frees any used memory 
 bool init(SDL_Window** window, SDL_Renderer** renderer) { // initialize important SDL functionalities
     bool success = true; // flag to check whether program runs successfully
     if (SDL_Init(SDL_INIT_VIDEO) < 0) { // Make sure SDL can initialize properly, otherwise return error code
-        printf("Error Initializing SDL./n SDL_Error %s\n", SDL_GetError());
+        cout << "Error Initializing SDL./n SDL_Error " << SDL_GetError() << "\n";
         success = false;
     } else {
         *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, 
             SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
              SDL_WINDOW_SHOWN);
-        if (window == NULL) {
-            printf("Error Creating Window./n SDL_Error %s\n", SDL_GetError());
+        if (window == NULL) { // check if cratewindow returned a valid pointer
+            cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
             success = false;
         } else {
             *renderer = SDL_CreateRenderer(*window, -1,
@@ -227,11 +225,17 @@ void Player::move(Wall wall) {
     int posOrigY = playerRect.y;
     // moves the player based on the final velocity of each frame
     playerRect.x += velx;
-    playerRect.y += vely;
     setPlayerCentre();
     if (wall.checkCollision(centreX, centreY, radius) == true) {
         playerRect.x = posOrigX;
+        velx = 0;
+        setPlayerCentre();
+    }
+    playerRect.y += vely;
+    setPlayerCentre();
+    if (wall.checkCollision(centreX, centreY, radius) == true) {
         playerRect.y = posOrigY;
+        vely = 0;
         setPlayerCentre();
     }
 }
@@ -248,6 +252,10 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
     wallLocation.y = y;
     wallLocation.w = w;
     wallLocation.h = h;
+
+    red = WALL_RED;
+    green = WALL_GREEN;
+    blue = WALL_BLUE;
 }
 
 bool Wall::checkCollision(int x, int y, int radius) {
