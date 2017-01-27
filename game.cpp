@@ -205,7 +205,7 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
 bool Wall::checkCollision(int x, int y, int radius) {
     // checks to see whether an object has collided with the wall
     bool collision = false;
-    if (x > wallLocation.x && x < (wallLocation.x+wallLocation.w)) {
+    if (x >= wallLocation.x && x <= (wallLocation.x+wallLocation.w)) {
         if (y < wallLocation.y) { // above wall
             if (y > (wallLocation.y - radius)) {
                 collision = true;
@@ -215,7 +215,7 @@ bool Wall::checkCollision(int x, int y, int radius) {
                 collision = true;
             }
         }
-    } else if (y > wallLocation.y && y < (wallLocation.y+wallLocation.h)) {
+    } else if (y >= wallLocation.y && y <= (wallLocation.y+wallLocation.h)) {
         if ( x < wallLocation.x) { // left of wall
             if (x > (wallLocation.x - radius)) {
                 collision = true;
