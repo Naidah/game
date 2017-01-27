@@ -2,6 +2,9 @@
 // Contains constants for game
 
 #include <string>
+#include <forward_list>
+
+using namespace std;
 
 /*------------- All program constants defined here ------------------*/
 
@@ -14,7 +17,7 @@ const int COLOUR_KEY_GREEN = 255;
 const int COLOUR_KEY_BLUE = 255;
 
 // Character related constants
-const std::string CHARACTER_IMAGE_LOCATION = "images/colorMod.png";
+const string CHARACTER_IMAGE_LOCATION = "images/colorMod.png";
 const int CHARACTER_VEL_MAX = 5;
 const int CHARACTER_ACCEL_PER_FRAME = 1;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
@@ -34,3 +37,69 @@ const int WALL_BLUE = 200;
 const int SCREEN_WIDTH = 1000; // size of screen
 const int SCREEN_HEIGHT = 600; // size of screen
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
+
+/*-------------------------- Class Definitions -------------------------*/
+
+// declarations
+class Player;
+class Wall;
+
+// Class definitions
+// Class to represent all player controlled characters
+class Player {
+private:
+    // details about the characters location
+    SDL_Rect playerRect; // constains the position and size of the player's image for rendering
+    double angle;
+    int centreX; // Contain the x and y coordinates of the centre of the player
+    int centreY;
+    int radius; // contains the radius of the character circle in pixels
+
+    // players velocity
+    int velx;
+    int vely;
+
+    // color of the players sprite
+    int red;
+    int green;
+    int blue;
+
+    // the sprite sheet for the player
+    SDL_Texture* playerImage;
+
+public:
+    // initializer function for the class
+    Player(SDL_Renderer* renderer);
+
+    void setPlayerCentre(void);    
+
+    //getters for the private variables
+    int getX(void) {return centreX;}
+    int getY(void) {return centreY;}
+    int getRadius(void) {return radius;}
+    double getAngle(void) {return angle;}
+
+    // functions to update the players state
+    void updateState(void);
+    void move(forward_list<Wall> wallContainer);
+
+    //draws the player to the screen
+    void render(SDL_Renderer* renderer);
+};
+
+// Wall objects found throughout the environment
+class Wall {
+private:
+    // Rect object to hold info on the wall location
+    SDL_Rect wallLocation;
+    int red;
+    int green;
+    int blue;
+
+
+public:
+    Wall(int x, int y, int w, int h);
+    SDL_Rect getLocation(void) {return wallLocation;}
+    bool checkCollision(int x, int y, int radius);
+    void render(SDL_Renderer* renderer);
+};

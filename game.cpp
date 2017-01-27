@@ -8,7 +8,8 @@
 // TODO
 /*
     - Start artwork for objects and background
-
+    - Add player rotation toward mouse
+    - Allow Walls to work in an array format
 */
 
 // Included modules in the program
@@ -19,8 +20,9 @@
 #include <string> // tools for string manipulations
 #include <iostream> // contains cout output method
 #include "game.h" // contains program constants to avoid cluttering main file
-#include <math.h> // contains math functions for use
-#include <algorithm> // contains
+#include <math.h> // contains math functions (sqrt, pow, etc) for use
+#include <algorithm> // contains min/max functions used
+#include <forward_list> // container structure used to hold objects in game
 
 using namespace std;
 
@@ -86,6 +88,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
+    // Uses pythagorous theorem to find distance between two points
     double output = 0.0;
     int diffX = x2-x1;
     int diffY = y2-y1;
@@ -97,69 +100,6 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
 
 
 /* -------------------------- CLASSES --------------------------- */
-// declarations
-class Player;
-class Wall;
-
-// Class definitions
-// Class to represent all player controlled characters
-class Player {
-private:
-    // details about the characters location
-    SDL_Rect playerRect; // constains the position and size of the player's image for rendering
-    double angle;
-    int centreX; // Contain the x and y coordinates of the centre of the player
-    int centreY;
-    int radius; // contains the radius of the character circle in pixels
-
-    // players velocity
-    int velx;
-    int vely;
-
-    // color of the players sprite
-    int red;
-    int green;
-    int blue;
-
-    // the sprite sheet for the player
-    SDL_Texture* playerImage;
-
-public:
-    // initializer function for the class
-    Player(SDL_Renderer* renderer);
-
-    void setPlayerCentre(void);    
-
-    //getters for the private variables
-    int getX(void) {return centreX;}
-    int getY(void) {return centreY;}
-    int getRadius(void) {return radius;}
-    double getAngle(void) {return angle;}
-
-    // functions to update the players state
-    void updateState(void);
-    void move(Wall wall);
-
-    //draws the player to the screen
-    void render(SDL_Renderer* renderer);
-};
-
-// Wall objects found throughout the environment
-class Wall {
-private:
-    // Rect object to hold info on the wall location
-    SDL_Rect wallLocation;
-    int red;
-    int green;
-    int blue;
-
-
-public:
-    Wall(int x, int y, int w, int h);
-    SDL_Rect getLocation(void) {return wallLocation;}
-    bool checkCollision(int x, int y, int radius);
-    void render(SDL_Renderer* renderer);
-};
 
 
 // Function definitions for each class
@@ -220,23 +160,27 @@ void Player::updateState(void) {
     }
 }
 
-void Player::move(Wall wall) {
+void Player::move(forward_list<Wall> wallContainer) {
     int posOrigX = playerRect.x;
     int posOrigY = playerRect.y;
     // moves the player based on the final velocity of each frame
     playerRect.x += velx;
     setPlayerCentre();
-    if (wall.checkCollision(centreX, centreY, radius) == true) {
-        playerRect.x = posOrigX;
-        velx = 0;
-        setPlayerCentre();
+    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        if ((*wall).checkCollision(centreX, centreY, radius) == true) {
+            playerRect.x = posOrigX;
+            velx = 0;
+            setPlayerCentre();
+        }
     }
     playerRect.y += vely;
     setPlayerCentre();
-    if (wall.checkCollision(centreX, centreY, radius) == true) {
-        playerRect.y = posOrigY;
-        vely = 0;
-        setPlayerCentre();
+    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        if ((*wall).checkCollision(centreX, centreY, radius) == true) {
+            playerRect.y = posOrigY;
+            vely = 0;
+            setPlayerCentre();
+        }
     }
 }
 
@@ -311,8 +255,9 @@ bool Wall::checkCollision(int x, int y, int radius) {
     return collision;
 }
 
+
 void Wall::render(SDL_Renderer* renderer) {
-    // draws the player to the screen using the supplied renderer
+    // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
     SDL_RenderFillRect(renderer, &wallLocation);
 }
@@ -331,11 +276,14 @@ int main(int argc, char const *argv[])
     SDL_Renderer* renderer = NULL;
     SDL_Event eventHandler;
 
-
+    forward_list<Wall> wallContainer = {
+        Wall(600,200,80,200),
+        Wall(100, 100, 200, 300),
+        Wall(300, 400, 50, 90)
+    };
 
     init(&window, &renderer);
     Player character(renderer);
-    Wall wall(100, 100, 200, 300);
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
@@ -344,7 +292,7 @@ int main(int argc, char const *argv[])
             }
         }
         character.updateState();
-        character.move(wall);
+        character.move(wallContainer);
 
         // reset the screen for the next frame
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
@@ -352,7 +300,9 @@ int main(int argc, char const *argv[])
 
         // render all objects to the screen
         character.render(renderer);
-        wall.render(renderer);
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            (*wall).render(renderer);   
+        }
 
         // update the screen to the renderers current state
         SDL_RenderPresent(renderer);
