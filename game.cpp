@@ -4,8 +4,9 @@
 // TODO
 /*
     - Start artwork for objects and background
-    - Add player rotation toward mouse
     - Comment current work
+    - Add gunfire
+    - Add id to characters to specify which to move, avoid friendly fire, etc
 */
 
 // Included modules in the program
@@ -99,6 +100,8 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
 
 
 // Function definitions for each class
+
+// Functions related to the player class
 Player::Player(SDL_Renderer* renderer) { // initialization function for the player class
     //set the players default coordinated
     playerRect.x = SCREEN_WIDTH/2;
@@ -161,7 +164,6 @@ void Player::updateState(void) {
     // rotate the player to look toward the mouse
     SDL_GetMouseState(&mouseX, &mouseY);
     angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
-    cout << angle << "\n";
 }
 
 void Player::move(forward_list<Wall> wallContainer) {
@@ -191,10 +193,12 @@ void Player::move(forward_list<Wall> wallContainer) {
 void Player::render(SDL_Renderer* renderer) {
     // draws the player to the screen using the supplied renderer
     SDL_SetTextureColorMod(playerImage, red, green, blue); // modulates the color based on the players settings
-    SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect, angle, NULL, SDL_FLIP_NONE);
+    SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
+     angle, NULL, SDL_FLIP_NONE);
 }
 
 
+// Functions related to the wall class
 Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
     wallLocation.x = x;
     wallLocation.y = y;
@@ -267,9 +271,44 @@ void Wall::render(SDL_Renderer* renderer) {
 }
 
 
+// Functions related to the projectile class
+ Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer) {
+    angle = a;
+    projectileRect.x = x;
+    projectileRect.y = y;
+    projectileRect.w = PROJECTILE_WIDTH;
+    projectileRect.h = PROJECTILE_HEIGHT;
 
+    radius = PROJECTILE_WIDTH/2;
+    setProjectileCentre();
 
+    velx = PROJECTILE_SPEED * cos(angle);
+    vely = PROJECTILE_SPEED * sin(angle);
 
+    projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, renderer);
+ }
+
+void Projectile::setProjectileCentre(void) {
+    centreX = projectileRect.x+radius;
+    centreY = projectileRect.y+radius;
+}
+
+bool Projectile::checkCollision(forward_list<Wall> wallContainer,
+ forward_list<Player> playerList) {
+    return false;
+}
+
+void Projectile::move(forward_list<Wall> wallContainer,
+ forward_list<Player> playerList) {
+    projectileRect.x += velx;
+    projectileRect.y += vely;
+}
+
+void Projectile::render(SDL_Renderer* renderer) {
+    SDL_SetTextureColorMod(projectileImage, red, green, blue); // modulates the color based on the players settings
+    SDL_RenderCopyEx(renderer, projectileImage, NULL, &projectileRect,
+     angle, NULL, SDL_FLIP_NONE);
+}
 
 
 int main(int argc, char const *argv[])
@@ -280,14 +319,22 @@ int main(int argc, char const *argv[])
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
 
+
+    init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
+
+    forward_list<Player> playerList = { // list containing all players in the game
+        Player(renderer)
+    };
+
     forward_list<Wall> wallContainer = { // container for the walls used in the game
         Wall(600,200,80,200),
         Wall(100, 100, 200, 300),
         Wall(300, 400, 50, 90)
     };
 
-    init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
-    Player character(renderer);
+    forward_list<Projectile> projectileList = {
+        Projectile(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, 135, renderer)
+    };
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
@@ -295,17 +342,34 @@ int main(int argc, char const *argv[])
                 gameRunning = false;
             }
         }
-        character.updateState();
-        character.move(wallContainer);
+
+        // update the state of the controlled character
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            (*character).updateState();   
+        }
+
+
+        // move all players and projectiles
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            (*character).move(wallContainer);   
+        }
+        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+            (*bullet).move(wallContainer, playerList);   
+        }
 
         // reset the screen for the next frame
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderClear(renderer);
 
         // render all objects to the screen
-        character.render(renderer);
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            (*character).render(renderer);   
+        }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             (*wall).render(renderer);   
+        }
+        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+            (*bullet).render(renderer);   
         }
 
         // update the screen to the renderers current state

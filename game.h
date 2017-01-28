@@ -28,6 +28,16 @@ const int CHARACTER_RED = 255;
 const int CHARACTER_GREEN = 255;
 const int CHARACTER_BLUE = 255;
 
+// Projectile related constants
+const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png";
+const int PROJECTILE_SPEED = 10;
+const int PROJECTILE_WIDTH = 8;
+const int PROJECTILE_HEIGHT = 8;
+
+const int PROJECTILE_RED = 255;
+const int PROJECTILE_GREEN = 255;
+const int PROJECTILE_BLUE = 255;
+
 // Wall related constats
 const int WALL_RED = 0;
 const int WALL_GREEN = 0;
@@ -102,6 +112,31 @@ public:
     Wall(int x, int y, int w, int h);
     SDL_Rect getLocation(void) {return wallLocation;}
     bool checkCollision(int x, int y, int radius);
+    void render(SDL_Renderer* renderer);
+};
+
+class Projectile {
+private:
+    SDL_Rect projectileRect;
+    int centreX;
+    int centreY;
+    double angle;
+
+    int radius;
+
+    int velx;
+    int vely;
+
+    int red;
+    int green;
+    int blue;
+
+    SDL_Texture* projectileImage;
+public:
+    Projectile(int x, int y, double a, SDL_Renderer* renderer);
+    bool checkCollision(forward_list<Wall> wallContainer, forward_list<Player> playerList);
+    void move(forward_list<Wall> wallContainer, forward_list<Player> playerList);
+    void setProjectileCentre(void);
     void render(SDL_Renderer* renderer);
 };
 
