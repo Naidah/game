@@ -1,15 +1,11 @@
 // By Aidan Hunt, first created 24/1/17, last edited 25/1/17
 // [Project description here]
-// Current Features:
-/*
-    -
-*/
 
 // TODO
 /*
     - Start artwork for objects and background
     - Add player rotation toward mouse
-    - Allow Walls to work in an array format
+    - Comment current work
 */
 
 // Included modules in the program
@@ -140,6 +136,9 @@ void Player::setPlayerCentre(void) {
 void Player::updateState(void) {
     // get the keyboard state containing which keys are actively pressed
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
+    // used to store the x and y coordinates of the mouse
+    int mouseX;
+    int mouseY;
 
     // update velocity in the y direction
     if (keyboardState[SDL_SCANCODE_UP]) {
@@ -158,6 +157,11 @@ void Player::updateState(void) {
     } else {
         velx = velx*CHARACTER_DECEL_PER_FRAME;
     }
+
+    // rotate the player to look toward the mouse
+    SDL_GetMouseState(&mouseX, &mouseY);
+    angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
+    cout << angle << "\n";
 }
 
 void Player::move(forward_list<Wall> wallContainer) {
@@ -187,7 +191,7 @@ void Player::move(forward_list<Wall> wallContainer) {
 void Player::render(SDL_Renderer* renderer) {
     // draws the player to the screen using the supplied renderer
     SDL_SetTextureColorMod(playerImage, red, green, blue); // modulates the color based on the players settings
-    SDL_RenderCopy(renderer, playerImage, NULL, &playerRect);
+    SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect, angle, NULL, SDL_FLIP_NONE);
 }
 
 
@@ -272,17 +276,17 @@ int main(int argc, char const *argv[])
 {
     // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
-    SDL_Window* window = NULL;
-    SDL_Renderer* renderer = NULL;
-    SDL_Event eventHandler;
+    SDL_Window* window = NULL; // window the game is displayed on, set in init function
+    SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
+    SDL_Event eventHandler; // event handler for the game
 
-    forward_list<Wall> wallContainer = {
+    forward_list<Wall> wallContainer = { // container for the walls used in the game
         Wall(600,200,80,200),
         Wall(100, 100, 200, 300),
         Wall(300, 400, 50, 90)
     };
 
-    init(&window, &renderer);
+    init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
     Player character(renderer);
 
     while (gameRunning == true) {

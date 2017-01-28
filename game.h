@@ -17,16 +17,16 @@ const int COLOUR_KEY_GREEN = 255;
 const int COLOUR_KEY_BLUE = 255;
 
 // Character related constants
-const string CHARACTER_IMAGE_LOCATION = "images/colorMod.png";
+const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
 const int CHARACTER_VEL_MAX = 5;
 const int CHARACTER_ACCEL_PER_FRAME = 1;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
 const int CHARACTER_WIDTH = 32;
 const int CHARACTER_HEIGHT = 32;
 
-const int CHARACTER_RED = 0;
+const int CHARACTER_RED = 255;
 const int CHARACTER_GREEN = 255;
-const int CHARACTER_BLUE = 0;
+const int CHARACTER_BLUE = 255;
 
 // Wall related constats
 const int WALL_RED = 0;
@@ -37,6 +37,7 @@ const int WALL_BLUE = 200;
 const int SCREEN_WIDTH = 1000; // size of screen
 const int SCREEN_HEIGHT = 600; // size of screen
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
+
 
 /*-------------------------- Class Definitions -------------------------*/
 
@@ -103,3 +104,12 @@ public:
     bool checkCollision(int x, int y, int radius);
     void render(SDL_Renderer* renderer);
 };
+
+
+
+/*--------------------- Function definitions -------------------------*/
+
+void quitGame(SDL_Window* window);
+bool init(SDL_Window** window, SDL_Renderer** renderer);
+SDL_Texture* loadImage(string path, SDL_Renderer* renderer);
+double distBetweenPoints(int x1, int y1, int x2, int y2);
