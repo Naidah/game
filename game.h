@@ -9,15 +9,12 @@ using namespace std;
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
-const int MILLISECONDS_PER_SECOND = 100;
-const int FRAMES_PER_SECOND = 30; // desired framerate of the game
-
 const int COLOUR_KEY_RED = 255;
 const int COLOUR_KEY_GREEN = 255;
 const int COLOUR_KEY_BLUE = 255;
 
 // Character related constants
-const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
+const string CHARACTER_IMAGE_LOCATION = "images/colorMod.png";
 const int CHARACTER_VEL_MAX = 5;
 const int CHARACTER_ACCEL_PER_FRAME = 1;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
@@ -28,15 +25,21 @@ const int CHARACTER_RED = 255;
 const int CHARACTER_GREEN = 255;
 const int CHARACTER_BLUE = 255;
 
+const int CHARACTER_MAIN_ID = 1;
+
 // Projectile related constants
 const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png";
-const int PROJECTILE_SPEED = 10;
+const double PROJECTILE_SPEED = 7.0;
 const int PROJECTILE_WIDTH = 8;
 const int PROJECTILE_HEIGHT = 8;
 
 const int PROJECTILE_RED = 255;
 const int PROJECTILE_GREEN = 255;
 const int PROJECTILE_BLUE = 255;
+
+const int PROJECTILE_COLLISION_NONE = 0;
+const int PROJECTILE_COLLISION_PLAYER = 1;
+const int PROJECTILE_COLLISION_WALL = 2;
 
 // Wall related constats
 const int WALL_RED = 0;
@@ -54,6 +57,7 @@ const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the scree
 // declarations
 class Player;
 class Wall;
+class Projectile;
 
 // Class definitions
 // Class to represent all player controlled characters
@@ -75,23 +79,29 @@ private:
     int green;
     int blue;
 
+    bool mousePressFirst;
+    int id;
+
     // the sprite sheet for the player
     SDL_Texture* playerImage;
 
 public:
     // initializer function for the class
-    Player(SDL_Renderer* renderer);
+    Player(SDL_Renderer* renderer, int startX, int startY, int idNum);
 
-    void setPlayerCentre(void);    
+    void setPlayerCentre(void);
+    void successfulShot(void);
 
     //getters for the private variables
     int getX(void) {return centreX;}
     int getY(void) {return centreY;}
     int getRadius(void) {return radius;}
+    int getID(void) {return id;}
     double getAngle(void) {return angle;}
 
     // functions to update the players state
-    void updateState(void);
+    void updateState(SDL_Event* eventHandler,
+     forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
     void move(forward_list<Wall> wallContainer);
 
     //draws the player to the screen
@@ -124,8 +134,8 @@ private:
 
     int radius;
 
-    int velx;
-    int vely;
+    double velx;
+    double vely;
 
     int red;
     int green;
@@ -134,8 +144,8 @@ private:
     SDL_Texture* projectileImage;
 public:
     Projectile(int x, int y, double a, SDL_Renderer* renderer);
-    bool checkCollision(forward_list<Wall> wallContainer, forward_list<Player> playerList);
-    void move(forward_list<Wall> wallContainer, forward_list<Player> playerList);
+    int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int shooterID);
+    bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int playerID);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer);
 };

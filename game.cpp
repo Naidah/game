@@ -5,7 +5,6 @@
 /*
     - Start artwork for objects and background
     - Comment current work
-    - Add gunfire
     - Add id to characters to specify which to move, avoid friendly fire, etc
 */
 
@@ -102,10 +101,10 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
 // Function definitions for each class
 
 // Functions related to the player class
-Player::Player(SDL_Renderer* renderer) { // initialization function for the player class
+Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) { // initialization function for the player class
     //set the players default coordinated
-    playerRect.x = SCREEN_WIDTH/2;
-    playerRect.y = SCREEN_HEIGHT/2;
+    playerRect.x = startX;
+    playerRect.y = startY;
 
     // set the size of the players sprite
     playerRect.w = CHARACTER_WIDTH;
@@ -125,6 +124,9 @@ Player::Player(SDL_Renderer* renderer) { // initialization function for the play
     velx = 0;
     vely = 0;
 
+    mousePressFirst = true;
+    id = idNum;
+
     // set the players color scheme for themself
     red = CHARACTER_RED;
     green = CHARACTER_GREEN;
@@ -136,7 +138,8 @@ void Player::setPlayerCentre(void) {
     centreY = playerRect.y + radius;
 }
 
-void Player::updateState(void) {
+void Player::updateState(SDL_Event* eventHandler,
+ forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
     // get the keyboard state containing which keys are actively pressed
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
     // used to store the x and y coordinates of the mouse
@@ -144,26 +147,34 @@ void Player::updateState(void) {
     int mouseY;
 
     // update velocity in the y direction
-    if (keyboardState[SDL_SCANCODE_UP]) {
-        vely = max(vely-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
-    } else if (keyboardState[SDL_SCANCODE_DOWN]) {
-        vely = min(vely+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
-    } else {
-        vely = vely*CHARACTER_DECEL_PER_FRAME;
-    }
+    if (id == CHARACTER_MAIN_ID) {
+        if (keyboardState[SDL_SCANCODE_UP]) {
+            vely = max(vely-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
+        } else if (keyboardState[SDL_SCANCODE_DOWN]) {
+            vely = min(vely+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
+        } else {
+            vely = vely*CHARACTER_DECEL_PER_FRAME;
+        }
 
-    // update velocity in the x direction
-    if (keyboardState[SDL_SCANCODE_LEFT]) {
-        velx = max(velx-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
-    } else if (keyboardState[SDL_SCANCODE_RIGHT]) {
-        velx = min(velx+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
-    } else {
-        velx = velx*CHARACTER_DECEL_PER_FRAME;
-    }
+        // update velocity in the x direction
+        if (keyboardState[SDL_SCANCODE_LEFT]) {
+            velx = max(velx-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
+        } else if (keyboardState[SDL_SCANCODE_RIGHT]) {
+            velx = min(velx+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
+        } else {
+            velx = velx*CHARACTER_DECEL_PER_FRAME;
+        }
 
-    // rotate the player to look toward the mouse
-    SDL_GetMouseState(&mouseX, &mouseY);
-    angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
+        // rotate the player to look toward the mouse
+        SDL_GetMouseState(&mouseX, &mouseY);
+        angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
+        if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) {
+            (*projectileList).push_front(Projectile(centreX, centreY, angle, renderer));
+            mousePressFirst = false;
+        } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+            mousePressFirst = true;
+        }
+    }
 }
 
 void Player::move(forward_list<Wall> wallContainer) {
@@ -188,6 +199,12 @@ void Player::move(forward_list<Wall> wallContainer) {
             setPlayerCentre();
         }
     }
+}
+
+
+void Player::successfulShot(void) {
+    //function called when the player takes damage from a bullet
+    red = (red+25)%255;
 }
 
 void Player::render(SDL_Renderer* renderer) {
@@ -282,8 +299,8 @@ void Wall::render(SDL_Renderer* renderer) {
     radius = PROJECTILE_WIDTH/2;
     setProjectileCentre();
 
-    velx = PROJECTILE_SPEED * cos(angle);
-    vely = PROJECTILE_SPEED * sin(angle);
+    velx = -PROJECTILE_SPEED * cos(angle*M_PI/180);
+    vely = -PROJECTILE_SPEED * sin(angle*M_PI/180);
 
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, renderer);
  }
@@ -293,15 +310,40 @@ void Projectile::setProjectileCentre(void) {
     centreY = projectileRect.y+radius;
 }
 
-bool Projectile::checkCollision(forward_list<Wall> wallContainer,
- forward_list<Player> playerList) {
-    return false;
+int Projectile::checkCollision(forward_list<Wall>* wallContainer,
+ forward_list<Player>* playerList, int shooterID) {
+    int output = PROJECTILE_COLLISION_NONE;
+    for (auto character = playerList->begin(); character != playerList->end(); character++) {
+        if (distBetweenPoints(centreX, centreY, (*character).getX(), (*character).getY()) < (radius + (*character).getRadius())) {
+            if (character->getID() != shooterID) {
+                (*character).successfulShot();
+                output = PROJECTILE_COLLISION_PLAYER;
+            }
+        }
+    }
+    if (output == PROJECTILE_COLLISION_NONE) { // make sure no other collision has been detected
+        for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
+            if ((*wall).checkCollision(centreX, centreY, radius)) {
+                output = PROJECTILE_COLLISION_WALL;
+            }
+        }
+    }
+    return output;
 }
 
-void Projectile::move(forward_list<Wall> wallContainer,
- forward_list<Player> playerList) {
+bool Projectile::move(forward_list<Wall>* wallContainer,
+ forward_list<Player>* playerList, int playerID) {
+    // moves the projectile,  returns true if the projectile collided and needs to be destroyed
+    bool destroyed = false;
+    int collision = PROJECTILE_COLLISION_NONE;
     projectileRect.x += velx;
     projectileRect.y += vely;
+    setProjectileCentre();
+    collision = checkCollision(wallContainer, playerList, playerID);
+    if (collision != PROJECTILE_COLLISION_NONE) {
+        destroyed = true;
+    }
+    return destroyed;
 }
 
 void Projectile::render(SDL_Renderer* renderer) {
@@ -323,18 +365,17 @@ int main(int argc, char const *argv[])
     init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer)
+        Player(renderer, SCREEN_WIDTH/2, SCREEN_HEIGHT/2, CHARACTER_MAIN_ID),
+        Player(renderer, 300, 300, 2)
     };
 
     forward_list<Wall> wallContainer = { // container for the walls used in the game
-        Wall(600,200,80,200),
+        Wall(600, 200, 80, 200),
         Wall(100, 100, 200, 300),
         Wall(300, 400, 50, 90)
     };
 
-    forward_list<Projectile> projectileList = {
-        Projectile(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, 135, renderer)
-    };
+    forward_list<Projectile> projectileList;
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
@@ -345,7 +386,7 @@ int main(int argc, char const *argv[])
 
         // update the state of the controlled character
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).updateState();   
+            (*character).updateState(&eventHandler, &projectileList, renderer);   
         }
 
 
@@ -353,9 +394,14 @@ int main(int argc, char const *argv[])
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             (*character).move(wallContainer);   
         }
+
+        forward_list<Projectile> newList;
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            (*bullet).move(wallContainer, playerList);   
+            if ((*bullet).move(&wallContainer, &playerList, CHARACTER_MAIN_ID) != true){
+                newList.push_front(*bullet);
+            }   
         }
+        projectileList = newList; // create a new list of projectiles to store all that remain on screen
 
         // reset the screen for the next frame
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
