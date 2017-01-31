@@ -13,10 +13,21 @@ const int COLOUR_KEY_RED = 255;
 const int COLOUR_KEY_GREEN = 255;
 const int COLOUR_KEY_BLUE = 255;
 
+// directions
+const int MOVE_NONE = 0;
+const int MOVE_UP = 1;
+const int MOVE_DOWN = 2;
+const int MOVE_LEFT = 3;
+const int MOVE_RIGHT = 4;
+const int MOVE_UP_LEFT = 5;
+const int MOVE_UP_RIGHT = 6;
+const int MOVE_DOWN_LEFT = 7;
+const int MOVE_DOWN_RIGHT = 8;
+
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/colorMod.png";
-const int CHARACTER_VEL_MAX = 5;
-const int CHARACTER_ACCEL_PER_FRAME = 1;
+const int CHARACTER_VEL_MAX = 10;
+const int CHARACTER_ACCEL_PER_FRAME = 2;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
 const int CHARACTER_WIDTH = 32;
 const int CHARACTER_HEIGHT = 32;
@@ -46,6 +57,10 @@ const int WALL_RED = 0;
 const int WALL_GREEN = 0;
 const int WALL_BLUE = 200;
 
+const int WALL_SHADOW_RED = 200;
+const int WALL_SHADOW_GREEN = 200;
+const int WALL_SHADOW_BLUE = 255;
+
 // Screen Parameters
 const int SCREEN_WIDTH = 1000; // size of screen
 const int SCREEN_HEIGHT = 600; // size of screen
@@ -71,8 +86,8 @@ private:
     int radius; // contains the radius of the character circle in pixels
 
     // players velocity
-    int velx;
-    int vely;
+    double velx;
+    double vely;
 
     // color of the players sprite
     int red;
@@ -123,6 +138,7 @@ public:
     SDL_Rect getLocation(void) {return wallLocation;}
     bool checkCollision(int x, int y, int radius);
     void render(SDL_Renderer* renderer);
+    void createShadow(int x, int y, int r, int g, int b);
 };
 
 class Projectile {

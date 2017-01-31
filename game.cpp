@@ -5,7 +5,13 @@
 /*
     - Start artwork for objects and background
     - Comment current work
-    - Add id to characters to specify which to move, avoid friendly fire, etc
+    - Begin to add networking
+    - Add shadows drawing
+    - Create the game space and add UI
+    - Add rolling
+    - Add reloading
+    - Add different guns
+    - Allow for the player class to be able to spawn with more conditions
 */
 
 // Included modules in the program
@@ -92,6 +98,30 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
     return output;
 }
 
+int getDirections(void) { // WORKHERE
+    int output = MOVE_NONE;
+    const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
+    if (keyboardState[SDL_SCANCODE_UP] && keyboardState[SDL_SCANCODE_LEFT]) {
+        output = MOVE_UP_LEFT;
+    } else if (keyboardState[SDL_SCANCODE_UP] && keyboardState[SDL_SCANCODE_RIGHT]) {
+        output = MOVE_UP_RIGHT;
+    } else if (keyboardState[SDL_SCANCODE_DOWN] && keyboardState[SDL_SCANCODE_LEFT]) {
+        output = MOVE_DOWN_LEFT;
+    } else if (keyboardState[SDL_SCANCODE_DOWN] && keyboardState[SDL_SCANCODE_RIGHT]) {
+        output = MOVE_DOWN_RIGHT;
+    } else if (keyboardState[SDL_SCANCODE_LEFT] && !keyboardState[SDL_SCANCODE_RIGHT]) {
+        output = MOVE_LEFT;
+    } else if (keyboardState[SDL_SCANCODE_RIGHT] && !keyboardState[SDL_SCANCODE_LEFT]) {
+        output = MOVE_RIGHT;
+    } else if (keyboardState[SDL_SCANCODE_UP] && !keyboardState[SDL_SCANCODE_DOWN]) {
+        output = MOVE_UP;
+    } else if (keyboardState[SDL_SCANCODE_DOWN] && !keyboardState[SDL_SCANCODE_UP]) {
+        output = MOVE_DOWN;
+    }
+
+    return output;
+}
+
 
 
 
@@ -101,7 +131,8 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
 // Function definitions for each class
 
 // Functions related to the player class
-Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) { // initialization function for the player class
+Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) {
+    // initialization function for the player class
     //set the players default coordinated
     playerRect.x = startX;
     playerRect.y = startY;
@@ -141,28 +172,56 @@ void Player::setPlayerCentre(void) {
 void Player::updateState(SDL_Event* eventHandler,
  forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
     // get the keyboard state containing which keys are actively pressed
-    const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
+    int direction = MOVE_NONE;
     // used to store the x and y coordinates of the mouse
     int mouseX;
     int mouseY;
 
     // update velocity in the y direction
     if (id == CHARACTER_MAIN_ID) {
-        if (keyboardState[SDL_SCANCODE_UP]) {
-            vely = max(vely-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
-        } else if (keyboardState[SDL_SCANCODE_DOWN]) {
-            vely = min(vely+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
-        } else {
-            vely = vely*CHARACTER_DECEL_PER_FRAME;
+        // directional movement
+        direction = getDirections();
+        if (direction == MOVE_UP) {
+            vely -= CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_DOWN) {
+            vely += CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_LEFT) {
+            velx -= CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_RIGHT) {
+            velx += CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_UP_LEFT) {
+            vely -= CHARACTER_ACCEL_PER_FRAME;
+            velx -= CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_UP_RIGHT) {
+            vely -= CHARACTER_ACCEL_PER_FRAME;
+            velx += CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_DOWN_LEFT) {
+            vely += CHARACTER_ACCEL_PER_FRAME;
+            velx -= CHARACTER_ACCEL_PER_FRAME;
+        } else if (direction == MOVE_DOWN_RIGHT) {
+            vely += CHARACTER_ACCEL_PER_FRAME;
+            velx += CHARACTER_ACCEL_PER_FRAME;
         }
 
-        // update velocity in the x direction
-        if (keyboardState[SDL_SCANCODE_LEFT]) {
-            velx = max(velx-CHARACTER_ACCEL_PER_FRAME, -CHARACTER_VEL_MAX);
-        } else if (keyboardState[SDL_SCANCODE_RIGHT]) {
-            velx = min(velx+CHARACTER_ACCEL_PER_FRAME, CHARACTER_VEL_MAX);
-        } else {
-            velx = velx*CHARACTER_DECEL_PER_FRAME;
+        if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
+            if (velx > 0) {
+                velx = floor(velx*CHARACTER_DECEL_PER_FRAME);
+            } else if (velx < 0) {
+                velx = ceil(velx*CHARACTER_DECEL_PER_FRAME);
+            }
+        }
+        if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
+            if (vely > 0) {
+                vely = floor(vely*CHARACTER_DECEL_PER_FRAME);
+            } else if (vely < 0) {
+                vely = ceil(vely*CHARACTER_DECEL_PER_FRAME);
+            }
+        }
+
+        double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2));
+        if (currSpeed > CHARACTER_VEL_MAX) {
+            vely *= CHARACTER_VEL_MAX/currSpeed;
+            velx *= CHARACTER_VEL_MAX/currSpeed;
         }
 
         // rotate the player to look toward the mouse
@@ -409,7 +468,7 @@ int main(int argc, char const *argv[])
 
         // render all objects to the screen
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).render(renderer);   
+            (*character).render(renderer);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             (*wall).render(renderer);   
