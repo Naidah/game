@@ -25,9 +25,9 @@ const int MOVE_DOWN_LEFT = 7;
 const int MOVE_DOWN_RIGHT = 8;
 
 // Character related constants
-const string CHARACTER_IMAGE_LOCATION = "images/colorMod.png";
-const int CHARACTER_VEL_MAX = 10;
-const int CHARACTER_ACCEL_PER_FRAME = 2;
+const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
+const int CHARACTER_VEL_MAX = 6;
+const int CHARACTER_ACCEL_PER_FRAME = 20;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
 const int CHARACTER_WIDTH = 32;
 const int CHARACTER_HEIGHT = 32;
@@ -35,6 +35,8 @@ const int CHARACTER_HEIGHT = 32;
 const int CHARACTER_RED = 255;
 const int CHARACTER_GREEN = 255;
 const int CHARACTER_BLUE = 255;
+
+const int CHARACTER_AMMO_MAX = 10;
 
 const int CHARACTER_MAIN_ID = 1;
 
@@ -94,6 +96,8 @@ private:
     int green;
     int blue;
 
+    int currAmmo;
+
     bool mousePressFirst;
     int id;
 
@@ -103,9 +107,6 @@ private:
 public:
     // initializer function for the class
     Player(SDL_Renderer* renderer, int startX, int startY, int idNum);
-
-    void setPlayerCentre(void);
-    void successfulShot(void);
 
     //getters for the private variables
     int getX(void) {return centreX;}
@@ -118,6 +119,10 @@ public:
     void updateState(SDL_Event* eventHandler,
      forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
     void move(forward_list<Wall> wallContainer);
+    void setPlayerCentre(void);
+    void successfulShot(void);
+    void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
+    void beginReload(void);
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer);

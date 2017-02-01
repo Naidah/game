@@ -155,6 +155,8 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) {
     velx = 0;
     vely = 0;
 
+    currAmmo = CHARACTER_AMMO_MAX;
+
     mousePressFirst = true;
     id = idNum;
 
@@ -227,8 +229,10 @@ void Player::updateState(SDL_Event* eventHandler,
         // rotate the player to look toward the mouse
         SDL_GetMouseState(&mouseX, &mouseY);
         angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
+
+        // check if player is shooting
         if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) {
-            (*projectileList).push_front(Projectile(centreX, centreY, angle, renderer));
+            takeShot(projectileList, renderer);
             mousePressFirst = false;
         } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
             mousePressFirst = true;
@@ -264,6 +268,21 @@ void Player::move(forward_list<Wall> wallContainer) {
 void Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
     red = (red+25)%255;
+}
+
+void Player::beginReload(void) {
+    // function to make the character enter the reload state
+    currAmmo = CHARACTER_AMMO_MAX;
+}
+
+void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
+    // function that is called when the player shoots their gun
+    if (currAmmo > 0) { // check the player has enough ammo left to shoot
+        currAmmo -= 1;
+        projectileList->push_front(Projectile(centreX, centreY, angle, renderer));
+    } else {
+        beginReload();
+    }
 }
 
 void Player::render(SDL_Renderer* renderer) {
@@ -344,6 +363,10 @@ void Wall::render(SDL_Renderer* renderer) {
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
     SDL_RenderFillRect(renderer, &wallLocation);
+}
+
+void Wall::createShadow(int x, int y, int r, int g, int b) {
+    // need to find function to draw polygons
 }
 
 
