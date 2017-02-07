@@ -9,7 +9,6 @@
     - Add shadows drawing
     - Create the game space and add UI
     - Add rolling
-    - Add reloading
     - Add different guns
     - Allow for the player class to be able to spawn with more conditions
 */
@@ -53,6 +52,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer) { // initialize importan
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
             success = false;
         } else {
+            SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (renderer == NULL) {
@@ -101,21 +101,21 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
 int getDirections(void) { // WORKHERE
     int output = MOVE_NONE;
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
-    if (keyboardState[SDL_SCANCODE_UP] && keyboardState[SDL_SCANCODE_LEFT]) {
+    if (keyboardState[SDL_SCANCODE_UP] && keyboardState[SDL_SCANCODE_A]) {
         output = MOVE_UP_LEFT;
-    } else if (keyboardState[SDL_SCANCODE_UP] && keyboardState[SDL_SCANCODE_RIGHT]) {
+    } else if (keyboardState[SDL_SCANCODE_W] && keyboardState[SDL_SCANCODE_D]) {
         output = MOVE_UP_RIGHT;
-    } else if (keyboardState[SDL_SCANCODE_DOWN] && keyboardState[SDL_SCANCODE_LEFT]) {
+    } else if (keyboardState[SDL_SCANCODE_S] && keyboardState[SDL_SCANCODE_A]) {
         output = MOVE_DOWN_LEFT;
-    } else if (keyboardState[SDL_SCANCODE_DOWN] && keyboardState[SDL_SCANCODE_RIGHT]) {
+    } else if (keyboardState[SDL_SCANCODE_S] && keyboardState[SDL_SCANCODE_D]) {
         output = MOVE_DOWN_RIGHT;
-    } else if (keyboardState[SDL_SCANCODE_LEFT] && !keyboardState[SDL_SCANCODE_RIGHT]) {
+    } else if (keyboardState[SDL_SCANCODE_A] && !keyboardState[SDL_SCANCODE_D]) {
         output = MOVE_LEFT;
-    } else if (keyboardState[SDL_SCANCODE_RIGHT] && !keyboardState[SDL_SCANCODE_LEFT]) {
+    } else if (keyboardState[SDL_SCANCODE_D] && !keyboardState[SDL_SCANCODE_A]) {
         output = MOVE_RIGHT;
-    } else if (keyboardState[SDL_SCANCODE_UP] && !keyboardState[SDL_SCANCODE_DOWN]) {
+    } else if (keyboardState[SDL_SCANCODE_W] && !keyboardState[SDL_SCANCODE_S]) {
         output = MOVE_UP;
-    } else if (keyboardState[SDL_SCANCODE_DOWN] && !keyboardState[SDL_SCANCODE_UP]) {
+    } else if (keyboardState[SDL_SCANCODE_S] && !keyboardState[SDL_SCANCODE_W]) {
         output = MOVE_DOWN;
     }
 
@@ -463,6 +463,10 @@ int main(int argc, char const *argv[])
         while (SDL_PollEvent(&eventHandler) != 0) {
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
                 gameRunning = false;
+            } else if (eventHandler.type == SDL_KEYDOWN) {
+                if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
+                    gameRunning = false;
+                }
             }
         }
 
@@ -494,7 +498,7 @@ int main(int argc, char const *argv[])
             (*character).render(renderer);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            (*wall).render(renderer);   
+            (*wall).render(renderer);
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             (*bullet).render(renderer);   

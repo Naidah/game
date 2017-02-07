@@ -65,7 +65,7 @@ const int WALL_SHADOW_BLUE = 255;
 
 // Screen Parameters
 const int SCREEN_WIDTH = 1000; // size of screen
-const int SCREEN_HEIGHT = 600; // size of screen
+const int SCREEN_HEIGHT = 800; // size of screen
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
 
