@@ -117,7 +117,7 @@ public:
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler,
-     forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
+     forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor);
     void move(forward_list<Wall> wallContainer);
     void setPlayerCentre(void);
     void successfulShot(void);
@@ -125,7 +125,7 @@ public:
     void beginReload(void);
 
     //draws the player to the screen
-    void render(SDL_Renderer* renderer);
+    void render(SDL_Renderer* renderer, double scaleFactor);
 };
 
 // Wall objects found throughout the environment
@@ -142,7 +142,7 @@ public:
     Wall(int x, int y, int w, int h);
     SDL_Rect getLocation(void) {return wallLocation;}
     bool checkCollision(int x, int y, int radius);
-    void render(SDL_Renderer* renderer);
+    void render(SDL_Renderer* renderer, double scaleFactor);
     void createShadow(int x, int y, int r, int g, int b);
 };
 
@@ -158,6 +158,9 @@ private:
     double velx;
     double vely;
 
+    double currPosX;
+    double currPosY;
+
     int red;
     int green;
     int blue;
@@ -168,7 +171,7 @@ public:
     int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int shooterID);
     bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int playerID);
     void setProjectileCentre(void);
-    void render(SDL_Renderer* renderer);
+    void render(SDL_Renderer* renderer, double scaleFactor);
 };
 
 

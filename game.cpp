@@ -27,11 +27,6 @@
 
 using namespace std;
 
-/* -------------------------- STRUCTS --------------------------- */
-
-
-
-
 
 /* -------------------------- FUNCTIONS ------------------------- */
 void quitGame(SDL_Window* window) { // Terminates SDL and Frees any used memory at end of program
@@ -39,7 +34,7 @@ void quitGame(SDL_Window* window) { // Terminates SDL and Frees any used memory 
     SDL_Quit();
 }
 
-bool init(SDL_Window** window, SDL_Renderer** renderer) { // initialize important SDL functionalities
+bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { // initialize important SDL functionalities
     bool success = true; // flag to check whether program runs successfully
     if (SDL_Init(SDL_INIT_VIDEO) < 0) { // Make sure SDL can initialize properly, otherwise return error code
         cout << "Error Initializing SDL./n SDL_Error " << SDL_GetError() << "\n";
@@ -53,6 +48,9 @@ bool init(SDL_Window** window, SDL_Renderer** renderer) { // initialize importan
             success = false;
         } else {
             SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+            int height;
+            SDL_GetWindowSize(*window, NULL, &height);
+            *scaleFactor = (double)height/(double)SCREEN_HEIGHT;
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (renderer == NULL) {
@@ -172,7 +170,7 @@ void Player::setPlayerCentre(void) {
 }
 
 void Player::updateState(SDL_Event* eventHandler,
- forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
+ forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor) {
     // get the keyboard state containing which keys are actively pressed
     int direction = MOVE_NONE;
     // used to store the x and y coordinates of the mouse
@@ -225,10 +223,12 @@ void Player::updateState(SDL_Event* eventHandler,
             vely *= CHARACTER_VEL_MAX/currSpeed;
             velx *= CHARACTER_VEL_MAX/currSpeed;
         }
+        cout << scaleFactor << "\n";
 
         // rotate the player to look toward the mouse
         SDL_GetMouseState(&mouseX, &mouseY);
         angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
+        cout << angle << "\n";
 
         // check if player is shooting
         if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) {
@@ -285,10 +285,16 @@ void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* re
     }
 }
 
-void Player::render(SDL_Renderer* renderer) {
+void Player::render(SDL_Renderer* renderer, double scaleFactor) {
     // draws the player to the screen using the supplied renderer
+    SDL_Rect renderRect;
+    renderRect.x = floor(playerRect.x * scaleFactor);
+    renderRect.y = floor(playerRect.y * scaleFactor);
+    renderRect.w = floor(playerRect.w * scaleFactor);
+    renderRect.h = floor(playerRect.h * scaleFactor);
+
     SDL_SetTextureColorMod(playerImage, red, green, blue); // modulates the color based on the players settings
-    SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
+    SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
      angle, NULL, SDL_FLIP_NONE);
 }
 
@@ -359,10 +365,16 @@ bool Wall::checkCollision(int x, int y, int radius) {
 }
 
 
-void Wall::render(SDL_Renderer* renderer) {
+void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
+    SDL_Rect renderRect;
+    renderRect.x = floor(wallLocation.x * scaleFactor);
+    renderRect.y = floor(wallLocation.y * scaleFactor);
+    renderRect.w = floor(wallLocation.w * scaleFactor);
+    renderRect.h = floor(wallLocation.h * scaleFactor);
+
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
-    SDL_RenderFillRect(renderer, &wallLocation);
+    SDL_RenderFillRect(renderer, &renderRect);
 }
 
 void Wall::createShadow(int x, int y, int r, int g, int b) {
@@ -372,6 +384,9 @@ void Wall::createShadow(int x, int y, int r, int g, int b) {
 
 // Functions related to the projectile class
  Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer) {
+    currPosX = x;
+    currPosY = y;
+
     angle = a;
     projectileRect.x = x;
     projectileRect.y = y;
@@ -418,8 +433,10 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
     // moves the projectile,  returns true if the projectile collided and needs to be destroyed
     bool destroyed = false;
     int collision = PROJECTILE_COLLISION_NONE;
-    projectileRect.x += velx;
-    projectileRect.y += vely;
+    currPosX += velx;
+    currPosY += vely;
+    projectileRect.x = floor(currPosX);
+    projectileRect.y = floor(currPosY);
     setProjectileCentre();
     collision = checkCollision(wallContainer, playerList, playerID);
     if (collision != PROJECTILE_COLLISION_NONE) {
@@ -428,9 +445,15 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
     return destroyed;
 }
 
-void Projectile::render(SDL_Renderer* renderer) {
+void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
+    SDL_Rect renderRect;
+    renderRect.x = floor(projectileRect.x * scaleFactor);
+    renderRect.y = floor(projectileRect.y * scaleFactor);
+    renderRect.w = floor(projectileRect.w * scaleFactor);
+    renderRect.h = floor(projectileRect.h * scaleFactor);
+
     SDL_SetTextureColorMod(projectileImage, red, green, blue); // modulates the color based on the players settings
-    SDL_RenderCopyEx(renderer, projectileImage, NULL, &projectileRect,
+    SDL_RenderCopyEx(renderer, projectileImage, NULL, &renderRect,
      angle, NULL, SDL_FLIP_NONE);
 }
 
@@ -442,9 +465,10 @@ int main(int argc, char const *argv[])
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
+    double scaleFactor;
 
 
-    init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
+    init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
         Player(renderer, SCREEN_WIDTH/2, SCREEN_HEIGHT/2, CHARACTER_MAIN_ID),
@@ -472,7 +496,7 @@ int main(int argc, char const *argv[])
 
         // update the state of the controlled character
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).updateState(&eventHandler, &projectileList, renderer);   
+            (*character).updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
         }
 
 
@@ -495,13 +519,13 @@ int main(int argc, char const *argv[])
 
         // render all objects to the screen
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).render(renderer);
+            (*character).render(renderer, scaleFactor);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            (*wall).render(renderer);
+            (*wall).render(renderer, scaleFactor);
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            (*bullet).render(renderer);   
+            (*bullet).render(renderer, scaleFactor);
         }
 
         // update the screen to the renderers current state
