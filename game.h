@@ -37,6 +37,7 @@ const int CHARACTER_GREEN = 255;
 const int CHARACTER_BLUE = 255;
 
 const int CHARACTER_AMMO_MAX = 10;
+const int CHARACTER_RELOAD_FRAMES = 120;
 
 const int CHARACTER_MAIN_ID = 1;
 
@@ -64,7 +65,8 @@ const int WALL_SHADOW_GREEN = 200;
 const int WALL_SHADOW_BLUE = 255;
 
 // Screen Parameters
-const int SCREEN_WIDTH = 1000; // size of screen
+const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
+const int SCREEN_WIDTH = 1200; // size of screen
 const int SCREEN_HEIGHT = 800; // size of screen
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
@@ -97,6 +99,7 @@ private:
     int blue;
 
     int currAmmo;
+    int reloadFramesLeft;
 
     bool mousePressFirst;
     int id;

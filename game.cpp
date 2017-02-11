@@ -13,17 +13,27 @@
     - Allow for the player class to be able to spawn with more conditions
 */
 
+/*int filledPolygonRGBA(SDL_Surface* dst,
+    Sint16* vx, Sint16vy, // arrays of the x and y coords
+    int n, // length of the arrays
+    Uint8 r, Uint8 g, Uint8 b, Uint8 a); //color and alpha levels
+*/
+
 // Included modules in the program
 #include <stdio.h> // standard input/output for debugging
 #include <stdlib.h> // constains several useful various features
+
 #include <SDL.h> // sdl library for graphics features
 #include <SDL_image.h> // sdl library for using PNGs and other image formats
+//#include <SDL_gfxPrimitives.h> // contains library for drawing arbitrary polygons
+
 #include <string> // tools for string manipulations
 #include <iostream> // contains cout output method
-#include "game.h" // contains program constants to avoid cluttering main file
 #include <math.h> // contains math functions (sqrt, pow, etc) for use
 #include <algorithm> // contains min/max functions used
 #include <forward_list> // container structure used to hold objects in game
+
+#include "game.h" // contains program constants to avoid cluttering main file
 
 using namespace std;
 
@@ -41,13 +51,15 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
         success = false;
     } else {
         *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, 
-            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
+            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, 400,
              SDL_WINDOW_SHOWN);
         if (window == NULL) { // check if cratewindow returned a valid pointer
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
             success = false;
         } else {
-            SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+            if (SCREEN_FULLSCREEN == true) {
+                SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+            }
             int height;
             SDL_GetWindowSize(*window, NULL, &height);
             *scaleFactor = (double)height/(double)SCREEN_HEIGHT;
@@ -154,6 +166,7 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) {
     vely = 0;
 
     currAmmo = CHARACTER_AMMO_MAX;
+    reloadFramesLeft = 0;
 
     mousePressFirst = true;
     id = idNum;
@@ -223,11 +236,12 @@ void Player::updateState(SDL_Event* eventHandler,
             vely *= CHARACTER_VEL_MAX/currSpeed;
             velx *= CHARACTER_VEL_MAX/currSpeed;
         }
-        cout << scaleFactor << "\n";
 
         // rotate the player to look toward the mouse
+        // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
         SDL_GetMouseState(&mouseX, &mouseY);
-        angle = atan2((double)(centreY-mouseY), (double)(centreX-mouseX))*180.0/M_PI;
+        angle = atan2((double)(centreY*scaleFactor-mouseY),
+         (double)(centreX*scaleFactor-mouseX))*180.0/M_PI;
         cout << angle << "\n";
 
         // check if player is shooting
@@ -246,6 +260,11 @@ void Player::move(forward_list<Wall> wallContainer) {
     // moves the player based on the final velocity of each frame
     playerRect.x += velx;
     setPlayerCentre();
+    if (reloadFramesLeft > 0) {
+        reloadFramesLeft--;
+    }
+    cout << reloadFramesLeft << "\n";
+
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
         if ((*wall).checkCollision(centreX, centreY, radius) == true) {
             playerRect.x = posOrigX;
@@ -273,14 +292,15 @@ void Player::successfulShot(void) {
 void Player::beginReload(void) {
     // function to make the character enter the reload state
     currAmmo = CHARACTER_AMMO_MAX;
+    reloadFramesLeft = CHARACTER_RELOAD_FRAMES;
 }
 
 void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
     // function that is called when the player shoots their gun
-    if (currAmmo > 0) { // check the player has enough ammo left to shoot
+    if (currAmmo > 0 && reloadFramesLeft == 0) { // check the player has enough ammo left to shoot
         currAmmo -= 1;
         projectileList->push_front(Projectile(centreX, centreY, angle, renderer));
-    } else {
+    } else if (currAmmo == 0) {
         beginReload();
     }
 }
@@ -518,11 +538,12 @@ int main(int argc, char const *argv[])
         SDL_RenderClear(renderer);
 
         // render all objects to the screen
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).render(renderer, scaleFactor);
-        }
+        
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             (*wall).render(renderer, scaleFactor);
+        }
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            (*character).render(renderer, scaleFactor);
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             (*bullet).render(renderer, scaleFactor);
