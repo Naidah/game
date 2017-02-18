@@ -150,7 +150,7 @@ public:
     SDL_Rect getLocation(void) {return wallLocation;}
     bool checkCollision(int x, int y, int radius);
     void render(SDL_Renderer* renderer, double scaleFactor, int playerX, int playerY);
-    void createShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer);
+    void renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer);
     void deleteObject(void);
 };
 

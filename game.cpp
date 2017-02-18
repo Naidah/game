@@ -6,13 +6,13 @@
     - Start artwork for objects and background
     - Comment current work
     - Begin to add networking
-    - Add shadows drawing
     - Create the game space and add UI
     - Add rolling
     - Add different guns
     - Allow for the player class to be able to spawn with more conditions
     - Add memory freeing
-    - Modify shadow drawing so that it the corners have X and Y for the appropriate thing
+    - Clean up code
+    - Change shadow drawing to be called as a seperate part of the render process
 */
 
 
@@ -133,7 +133,6 @@ int getDirections(void) { // WORKHERE
 }
 
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
-    //cout << x1 << "  " << x2 << "  " << y1 << "  " << y2 << "\n";
     int output = 0;
     double m = (double)(y1-y2)/(double)(x1-x2);
     cout << (double)(interceptY-y1)/m << "\n";
@@ -144,7 +143,6 @@ int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
     int output = 0;
     double m = (double)(x1-x2)/(double)(y1-y2);
-    cout << m << "\n";
     output = (double)(interceptX-x1)/m + y1;
     return output;
 }
@@ -411,14 +409,14 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor, int playerX, int p
     renderRect.h = floor(wallLocation.h * scaleFactor);
 
     // draw the shadow of the wall first so it is below the actual wall
-    createShadow(playerX, playerY, 0, 0, 0, renderer);
+    // createShadow(playerX, playerY, 0, 0, 0, renderer);
 
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
     SDL_RenderFillRect(renderer, &renderRect);
 }
 
-void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
+void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
     Sint16 coordsX[5];
     Sint16 coordsY[5];
     int n;
@@ -658,8 +656,8 @@ int main(int argc, char const *argv[])
 
     forward_list<Wall> wallContainer = { // container for the walls used in the game
         Wall(600, 200, 80, 200),
-    //    Wall(100, 100, 200, 300),
-    //    Wall(300, 400, 50, 90)
+        Wall(100, 100, 200, 300),
+        Wall(300, 400, 50, 90)
     };
 
     forward_list<Projectile> projectileList;
@@ -711,6 +709,9 @@ int main(int argc, char const *argv[])
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             (*bullet).render(renderer, scaleFactor);
+        }
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->render(renderer, scaleFactor, playerMainX, playerMainY);
