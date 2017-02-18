@@ -131,13 +131,19 @@ int getDirections(void) { // WORKHERE
     return output;
 }
 
-int getIntercept(int x1, int y1, int x2, int y2, int interceptX) {
+int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
     int output = 0;
-    double m = ((double)y2-(double)y1)/((double)x2-(double)x1);
-    output = m*(interceptX-x1)+y1;
+    double m = (double)(y1-y2)/(double)(x1-x2);
+    output = (double)(interceptY-y1)/m + x1;
     return output;
 }
 
+int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
+    int output = 0;
+    double m = (double)(x1-x2)/(double)(y1-y2);
+    output = (double)(interceptX-x1)/m + y1;
+    return output;
+}
 
 
 
@@ -400,12 +406,12 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor, int playerX, int p
     renderRect.w = floor(wallLocation.w * scaleFactor);
     renderRect.h = floor(wallLocation.h * scaleFactor);
 
+    // draw the shadow of the wall first so it is below the actual wall
+    createShadow(playerX, playerY, 0, 0, 0, renderer);
+
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
     SDL_RenderFillRect(renderer, &renderRect);
-
-    // draw the shadow of the wall first so it is below the actual wall
-    createShadow(playerX, playerY, 0, 0, 0, renderer);
 }
 
 void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
@@ -419,32 +425,102 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
             coordsX[1] = wallLocation.x+wallLocation.w;
             coordsY[1] = wallLocation.y;
 
-            coordsX[2] = getIntercept(x, y, wallLocation.x+wallLocation.w, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+            coordsX[2] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
             coordsY[2] = SCREEN_HEIGHT_DEFAULT;
 
-            coordsX[3] = getIntercept(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+            coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
             coordsY[3] = SCREEN_HEIGHT_DEFAULT;
         } else { // below wall
-            //
+            coordsX[0] = wallLocation.x;
+            coordsY[0] = wallLocation.y+wallLocation.h;
+
+            coordsX[1] = wallLocation.x+wallLocation.w;
+            coordsY[1] = wallLocation.y+wallLocation.h;
+
+            coordsX[2] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, 0);
+            coordsY[2] = 0;
+
+            coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y+wallLocation.h, 0);
+            coordsY[3] = 0;
         }
     } else if (y >= wallLocation.y && y <= (wallLocation.y+wallLocation.h)) {
         if ( x < wallLocation.x) { // left of wall
-            //
+            coordsX[0] = wallLocation.x;
+            coordsY[0] = wallLocation.y;
+
+            coordsX[1] = wallLocation.x;
+            coordsY[1] = wallLocation.y+wallLocation.h;
+
+            coordsX[2] = SCREEN_WIDTH_DEFAULT;
+            coordsY[2] = getInterceptY(x, y, wallLocation.x, wallLocation.y+wallLocation.h, SCREEN_HEIGHT_DEFAULT);
+
+            coordsX[3] = SCREEN_WIDTH_DEFAULT;
+            coordsY[3] = getInterceptY(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
         } else { // right of wall
-            //
+            coordsX[0] = wallLocation.x+wallLocation.w;
+            coordsY[0] = wallLocation.y;
+
+            coordsX[1] = wallLocation.x+wallLocation.w;
+            coordsY[1] = wallLocation.y+wallLocation.h;
+
+            coordsX[2] = 0;
+            coordsY[2] = getInterceptY(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, 0);
+
+            coordsX[3] = 0;
+            coordsY[3] = getInterceptY(x, y, wallLocation.x+wallLocation.w, wallLocation.y, 0);
         }
     } else {
         if (x < wallLocation.x) {
             if (y < wallLocation.y) { // top left of wall
-                //
+                coordsX[0] = wallLocation.x+wallLocation.w;
+                coordsY[0] = wallLocation.y;
+
+                coordsX[1] = wallLocation.x;
+                coordsY[1] = wallLocation.y+wallLocation.h;
+
+                coordsX[2] = getInterceptX(x, y, wallLocation.x, wallLocation.y+wallLocation.h, SCREEN_HEIGHT_DEFAULT);
+                coordsY[2] = SCREEN_HEIGHT_DEFAULT;
+
+                coordsX[3] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+                coordsY[3] = SCREEN_HEIGHT_DEFAULT;
             } else { // bottom left of wall
-                //
+                coordsX[0] = wallLocation.x;
+                coordsY[0] = wallLocation.y;
+
+                coordsX[1] = wallLocation.x+wallLocation.w;
+                coordsY[1] = wallLocation.y+wallLocation.h;
+
+                coordsX[2] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, 0);
+                coordsY[2] = 0;
+
+                coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y, 0);
+                coordsY[3] = 0;
             }
         } else {
             if (y < wallLocation.y) { // top right of wall
-                //
+                coordsX[0] = wallLocation.x;
+                coordsY[0] = wallLocation.y;
+
+                coordsX[1] = wallLocation.x+wallLocation.w;
+                coordsY[1] = wallLocation.y+wallLocation.h;
+
+                coordsX[2] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, SCREEN_HEIGHT_DEFAULT);
+                coordsY[2] = SCREEN_HEIGHT_DEFAULT;
+
+                coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+                coordsY[3] = SCREEN_HEIGHT_DEFAULT;
             } else { // bottom right of wall
-                //
+                coordsX[0] = wallLocation.x+wallLocation.w;
+                coordsY[0] = wallLocation.y;
+
+                coordsX[1] = wallLocation.x;
+                coordsY[1] = wallLocation.y+wallLocation.h;
+
+                coordsX[2] = getInterceptX(x, y, wallLocation.x, wallLocation.y+wallLocation.h, 0);
+                coordsY[2] = 0;
+
+                coordsX[3] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y, 0);
+                coordsY[3] = 0;
             }
         }
     }

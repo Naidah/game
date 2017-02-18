@@ -192,4 +192,5 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList,
 bool init(SDL_Window** window, SDL_Renderer** renderer);
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer);
 double distBetweenPoints(int x1, int y1, int x2, int y2);
-int getIntercept(int x1, int y1, int x2, int y2, int interceptX);
+int getInterceptX(int x1, int y1, int x2, int y2, int interceptY);
+int getInterceptY(int x1, int y1, int x2, int y2, int interceptX);
