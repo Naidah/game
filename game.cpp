@@ -12,6 +12,7 @@
     - Add different guns
     - Allow for the player class to be able to spawn with more conditions
     - Add memory freeing
+    - Modify shadow drawing so that it the corners have X and Y for the appropriate thing
 */
 
 
@@ -132,8 +133,10 @@ int getDirections(void) { // WORKHERE
 }
 
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
+    //cout << x1 << "  " << x2 << "  " << y1 << "  " << y2 << "\n";
     int output = 0;
     double m = (double)(y1-y2)/(double)(x1-x2);
+    cout << (double)(interceptY-y1)/m << "\n";
     output = (double)(interceptY-y1)/m + x1;
     return output;
 }
@@ -141,6 +144,7 @@ int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
     int output = 0;
     double m = (double)(x1-x2)/(double)(y1-y2);
+    cout << m << "\n";
     output = (double)(interceptX-x1)/m + y1;
     return output;
 }
@@ -415,10 +419,12 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor, int playerX, int p
 }
 
 void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
-    Sint16 coordsX[4];
-    Sint16 coordsY[4];
+    Sint16 coordsX[5];
+    Sint16 coordsY[5];
+    int n;
     if (x >= wallLocation.x && x <= (wallLocation.x+wallLocation.w)) {
         if (y < wallLocation.y) { // above wall
+            n = 4;
             coordsX[0] = wallLocation.x;
             coordsY[0] = wallLocation.y;
 
@@ -431,6 +437,7 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
             coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
             coordsY[3] = SCREEN_HEIGHT_DEFAULT;
         } else { // below wall
+            n=4;
             coordsX[0] = wallLocation.x;
             coordsY[0] = wallLocation.y+wallLocation.h;
 
@@ -445,6 +452,7 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
         }
     } else if (y >= wallLocation.y && y <= (wallLocation.y+wallLocation.h)) {
         if ( x < wallLocation.x) { // left of wall
+            n=4;
             coordsX[0] = wallLocation.x;
             coordsY[0] = wallLocation.y;
 
@@ -452,11 +460,12 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
             coordsY[1] = wallLocation.y+wallLocation.h;
 
             coordsX[2] = SCREEN_WIDTH_DEFAULT;
-            coordsY[2] = getInterceptY(x, y, wallLocation.x, wallLocation.y+wallLocation.h, SCREEN_HEIGHT_DEFAULT);
+            coordsY[2] = getInterceptY(x, y, wallLocation.x, wallLocation.y+wallLocation.h, SCREEN_WIDTH_DEFAULT);
 
             coordsX[3] = SCREEN_WIDTH_DEFAULT;
-            coordsY[3] = getInterceptY(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+            coordsY[3] = getInterceptY(x, y, wallLocation.x, wallLocation.y, SCREEN_WIDTH_DEFAULT);
         } else { // right of wall
+            n=4;
             coordsX[0] = wallLocation.x+wallLocation.w;
             coordsY[0] = wallLocation.y;
 
@@ -472,6 +481,7 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
     } else {
         if (x < wallLocation.x) {
             if (y < wallLocation.y) { // top left of wall
+                n=5;
                 coordsX[0] = wallLocation.x+wallLocation.w;
                 coordsY[0] = wallLocation.y;
 
@@ -481,23 +491,31 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
                 coordsX[2] = getInterceptX(x, y, wallLocation.x, wallLocation.y+wallLocation.h, SCREEN_HEIGHT_DEFAULT);
                 coordsY[2] = SCREEN_HEIGHT_DEFAULT;
 
-                coordsX[3] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+                coordsX[3] = SCREEN_WIDTH_DEFAULT;
                 coordsY[3] = SCREEN_HEIGHT_DEFAULT;
+
+                coordsX[4] = SCREEN_WIDTH_DEFAULT;
+                coordsY[4] = getInterceptY(x, y, wallLocation.x+wallLocation.w, wallLocation.y, SCREEN_WIDTH_DEFAULT);
             } else { // bottom left of wall
+                n=5;
                 coordsX[0] = wallLocation.x;
                 coordsY[0] = wallLocation.y;
 
                 coordsX[1] = wallLocation.x+wallLocation.w;
                 coordsY[1] = wallLocation.y+wallLocation.h;
 
-                coordsX[2] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, 0);
-                coordsY[2] = 0;
+                coordsX[2] = SCREEN_WIDTH_DEFAULT;
+                coordsY[2] = getInterceptY(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, SCREEN_WIDTH_DEFAULT);
 
-                coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y, 0);
+                coordsX[3] = SCREEN_WIDTH_DEFAULT;
                 coordsY[3] = 0;
+
+                coordsX[4] = getInterceptX(x, y, wallLocation.x, wallLocation.y, 0);
+                coordsY[4] = 0;
             }
         } else {
             if (y < wallLocation.y) { // top right of wall
+                n=5;
                 coordsX[0] = wallLocation.x;
                 coordsY[0] = wallLocation.y;
 
@@ -507,24 +525,31 @@ void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
                 coordsX[2] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y+wallLocation.h, SCREEN_HEIGHT_DEFAULT);
                 coordsY[2] = SCREEN_HEIGHT_DEFAULT;
 
-                coordsX[3] = getInterceptX(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+                coordsX[3] = 0;
                 coordsY[3] = SCREEN_HEIGHT_DEFAULT;
+
+                coordsX[4] = 0;
+                coordsY[4] = getInterceptY(x, y, wallLocation.x, wallLocation.y, 0);
             } else { // bottom right of wall
+                n=5;
                 coordsX[0] = wallLocation.x+wallLocation.w;
                 coordsY[0] = wallLocation.y;
 
                 coordsX[1] = wallLocation.x;
                 coordsY[1] = wallLocation.y+wallLocation.h;
 
-                coordsX[2] = getInterceptX(x, y, wallLocation.x, wallLocation.y+wallLocation.h, 0);
-                coordsY[2] = 0;
+                coordsX[2] = 0;
+                coordsY[2] = getInterceptY(x, y, wallLocation.x, wallLocation.y+wallLocation.h, 0);
 
-                coordsX[3] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y, 0);
+                coordsX[3] = 0;
                 coordsY[3] = 0;
+
+                coordsX[4] = getInterceptX(x, y, wallLocation.x+wallLocation.w, wallLocation.y, 0);
+                coordsY[4] = 0;
             }
         }
     }
-    filledPolygonRGBA(renderer, coordsX, coordsY, 4, r, g, b, 255); // draws the shadow using the renderer
+    filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, 255); // draws the shadow using the renderer
 }
 
 void Wall::deleteObject(void) {
@@ -625,7 +650,6 @@ int main(int argc, char const *argv[])
 
 
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
-    cout << scaleFactor << "\n";
 
     forward_list<Player> playerList = { // list containing all players in the game
         Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID),
@@ -634,8 +658,8 @@ int main(int argc, char const *argv[])
 
     forward_list<Wall> wallContainer = { // container for the walls used in the game
         Wall(600, 200, 80, 200),
-        Wall(100, 100, 200, 300),
-        Wall(300, 400, 50, 90)
+    //    Wall(100, 100, 200, 300),
+    //    Wall(300, 400, 50, 90)
     };
 
     forward_list<Projectile> projectileList;
@@ -682,14 +706,14 @@ int main(int argc, char const *argv[])
 
         // render all objects to the screen
         
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->render(renderer, scaleFactor, playerMainX, playerMainY);
-        }
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             (*character).render(renderer, scaleFactor);
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             (*bullet).render(renderer, scaleFactor);
+        }
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            wall->render(renderer, scaleFactor, playerMainX, playerMainY);
         }
 
         // update the screen to the renderers current state

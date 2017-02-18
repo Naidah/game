@@ -26,7 +26,7 @@ const int MOVE_DOWN_RIGHT = 8;
 
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
-const int CHARACTER_VEL_MAX = 6;
+const int CHARACTER_VEL_MAX = 5;
 const int CHARACTER_ACCEL_PER_FRAME = 20;
 const int CHARACTER_DECEL_PER_FRAME = 0.9;
 const int CHARACTER_WIDTH = 32;
@@ -43,7 +43,7 @@ const int CHARACTER_MAIN_ID = 1;
 
 // Projectile related constants
 const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png";
-const double PROJECTILE_SPEED = 12.0;
+const double PROJECTILE_SPEED = 16.0;
 const int PROJECTILE_WIDTH = 8;
 const int PROJECTILE_HEIGHT = 8;
 
