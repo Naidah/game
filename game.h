@@ -1,4 +1,4 @@
-// Created by Aidan Hunt 24/1/17, last edited 25/1/17
+// Created by Aidan Hunt 24/1/17, last edited 14/2/17
 // Contains constants for game
 
 #include <string>
@@ -43,7 +43,7 @@ const int CHARACTER_MAIN_ID = 1;
 
 // Projectile related constants
 const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png";
-const double PROJECTILE_SPEED = 7.0;
+const double PROJECTILE_SPEED = 12.0;
 const int PROJECTILE_WIDTH = 8;
 const int PROJECTILE_HEIGHT = 8;
 
@@ -68,6 +68,9 @@ const int WALL_SHADOW_BLUE = 255;
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
 const int SCREEN_WIDTH = 1200; // size of screen
 const int SCREEN_HEIGHT = 800; // size of screen
+
+const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
+const int SCREEN_HEIGHT_DEFAULT = 800; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
 
@@ -126,6 +129,7 @@ public:
     void successfulShot(void);
     void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
     void beginReload(void);
+    void deleteObject(void);
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer, double scaleFactor);
@@ -145,8 +149,9 @@ public:
     Wall(int x, int y, int w, int h);
     SDL_Rect getLocation(void) {return wallLocation;}
     bool checkCollision(int x, int y, int radius);
-    void render(SDL_Renderer* renderer, double scaleFactor);
-    void createShadow(int x, int y, int r, int g, int b);
+    void render(SDL_Renderer* renderer, double scaleFactor, int playerX, int playerY);
+    void createShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer);
+    void deleteObject(void);
 };
 
 class Projectile {
@@ -175,13 +180,16 @@ public:
     bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int playerID);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer, double scaleFactor);
+    void deleteObject(void);
 };
 
 
 
 /*--------------------- Function definitions -------------------------*/
 
-void quitGame(SDL_Window* window);
+void quitGame(SDL_Window* window, forward_list<Player> playerList,
+     forward_list<Wall> wallContainer, forward_list<Projectile> projectileList);
 bool init(SDL_Window** window, SDL_Renderer** renderer);
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer);
 double distBetweenPoints(int x1, int y1, int x2, int y2);
+int getIntercept(int x1, int y1, int x2, int y2, int interceptX);

@@ -1,4 +1,4 @@
-// By Aidan Hunt, first created 24/1/17, last edited 25/1/17
+// By Aidan Hunt, first created 24/1/17, last edited 14/2/17
 // [Project description here]
 
 // TODO
@@ -11,13 +11,10 @@
     - Add rolling
     - Add different guns
     - Allow for the player class to be able to spawn with more conditions
+    - Add memory freeing
 */
 
-/*int filledPolygonRGBA(SDL_Surface* dst,
-    Sint16* vx, Sint16vy, // arrays of the x and y coords
-    int n, // length of the arrays
-    Uint8 r, Uint8 g, Uint8 b, Uint8 a); //color and alpha levels
-*/
+
 
 // Included modules in the program
 #include <stdio.h> // standard input/output for debugging
@@ -25,7 +22,7 @@
 
 #include <SDL.h> // sdl library for graphics features
 #include <SDL_image.h> // sdl library for using PNGs and other image formats
-//#include <SDL_gfxPrimitives.h> // contains library for drawing arbitrary polygons
+#include <SDL2_gfxPrimitives.h> // contains library for drawing arbitrary polygons
 
 #include <string> // tools for string manipulations
 #include <iostream> // contains cout output method
@@ -39,8 +36,10 @@ using namespace std;
 
 
 /* -------------------------- FUNCTIONS ------------------------- */
-void quitGame(SDL_Window* window) { // Terminates SDL and Frees any used memory at end of program
+void quitGame(SDL_Window* window, forward_list<Player> playerList,
+     forward_list<Wall> wallContainer, forward_list<Projectile> projectileList) {
     SDL_DestroyWindow(window);
+    // FIX THIS
     SDL_Quit();
 }
 
@@ -51,7 +50,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
         success = false;
     } else {
         *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, 
-            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, 400,
+            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_WIDTH,
              SDL_WINDOW_SHOWN);
         if (window == NULL) { // check if cratewindow returned a valid pointer
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
@@ -62,7 +61,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
             }
             int height;
             SDL_GetWindowSize(*window, NULL, &height);
-            *scaleFactor = (double)height/(double)SCREEN_HEIGHT;
+            *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT;
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (renderer == NULL) {
@@ -129,6 +128,13 @@ int getDirections(void) { // WORKHERE
         output = MOVE_DOWN;
     }
 
+    return output;
+}
+
+int getIntercept(int x1, int y1, int x2, int y2, int interceptX) {
+    int output = 0;
+    double m = ((double)y2-(double)y1)/((double)x2-(double)x1);
+    output = m*(interceptX-x1)+y1;
     return output;
 }
 
@@ -242,7 +248,6 @@ void Player::updateState(SDL_Event* eventHandler,
         SDL_GetMouseState(&mouseX, &mouseY);
         angle = atan2((double)(centreY*scaleFactor-mouseY),
          (double)(centreX*scaleFactor-mouseX))*180.0/M_PI;
-        cout << angle << "\n";
 
         // check if player is shooting
         if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) {
@@ -263,7 +268,6 @@ void Player::move(forward_list<Wall> wallContainer) {
     if (reloadFramesLeft > 0) {
         reloadFramesLeft--;
     }
-    cout << reloadFramesLeft << "\n";
 
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
         if ((*wall).checkCollision(centreX, centreY, radius) == true) {
@@ -316,6 +320,10 @@ void Player::render(SDL_Renderer* renderer, double scaleFactor) {
     SDL_SetTextureColorMod(playerImage, red, green, blue); // modulates the color based on the players settings
     SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
      angle, NULL, SDL_FLIP_NONE);
+}
+
+void Player::deleteObject(void) {
+    // Clear texture
 }
 
 
@@ -385,7 +393,7 @@ bool Wall::checkCollision(int x, int y, int radius) {
 }
 
 
-void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
+void Wall::render(SDL_Renderer* renderer, double scaleFactor, int playerX, int playerY) {
     SDL_Rect renderRect;
     renderRect.x = floor(wallLocation.x * scaleFactor);
     renderRect.y = floor(wallLocation.y * scaleFactor);
@@ -395,11 +403,58 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
     SDL_RenderFillRect(renderer, &renderRect);
+
+    // draw the shadow of the wall first so it is below the actual wall
+    createShadow(playerX, playerY, 0, 0, 0, renderer);
 }
 
-void Wall::createShadow(int x, int y, int r, int g, int b) {
-    // need to find function to draw polygons
+void Wall::createShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
+    Sint16 coordsX[4];
+    Sint16 coordsY[4];
+    if (x >= wallLocation.x && x <= (wallLocation.x+wallLocation.w)) {
+        if (y < wallLocation.y) { // above wall
+            coordsX[0] = wallLocation.x;
+            coordsY[0] = wallLocation.y;
+
+            coordsX[1] = wallLocation.x+wallLocation.w;
+            coordsY[1] = wallLocation.y;
+
+            coordsX[2] = getIntercept(x, y, wallLocation.x+wallLocation.w, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+            coordsY[2] = SCREEN_HEIGHT_DEFAULT;
+
+            coordsX[3] = getIntercept(x, y, wallLocation.x, wallLocation.y, SCREEN_HEIGHT_DEFAULT);
+            coordsY[3] = SCREEN_HEIGHT_DEFAULT;
+        } else { // below wall
+            //
+        }
+    } else if (y >= wallLocation.y && y <= (wallLocation.y+wallLocation.h)) {
+        if ( x < wallLocation.x) { // left of wall
+            //
+        } else { // right of wall
+            //
+        }
+    } else {
+        if (x < wallLocation.x) {
+            if (y < wallLocation.y) { // top left of wall
+                //
+            } else { // bottom left of wall
+                //
+            }
+        } else {
+            if (y < wallLocation.y) { // top right of wall
+                //
+            } else { // bottom right of wall
+                //
+            }
+        }
+    }
+    filledPolygonRGBA(renderer, coordsX, coordsY, 4, r, g, b, 255); // draws the shadow using the renderer
 }
+
+void Wall::deleteObject(void) {
+    // Clear texture
+}
+
 
 
 // Functions related to the projectile class
@@ -431,9 +486,9 @@ int Projectile::checkCollision(forward_list<Wall>* wallContainer,
  forward_list<Player>* playerList, int shooterID) {
     int output = PROJECTILE_COLLISION_NONE;
     for (auto character = playerList->begin(); character != playerList->end(); character++) {
-        if (distBetweenPoints(centreX, centreY, (*character).getX(), (*character).getY()) < (radius + (*character).getRadius())) {
+        if (distBetweenPoints(centreX, centreY, character->getX(), character->getY()) < (radius + character->getRadius())) {
             if (character->getID() != shooterID) {
-                (*character).successfulShot();
+                character->successfulShot();
                 output = PROJECTILE_COLLISION_PLAYER;
             }
         }
@@ -477,6 +532,9 @@ void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
      angle, NULL, SDL_FLIP_NONE);
 }
 
+void Projectile::deleteObject(void) {
+    // Clear texture
+}
 
 int main(int argc, char const *argv[])
 {
@@ -486,12 +544,15 @@ int main(int argc, char const *argv[])
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
     double scaleFactor;
+    int playerMainX;
+    int playerMainY;
 
 
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
+    cout << scaleFactor << "\n";
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH/2, SCREEN_HEIGHT/2, CHARACTER_MAIN_ID),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID),
         Player(renderer, 300, 300, 2)
     };
 
@@ -502,6 +563,7 @@ int main(int argc, char const *argv[])
     };
 
     forward_list<Projectile> projectileList;
+    forward_list<Projectile> newList;
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
@@ -516,18 +578,23 @@ int main(int argc, char const *argv[])
 
         // update the state of the controlled character
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
+            character->updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
         }
 
 
         // move all players and projectiles
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).move(wallContainer);   
+            character->move(wallContainer);
+            if (character->getID() == CHARACTER_MAIN_ID) {
+                playerMainX = character->getX();
+                playerMainY = character->getY();
+            }
+
         }
 
-        forward_list<Projectile> newList;
+        newList.clear();
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if ((*bullet).move(&wallContainer, &playerList, CHARACTER_MAIN_ID) != true){
+            if (bullet->move(&wallContainer, &playerList, CHARACTER_MAIN_ID) != true){
                 newList.push_front(*bullet);
             }   
         }
@@ -540,7 +607,7 @@ int main(int argc, char const *argv[])
         // render all objects to the screen
         
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            (*wall).render(renderer, scaleFactor);
+            wall->render(renderer, scaleFactor, playerMainX, playerMainY);
         }
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             (*character).render(renderer, scaleFactor);
@@ -553,7 +620,7 @@ int main(int argc, char const *argv[])
         SDL_RenderPresent(renderer);
     }
 
-    quitGame(window);
+    quitGame(window, playerList, wallContainer, projectileList);
 
     return EXIT_SUCCESS; // return success if the program terminates correctly
 }
