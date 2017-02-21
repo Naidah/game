@@ -135,7 +135,6 @@ int getDirections(void) { // WORKHERE
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
     int output = 0;
     double m = (double)(y1-y2)/(double)(x1-x2);
-    cout << (double)(interceptY-y1)/m << "\n";
     output = (double)(interceptY-y1)/m + x1;
     return output;
 }
@@ -401,22 +400,19 @@ bool Wall::checkCollision(int x, int y, int radius) {
 }
 
 
-void Wall::render(SDL_Renderer* renderer, double scaleFactor, int playerX, int playerY) {
+void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
     SDL_Rect renderRect;
     renderRect.x = floor(wallLocation.x * scaleFactor);
     renderRect.y = floor(wallLocation.y * scaleFactor);
     renderRect.w = floor(wallLocation.w * scaleFactor);
     renderRect.h = floor(wallLocation.h * scaleFactor);
 
-    // draw the shadow of the wall first so it is below the actual wall
-    // createShadow(playerX, playerY, 0, 0, 0, renderer);
-
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
     SDL_RenderFillRect(renderer, &renderRect);
 }
 
-void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
+void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer, double scaleFactor) {
     Sint16 coordsX[5];
     Sint16 coordsY[5];
     int n;
@@ -546,6 +542,10 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
                 coordsY[4] = 0;
             }
         }
+    }
+    for (int i = 0; i < n; i++) {
+        coordsX[i] *= scaleFactor;
+        coordsY[i] *= scaleFactor;
     }
     filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, 255); // draws the shadow using the renderer
 }
@@ -711,10 +711,10 @@ int main(int argc, char const *argv[])
             (*bullet).render(renderer, scaleFactor);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer);
+            wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->render(renderer, scaleFactor, playerMainX, playerMainY);
+            wall->render(renderer, scaleFactor);
         }
 
         // update the screen to the renderers current state

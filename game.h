@@ -66,11 +66,11 @@ const int WALL_SHADOW_BLUE = 255;
 
 // Screen Parameters
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
-const int SCREEN_WIDTH = 1200; // size of screen
-const int SCREEN_HEIGHT = 800; // size of screen
+const int SCREEN_WIDTH = 800; // size of screen
+const int SCREEN_HEIGHT = 600; // size of screen
 
-const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
-const int SCREEN_HEIGHT_DEFAULT = 800; // height of screen to scale against
+const int SCREEN_WIDTH_DEFAULT = 1600; // width of screen to scale against
+const int SCREEN_HEIGHT_DEFAULT = 1200; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
 
@@ -149,8 +149,8 @@ public:
     Wall(int x, int y, int w, int h);
     SDL_Rect getLocation(void) {return wallLocation;}
     bool checkCollision(int x, int y, int radius);
-    void render(SDL_Renderer* renderer, double scaleFactor, int playerX, int playerY);
-    void renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer);
+    void render(SDL_Renderer* renderer, double scaleFactor);
+    void renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer, double scaleFactor);
     void deleteObject(void);
 };
 
