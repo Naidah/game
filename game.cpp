@@ -91,7 +91,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
         cout << "Image failed to load\nSDL_image error " << SDL_GetError();
     } else {
         SDL_SetColorKey(surfaceAtPath, SDL_TRUE, SDL_MapRGB(
-         surfaceAtPath->format, COLOUR_KEY_RED, COLOUR_KEY_GREEN, COLOUR_KEY_BLUE));
+         surfaceAtPath->format, COLOR_KEY_RED, COLOR_KEY_GREEN, COLOR_KEY_BLUE));
         output = SDL_CreateTextureFromSurface(renderer, surfaceAtPath);
         if (output == NULL) {
             cout << "Surface failed conversion to texture.\nSDL_Error " << SDL_GetError();

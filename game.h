@@ -9,11 +9,13 @@ using namespace std;
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
-const int COLOUR_KEY_RED = 255;
-const int COLOUR_KEY_GREEN = 255;
-const int COLOUR_KEY_BLUE = 255;
 
-// directions
+// RGB color of backgroun on images to allow tranparency
+const int COLOR_KEY_RED = 255;
+const int COLOR_KEY_GREEN = 255;
+const int COLOR_KEY_BLUE = 255;
+
+// directions returned by the get direction function for movement
 const int MOVE_NONE = 0;
 const int MOVE_UP = 1;
 const int MOVE_DOWN = 2;
@@ -25,45 +27,46 @@ const int MOVE_DOWN_LEFT = 7;
 const int MOVE_DOWN_RIGHT = 8;
 
 // Character related constants
-const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png";
-const int CHARACTER_VEL_MAX = 5;
-const int CHARACTER_ACCEL_PER_FRAME = 20;
-const int CHARACTER_DECEL_PER_FRAME = 0.9;
-const int CHARACTER_WIDTH = 32;
-const int CHARACTER_HEIGHT = 32;
+const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
+const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
+const int CHARACTER_ACCEL_PER_FRAME = 20; // Acceleration speed of the plater
+const double CHARACTER_DECEL_PER_FRAME = 0.9; // Multiplier used to decelerate player when not giving input movement
+const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
+const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
-const int CHARACTER_RED = 255;
-const int CHARACTER_GREEN = 255;
-const int CHARACTER_BLUE = 255;
+const int CHARACTER_RED = 255; // red hue of player
+const int CHARACTER_GREEN = 255; // green hue of player
+const int CHARACTER_BLUE = 255; // blue hue of player
 
-const int CHARACTER_AMMO_MAX = 10;
-const int CHARACTER_WEAPON_SPREAD_MAX = 8;
-const int CHARACTER_RELOAD_FRAMES = 0; //120
+const int CHARACTER_AMMO_MAX = 10; // number of bullets in player clip
+const int CHARACTER_WEAPON_SPREAD_MAX = 8; // Maximum angle of deviation in the players shot from straight ahead
+const int CHARACTER_RELOAD_FRAMES = 120; // number of frames the reload animation takes
 
-const int CHARACTER_MAIN_ID = 1;
+const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
 
 // Projectile related constants
-const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png";
-const double PROJECTILE_SPEED = 16.0;
-const int PROJECTILE_WIDTH = 8;
-const int PROJECTILE_HEIGHT = 8;
+const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png"; // location of the bulet sprite
+const double PROJECTILE_SPEED = 16.0; // velocity of the projectile
+const int PROJECTILE_WIDTH = 8; // width of projectile image on default screen size
+const int PROJECTILE_HEIGHT = 8; // height of projectile image on default screen size
 
-const int PROJECTILE_RED = 255;
-const int PROJECTILE_GREEN = 255;
-const int PROJECTILE_BLUE = 255;
+const int PROJECTILE_RED = 255; // red hue of projectile
+const int PROJECTILE_GREEN = 255; // green hue of projectile
+const int PROJECTILE_BLUE = 255; // blue hue of projectile
 
+// identifiers for which object type an object collides with
 const int PROJECTILE_COLLISION_NONE = 0;
 const int PROJECTILE_COLLISION_PLAYER = 1;
 const int PROJECTILE_COLLISION_WALL = 2;
 
 // Wall related constats
-const int WALL_RED = 0;
-const int WALL_GREEN = 0;
-const int WALL_BLUE = 200;
+const int WALL_RED = 0; // red hue of wall
+const int WALL_GREEN = 0; // green hue of wall
+const int WALL_BLUE = 200; // blue hue of wall
 
-const int WALL_SHADOW_RED = 200;
-const int WALL_SHADOW_GREEN = 200;
-const int WALL_SHADOW_BLUE = 255;
+const int WALL_SHADOW_RED = 200; // red component of walls shadow
+const int WALL_SHADOW_GREEN = 200; // green component of walls shadow
+const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
@@ -77,23 +80,24 @@ const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the scree
 
 /*-------------------------- Class Definitions -------------------------*/
 
-// declarations
+// declarations of different classes
 class Player;
 class Wall;
 class Projectile;
 
 // Class definitions
+
 // Class to represent all player controlled characters
 class Player {
 private:
     // details about the characters location
     SDL_Rect playerRect; // constains the position and size of the player's image for rendering
-    double angle;
+    double angle; // stores angle player is pointing
     int centreX; // Contain the x and y coordinates of the centre of the player
     int centreY;
     int radius; // contains the radius of the character circle in pixels
 
-    // players velocity
+    // players velocity in each direction
     double velx;
     double vely;
 
@@ -102,11 +106,11 @@ private:
     int green;
     int blue;
 
-    int currAmmo;
-    int reloadFramesLeft;
+    int currAmmo; // ammo player has left in their clip
+    int reloadFramesLeft; // number of frames left for the reload animation to complete
 
-    bool mousePressFirst;
-    int id;
+    bool mousePressFirst; // flag for whether mouse was pressed last frame
+    int id; // ID number of the player object to differentiate it
 
     // the sprite sheet for the player
     SDL_Texture* playerImage;
@@ -124,13 +128,15 @@ public:
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler,
-     forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor);
-    void move(forward_list<Wall> wallContainer);
-    void setPlayerCentre(void);
-    void successfulShot(void);
-    void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
-    void beginReload(void);
-    void deleteObject(void);
+     forward_list<Projectile>* projectileList, SDL_Renderer* renderer,
+     double scaleFactor);
+    void move(forward_list<Wall> wallContainer); // moves the player based on their velocity
+    void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
+    void successfulShot(void); // called when the player is hit by a bullet
+    void takeShot(forward_list<Projectile>* projectileList,
+     SDL_Renderer* renderer);
+    void beginReload(void); // Function called when reload animation begins
+    void deleteObject(void); // frees any variables from memory as needed
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer, double scaleFactor);
@@ -141,39 +147,46 @@ class Wall {
 private:
     // Rect object to hold info on the wall location
     SDL_Rect wallLocation;
+    // color of the wall
     int red;
     int green;
     int blue;
 
 
 public:
-    Wall(int x, int y, int w, int h);
-    SDL_Rect getLocation(void) {return wallLocation;}
-    bool checkCollision(int x, int y, int radius);
-    void render(SDL_Renderer* renderer, double scaleFactor);
-    void renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer, double scaleFactor);
-    void deleteObject(void);
+    Wall(int x, int y, int w, int h); // initializer function
+    SDL_Rect getLocation(void) {return wallLocation;} // returns the SDL_Rect describing the wall
+    bool checkCollision(int x, int y, int radius); // checks if the object at (x, y) with radius r is in contact with the wall
+    void render(SDL_Renderer* renderer, double scaleFactor); // draw the wall to the screen
+    void renderShadow(int x, int y, int r, int g, int b,
+     SDL_Renderer* renderer, double scaleFactor); // draw the LOS shadow by the wall to the screen
+    void deleteObject(void); // frees any memory associated with the wall
 };
 
 class Projectile {
 private:
+    // detail about the projectile (location of top left corner, width and height)
     SDL_Rect projectileRect;
-    int centreX;
+    int centreX; // location of hte bullets centre
     int centreY;
-    double angle;
+    double angle; // rotation of the projectile
 
-    int radius;
+    int radius; // radius of the bullet
 
+    // velocity of the bullet in each direction
     double velx;
     double vely;
 
+    // double version of the projectiles location
     double currPosX;
     double currPosY;
 
+    // color of the projectiles
     int red;
     int green;
     int blue;
 
+    // spritesheet of the projectile
     SDL_Texture* projectileImage;
 public:
     Projectile(int x, int y, double a, SDL_Renderer* renderer);
@@ -189,9 +202,9 @@ public:
 /*--------------------- Function definitions -------------------------*/
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
-     forward_list<Wall> wallContainer, forward_list<Projectile> projectileList);
-bool init(SDL_Window** window, SDL_Renderer** renderer);
-SDL_Texture* loadImage(string path, SDL_Renderer* renderer);
-double distBetweenPoints(int x1, int y1, int x2, int y2);
-int getInterceptX(int x1, int y1, int x2, int y2, int interceptY);
-int getInterceptY(int x1, int y1, int x2, int y2, int interceptX);
+     forward_list<Wall> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
+bool init(SDL_Window** window, SDL_Renderer** renderer); // initializes the same (including SDL)
+SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
+double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
+int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
+int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
