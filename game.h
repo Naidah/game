@@ -29,8 +29,8 @@ const int MOVE_DOWN_RIGHT = 8;
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
 const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
-const int CHARACTER_ACCEL_PER_FRAME = 20; // Acceleration speed of the plater
-const double CHARACTER_DECEL_PER_FRAME = 0.9; // Multiplier used to decelerate player when not giving input movement
+const double CHARACTER_ACCEL_PER_FRAME = 0.7; // Acceleration speed of the plater
+const double CHARACTER_DECEL_PER_FRAME = 0.5; // Multiplier used to decelerate player when not giving input movement
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 

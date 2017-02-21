@@ -55,56 +55,56 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList,
 }
 
 bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { // initialize important SDL functionalities
+    int height;
     bool success = true; // flag to check whether program runs successfully
     if (SDL_Init(SDL_INIT_VIDEO) < 0) { // Make sure SDL can initialize properly, otherwise return error code
         cout << "Error Initializing SDL./n SDL_Error " << SDL_GetError() << "\n";
         success = false;
     } else {
-        *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, 
+        *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, //create the window
             SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_WIDTH,
              SDL_WINDOW_SHOWN);
         if (window == NULL) { // check if cratewindow returned a valid pointer
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
             success = false;
         } else {
-            if (SCREEN_FULLSCREEN == true) {
+            if (SCREEN_FULLSCREEN == true) { // If the game is set to be in fullscreen, set it to fullscreen
                 SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
             }
-            int height;
-            SDL_GetWindowSize(*window, NULL, &height);
-            *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT;
+            SDL_GetWindowSize(*window, NULL, &height); // get the height of the window
+            *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT; // store the ratio between the size of the screen and the screen size the game is built around
             *renderer = SDL_CreateRenderer(*window, -1,
-             SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-            if (renderer == NULL) {
+             SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC); // create renderer object
+            if (renderer == NULL) { // if the renderer failed to initialize, return an error
                 cout << "Renderer failed to initialize. SDL_Error" << SDL_GetError();
                 success = false;
             } else {
-                SDL_SetRenderDrawColor(*renderer, 255, 255, 255, 255);
+                SDL_SetRenderDrawColor(*renderer, 255, 255, 255, 255); // Give the renderer a default white state
 
                 int imgFlags = IMG_INIT_PNG;
-                if (!(IMG_Init(imgFlags) & imgFlags)) {
+                if (!(IMG_Init(imgFlags) & imgFlags)) { // initialize SDL_image, returning an error if it fails
                     cout << "SDL_Image failed to initialize. Image Error" << IMG_GetError();
                     success = false;
                 }
             }
         }
     }
-    return success;
+    return success; // returns whether any errors occured during the process
 }
 
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
     SDL_Texture* output = NULL;
-    SDL_Surface* surfaceAtPath = IMG_Load(path.c_str());
+    SDL_Surface* surfaceAtPath = IMG_Load(path.c_str()); // load the spritesheet as a surface
     if (surfaceAtPath == NULL) { //ensure the image loaded correctly
         cout << "Image failed to load\nSDL_image error " << SDL_GetError();
     } else {
-        SDL_SetColorKey(surfaceAtPath, SDL_TRUE, SDL_MapRGB(
+        SDL_SetColorKey(surfaceAtPath, SDL_TRUE, SDL_MapRGB( // use color keying to remove the background from the image
          surfaceAtPath->format, COLOR_KEY_RED, COLOR_KEY_GREEN, COLOR_KEY_BLUE));
-        output = SDL_CreateTextureFromSurface(renderer, surfaceAtPath);
-        if (output == NULL) {
+        output = SDL_CreateTextureFromSurface(renderer, surfaceAtPath); // convert the surface to a texture
+        if (output == NULL) { // check the image converted correctly
             cout << "Surface failed conversion to texture.\nSDL_Error " << SDL_GetError();
         }
-        SDL_FreeSurface(surfaceAtPath);
+        SDL_FreeSurface(surfaceAtPath); // remove the surface now that it is no longer needed
     }
     return output;
 }
@@ -118,10 +118,13 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
     return output;
 }
 
-int getDirections(void) { // WORKHERE
-    int output = MOVE_NONE;
-    const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
-    if (keyboardState[SDL_SCANCODE_UP] && keyboardState[SDL_SCANCODE_A]) {
+int getDirections(void) {
+    int output = MOVE_NONE; // set the default output to no keys pressed
+    const Uint8* keyboardState = SDL_GetKeyboardState(NULL); // load the array of keyboard states
+
+    // go through each key combination (A, SD, WD, etc) and see if the corresponding key
+    // for a given case, if the required keys are pressed, set movement in that direction
+    if (keyboardState[SDL_SCANCODE_W] && keyboardState[SDL_SCANCODE_A]) {
         output = MOVE_UP_LEFT;
     } else if (keyboardState[SDL_SCANCODE_W] && keyboardState[SDL_SCANCODE_D]) {
         output = MOVE_UP_RIGHT;
@@ -139,20 +142,21 @@ int getDirections(void) { // WORKHERE
         output = MOVE_DOWN;
     }
 
+    // return the direction of movement
     return output;
 }
 
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
     int output = 0;
-    double m = (double)(y1-y2)/(double)(x1-x2);
-    output = (double)(interceptY-y1)/m + x1;
+    double m = (double)(y1-y2)/(double)(x1-x2); // find the gradient of the line
+    output = (double)(interceptY-y1)/m + x1; // calculate the x-value
     return output;
 }
 
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
     int output = 0;
-    double m = (double)(x1-x2)/(double)(y1-y2);
-    output = (double)(interceptX-x1)/m + y1;
+    double m = (double)(x1-x2)/(double)(y1-y2); // find the gradient
+    output = (double)(interceptX-x1)/m + y1; // caluculate the y-value
     return output;
 }
 
@@ -184,24 +188,24 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) {
     // load in the players spritesheet
     playerImage = loadImage(CHARACTER_IMAGE_LOCATION, renderer);
 
-    // set the players default speed
+    // set the players default speed to 0
     velx = 0;
     vely = 0;
 
-    currAmmo = CHARACTER_AMMO_MAX;
-    reloadFramesLeft = 0;
+    currAmmo = CHARACTER_AMMO_MAX; // fully load the players gun
+    reloadFramesLeft = 0; // default the player to not be reloading
 
-    mousePressFirst = true;
-    id = idNum;
+    mousePressFirst = true; // default player to have not pressed the mouse last frame
+    id = idNum; // set the ID number to the one provided
 
-    // set the players color scheme for themself
+    // set the players color scheme
     red = CHARACTER_RED;
     green = CHARACTER_GREEN;
     blue = CHARACTER_BLUE;
 }
 
 void Player::setPlayerCentre(void) {
-    centreX = playerRect.x + radius;
+    centreX = playerRect.x + radius; // calculate the X and Y centres of the player
     centreY = playerRect.y + radius;
 }
 
@@ -209,14 +213,16 @@ void Player::updateState(SDL_Event* eventHandler,
  forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor) {
     // get the keyboard state containing which keys are actively pressed
     int direction = MOVE_NONE;
+
     // used to store the x and y coordinates of the mouse
     int mouseX;
     int mouseY;
 
     // update velocity in the y direction
-    if (id == CHARACTER_MAIN_ID) {
+    if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
         // directional movement
-        direction = getDirections();
+        direction = getDirections(); // get the direction of movement for the player at the current frame
+        // increment the velocity in each direction according to the movement direction
         if (direction == MOVE_UP) {
             vely -= CHARACTER_ACCEL_PER_FRAME;
         } else if (direction == MOVE_DOWN) {
@@ -240,52 +246,61 @@ void Player::updateState(SDL_Event* eventHandler,
         }
 
         if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
-            if (velx > 0) {
-                velx = floor(velx*CHARACTER_DECEL_PER_FRAME);
-            } else if (velx < 0) {
-                velx = ceil(velx*CHARACTER_DECEL_PER_FRAME);
+            // if the player has no movement in the x direction, reduce speed along that axis
+            if (velx > 0) { // decrease toward 0 if the player is moving right 
+                velx -= CHARACTER_DECEL_PER_FRAME;
+            } else if (velx < 0) { // increase toward 0 if the player is moving left
+                velx += CHARACTER_DECEL_PER_FRAME;
+            }
+            if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
+                velx = 0; // if the velocity would wrap the other way next frame, set it to 0
             }
         }
         if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
             if (vely > 0) {
-                vely = floor(vely*CHARACTER_DECEL_PER_FRAME);
+                vely -= CHARACTER_DECEL_PER_FRAME;
             } else if (vely < 0) {
-                vely = ceil(vely*CHARACTER_DECEL_PER_FRAME);
+                vely += CHARACTER_DECEL_PER_FRAME;
+            }
+            if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
+                vely = 0; // if the velocity would wrap the other way next frame, set it to 0
             }
         }
 
-        double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2));
-        if (currSpeed > CHARACTER_VEL_MAX) {
+        double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
+        if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
+            // scale x and y down so they are at the correct speed
             vely *= CHARACTER_VEL_MAX/currSpeed;
             velx *= CHARACTER_VEL_MAX/currSpeed;
         }
 
         // rotate the player to look toward the mouse
         // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
-        SDL_GetMouseState(&mouseX, &mouseY);
+        SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
         angle = atan2((double)(centreY*scaleFactor-mouseY),
-         (double)(centreX*scaleFactor-mouseX))*180.0/M_PI;
+         (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
 
         // check if player is shooting
-        if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) {
-            takeShot(projectileList, renderer);
-            mousePressFirst = false;
-        } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+        if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) { // if the mouse is pressed this frame and not the last
+            takeShot(projectileList, renderer); // have the player shoot a projectile
+            mousePressFirst = false; // set the mouse to have been pressed this frame
+        } else if (eventHandler->type == SDL_MOUSEBUTTONUP) { // if the mouse is released
             mousePressFirst = true;
         }
     }
 }
 
 void Player::move(forward_list<Wall> wallContainer) {
+    // store the original location of the player
     int posOrigX = playerRect.x;
     int posOrigY = playerRect.y;
     // moves the player based on the final velocity of each frame
+
+    // move the player along x and reset the centre
     playerRect.x += velx;
     setPlayerCentre();
-    if (reloadFramesLeft > 0) {
-        reloadFramesLeft--;
-    }
 
+    // go through each wall, and if the player movement would cause a collision, undo the movement along x
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
         if ((*wall).checkCollision(centreX, centreY, radius) == true) {
             playerRect.x = posOrigX;
@@ -293,6 +308,8 @@ void Player::move(forward_list<Wall> wallContainer) {
             setPlayerCentre();
         }
     }
+
+    //repeat the process for x with y
     playerRect.y += vely;
     setPlayerCentre();
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
@@ -302,27 +319,32 @@ void Player::move(forward_list<Wall> wallContainer) {
             setPlayerCentre();
         }
     }
+
+    // if the player is partway through reloading, take a frame of the time
+    if (reloadFramesLeft > 0) {
+        reloadFramesLeft--;
+    }
 }
 
 
 void Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
-    red = (red+25)%255;
+    red = (red+25)%255; // placeholder thing till actual damage mechanics added
 }
 
 void Player::beginReload(void) {
     // function to make the character enter the reload state
-    currAmmo = CHARACTER_AMMO_MAX;
-    reloadFramesLeft = CHARACTER_RELOAD_FRAMES;
+    currAmmo = CHARACTER_AMMO_MAX; // refill ammo
+    reloadFramesLeft = CHARACTER_RELOAD_FRAMES; // set the player to begin the reload animation
 }
 
 void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
     // function that is called when the player shoots their gun
-    double projectileAngle = angle;
+    double projectileAngle = angle; // angle projectile is facing
     if (currAmmo > 0 && reloadFramesLeft == 0) { // check the player has enough ammo left to shoot
-        currAmmo -= 1;
-        projectileAngle = angle + (rand() % (2*CHARACTER_WEAPON_SPREAD_MAX) - CHARACTER_WEAPON_SPREAD_MAX);    
-        projectileList->push_front(Projectile(centreX, centreY, projectileAngle, renderer));
+        currAmmo -= 1; // take one bullet from the player magazine
+        projectileAngle += (rand() % (2*CHARACTER_WEAPON_SPREAD_MAX) - CHARACTER_WEAPON_SPREAD_MAX); // add a random element to the bullets start
+        projectileList->push_front(Projectile(centreX, centreY, projectileAngle, renderer)); // create the new projectile and add it to the array
     } else if (currAmmo == 0) {
         beginReload();
     }
@@ -330,7 +352,7 @@ void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* re
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {
     // draws the player to the screen using the supplied renderer
-    SDL_Rect renderRect;
+    SDL_Rect renderRect; // create a rect containing the players scale coordinates and size
     renderRect.x = floor(playerRect.x * scaleFactor);
     renderRect.y = floor(playerRect.y * scaleFactor);
     renderRect.w = floor(playerRect.w * scaleFactor);
@@ -338,21 +360,24 @@ void Player::render(SDL_Renderer* renderer, double scaleFactor) {
 
     SDL_SetTextureColorMod(playerImage, red, green, blue); // modulates the color based on the players settings
     SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
-     angle, NULL, SDL_FLIP_NONE);
+     angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
 }
 
 void Player::deleteObject(void) {
+    // clears any memory used by the player
     SDL_DestroyTexture(playerImage);
 }
 
 
 // Functions related to the wall class
 Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
+    // set the coordinates and size of the player
     wallLocation.x = x;
     wallLocation.y = y;
     wallLocation.w = w;
     wallLocation.h = h;
 
+    // set the walls color
     red = WALL_RED;
     green = WALL_GREEN;
     blue = WALL_BLUE;
