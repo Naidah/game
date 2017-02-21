@@ -3,23 +3,25 @@
 
 // TODO
 /*
+MAJOR:
+    - Add memory freeing
+    - Clean up code
     - Start artwork for objects and background
     - Comment current work
-    - Begin to add networking
+    - Begin to add networking   
     - Create the game space and add UI
+
+MINOR:
     - Add rolling
     - Add different guns
     - Allow for the player class to be able to spawn with more conditions
-    - Add memory freeing
-    - Clean up code
-    - Change shadow drawing to be called as a seperate part of the render process
 */
 
 
 
 // Included modules in the program
 #include <stdio.h> // standard input/output for debugging
-#include <stdlib.h> // constains several useful various features
+#include <stdlib.h> // constains several constants and random function
 
 #include <SDL.h> // sdl library for graphics features
 #include <SDL_image.h> // sdl library for using PNGs and other image formats
@@ -308,9 +310,11 @@ void Player::beginReload(void) {
 
 void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
     // function that is called when the player shoots their gun
+    double projectileAngle = angle;
     if (currAmmo > 0 && reloadFramesLeft == 0) { // check the player has enough ammo left to shoot
         currAmmo -= 1;
-        projectileList->push_front(Projectile(centreX, centreY, angle, renderer));
+        projectileAngle = angle + (rand() % (2*CHARACTER_WEAPON_SPREAD_MAX) - CHARACTER_WEAPON_SPREAD_MAX);    
+        projectileList->push_front(Projectile(centreX, centreY, projectileAngle, renderer));
     } else if (currAmmo == 0) {
         beginReload();
     }

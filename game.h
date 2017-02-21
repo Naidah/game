@@ -37,7 +37,8 @@ const int CHARACTER_GREEN = 255;
 const int CHARACTER_BLUE = 255;
 
 const int CHARACTER_AMMO_MAX = 10;
-const int CHARACTER_RELOAD_FRAMES = 120;
+const int CHARACTER_WEAPON_SPREAD_MAX = 8;
+const int CHARACTER_RELOAD_FRAMES = 0; //120
 
 const int CHARACTER_MAIN_ID = 1;
 
@@ -66,11 +67,11 @@ const int WALL_SHADOW_BLUE = 255;
 
 // Screen Parameters
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
-const int SCREEN_WIDTH = 800; // size of screen
-const int SCREEN_HEIGHT = 600; // size of screen
+const int SCREEN_WIDTH = 1200; // size of screen
+const int SCREEN_HEIGHT = 800; // size of screen
 
-const int SCREEN_WIDTH_DEFAULT = 1600; // width of screen to scale against
-const int SCREEN_HEIGHT_DEFAULT = 1200; // height of screen to scale against
+const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
+const int SCREEN_HEIGHT_DEFAULT = 800; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
 
