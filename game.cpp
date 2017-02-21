@@ -42,7 +42,15 @@ using namespace std;
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
      forward_list<Wall> wallContainer, forward_list<Projectile> projectileList) {
     SDL_DestroyWindow(window);
-    // FIX THIS
+    for (auto character = playerList.begin(); character != playerList.end(); character++) {
+        character->deleteObject();
+    }
+    for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+        bullet->deleteObject();
+    }
+    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        wall->deleteObject();
+    }
     SDL_Quit();
 }
 
@@ -334,7 +342,7 @@ void Player::render(SDL_Renderer* renderer, double scaleFactor) {
 }
 
 void Player::deleteObject(void) {
-    // Clear texture
+    SDL_DestroyTexture(playerImage);
 }
 
 
@@ -555,7 +563,7 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
 }
 
 void Wall::deleteObject(void) {
-    // Clear texture
+    // No variables to clear, kept in case some added later
 }
 
 
@@ -636,7 +644,7 @@ void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
 }
 
 void Projectile::deleteObject(void) {
-    // Clear texture
+    SDL_DestroyTexture(projectileImage);
 }
 
 int main(int argc, char const *argv[])
@@ -698,7 +706,9 @@ int main(int argc, char const *argv[])
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             if (bullet->move(&wallContainer, &playerList, CHARACTER_MAIN_ID) != true){
                 newList.push_front(*bullet);
-            }   
+            } else {
+                bullet->deleteObject();
+            }
         }
         projectileList = newList; // create a new list of projectiles to store all that remain on screen
 
@@ -709,10 +719,10 @@ int main(int argc, char const *argv[])
         // render all objects to the screen
         
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            (*character).render(renderer, scaleFactor);
+            character->render(renderer, scaleFactor);
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            (*bullet).render(renderer, scaleFactor);
+            bullet->render(renderer, scaleFactor);
         }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);

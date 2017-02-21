@@ -38,8 +38,8 @@ const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
 const int CHARACTER_BLUE = 255; // blue hue of player
 
-const int CHARACTER_AMMO_MAX = 10; // number of bullets in player clip
-const int CHARACTER_WEAPON_SPREAD_MAX = 8; // Maximum angle of deviation in the players shot from straight ahead
+const int CHARACTER_AMMO_MAX = 40; // number of bullets in player clip
+const int CHARACTER_WEAPON_SPREAD_MAX = 4; // Maximum angle of deviation in the players shot from straight ahead
 const int CHARACTER_RELOAD_FRAMES = 120; // number of frames the reload animation takes
 
 const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
