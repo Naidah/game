@@ -4,8 +4,6 @@
 // TODO
 /*
 MAJOR:
-    - Add memory freeing
-    - Clean up code
     - Start artwork for objects and background
     - Comment current work
     - Begin to add networking   
@@ -14,6 +12,12 @@ MAJOR:
 MINOR:
     - Add rolling
     - Add different guns
+        - Pistol (recoil)
+        - AR (full auto, fixed spread)
+        - Shotgun (several shots at once, delay on shots)
+        - Sniper (charge time, reduced speed when firing)
+        - LMG (delay on start, bouncing bullet, infinite ammo)
+        - GL? (slow speed, bounce on wall)
     - Allow for the player class to be able to spawn with more conditions
 */
 
@@ -385,7 +389,13 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
 
 bool Wall::checkCollision(int x, int y, int radius) {
     // checks to see whether an object has collided with the wall
-    bool collision = false;
+    bool collision = false; // whether a collision has been detected
+
+    /*
+    goes through and compares the players coordinates to the sides of the
+    wall to find the object is located next to. Then, for each case a check
+    is made to see if the object is touching the wall
+    */
     if (x >= wallLocation.x && x <= (wallLocation.x+wallLocation.w)) {
         if (y < wallLocation.y) { // above wall
             if (y > (wallLocation.y - radius)) {
@@ -450,9 +460,15 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
 }
 
 void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer, double scaleFactor) {
+    // arrays containing the coords of the corner
     Sint16 coordsX[5];
     Sint16 coordsY[5];
+    // number of elements in the array being used
     int n;
+
+    // compares the objects coordinates to the walls sides to determine
+    // where the shadow should be drawn from. Then, for each case the corners
+    // of the shadow to be used are defined
     if (x >= wallLocation.x && x <= (wallLocation.x+wallLocation.w)) {
         if (y < wallLocation.y) { // above wall
             n = 4;
@@ -580,10 +596,11 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
             }
         }
     }
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++) { // go through each coordinate and scale it to the screen size
         coordsX[i] *= scaleFactor;
         coordsY[i] *= scaleFactor;
     }
+
     filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, 255); // draws the shadow using the renderer
 }
 
@@ -595,21 +612,28 @@ void Wall::deleteObject(void) {
 
 // Functions related to the projectile class
  Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer) {
+    // set the location of the projectile
     currPosX = x;
     currPosY = y;
 
+    // set the angle
     angle = a;
+
+    // set the SDL_Rect for the projectile
     projectileRect.x = x;
     projectileRect.y = y;
     projectileRect.w = PROJECTILE_WIDTH;
     projectileRect.h = PROJECTILE_HEIGHT;
 
+    // set the projectiles radius and centre
     radius = PROJECTILE_WIDTH/2;
     setProjectileCentre();
 
+    // initialize the speed of the projectile based on the angle it fired at
     velx = -PROJECTILE_SPEED * cos(angle*M_PI/180);
     vely = -PROJECTILE_SPEED * sin(angle*M_PI/180);
 
+    // load the spritesheet to memory
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, renderer);
  }
 
@@ -620,18 +644,19 @@ void Projectile::setProjectileCentre(void) {
 
 int Projectile::checkCollision(forward_list<Wall>* wallContainer,
  forward_list<Player>* playerList, int shooterID) {
-    int output = PROJECTILE_COLLISION_NONE;
+    int output = PROJECTILE_COLLISION_NONE; // default to no collision
     for (auto character = playerList->begin(); character != playerList->end(); character++) {
-        if (distBetweenPoints(centreX, centreY, character->getX(), character->getY()) < (radius + character->getRadius())) {
-            if (character->getID() != shooterID) {
-                character->successfulShot();
+        if (distBetweenPoints(centreX, centreY, character->getX(),
+         character->getY()) < (radius + character->getRadius())) { // check whether the projectile is contacting the player
+            if (character->getID() != shooterID) { // check the player hit is not the one who shot the projectile
+                character->successfulShot(); // tell the player they are hit
                 output = PROJECTILE_COLLISION_PLAYER;
             }
         }
     }
-    if (output == PROJECTILE_COLLISION_NONE) { // make sure no other collision has been detected
+    if (output == PROJECTILE_COLLISION_NONE) { // make sure no other collision has been detected with a wall
         for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
-            if ((*wall).checkCollision(centreX, centreY, radius)) {
+            if (wall->checkCollision(centreX, centreY, radius)) {
                 output = PROJECTILE_COLLISION_WALL;
             }
         }
@@ -644,11 +669,17 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
     // moves the projectile,  returns true if the projectile collided and needs to be destroyed
     bool destroyed = false;
     int collision = PROJECTILE_COLLISION_NONE;
+
+    // update positions based on velocity
     currPosX += velx;
     currPosY += vely;
     projectileRect.x = floor(currPosX);
     projectileRect.y = floor(currPosY);
+
+    // move the centre
     setProjectileCentre();
+
+    // check if the projectile collided this frame
     collision = checkCollision(wallContainer, playerList, playerID);
     if (collision != PROJECTILE_COLLISION_NONE) {
         destroyed = true;
@@ -657,6 +688,7 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
 }
 
 void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
+    // create a scaled rect to use for displaying the object
     SDL_Rect renderRect;
     renderRect.x = floor(projectileRect.x * scaleFactor);
     renderRect.y = floor(projectileRect.y * scaleFactor);
@@ -665,10 +697,11 @@ void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
 
     SDL_SetTextureColorMod(projectileImage, red, green, blue); // modulates the color based on the players settings
     SDL_RenderCopyEx(renderer, projectileImage, NULL, &renderRect,
-     angle, NULL, SDL_FLIP_NONE);
+     angle, NULL, SDL_FLIP_NONE);// draw the projectile to the window
 }
 
 void Projectile::deleteObject(void) {
+    // clears any memory used  by the projectile
     SDL_DestroyTexture(projectileImage);
 }
 
@@ -738,7 +771,7 @@ int main(int argc, char const *argv[])
         projectileList = newList; // create a new list of projectiles to store all that remain on screen
 
         // reset the screen for the next frame
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_SetRenderDrawColor(renderer, 200, 200, 255, 255);
         SDL_RenderClear(renderer);
 
         // render all objects to the screen
