@@ -8,6 +8,7 @@ MAJOR:
     - Comment current work
     - Begin to add networking   
     - Create the game space and add UI
+    - Add weapon deconstructor
 
 MINOR:
     - Add rolling
@@ -43,8 +44,8 @@ using namespace std;
 
 
 /* -------------------------- FUNCTIONS ------------------------- */
-void quitGame(SDL_Window* window, forward_list<Player> playerList,
-     forward_list<Wall> wallContainer, forward_list<Projectile> projectileList) {
+
+void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<Wall> wallContainer, forward_list<Projectile> projectileList) {
     SDL_DestroyWindow(window);
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
         character->deleteObject();
@@ -172,7 +173,7 @@ int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
 // Function definitions for each class
 
 // Functions related to the player class
-Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) {
+Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* gun) {
     // initialization function for the player class
     //set the players default coordinated
     playerRect.x = startX;
@@ -196,10 +197,9 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum) {
     velx = 0;
     vely = 0;
 
-    currAmmo = CHARACTER_AMMO_MAX; // fully load the players gun
-    reloadFramesLeft = 0; // default the player to not be reloading
+    // assign the weapon pointer to a variable
+    weapon = gun;
 
-    mousePressFirst = true; // default player to have not pressed the mouse last frame
     id = idNum; // set the ID number to the one provided
 
     // set the players color scheme
@@ -285,11 +285,8 @@ void Player::updateState(SDL_Event* eventHandler,
          (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
 
         // check if player is shooting
-        if (eventHandler->type == SDL_MOUSEBUTTONDOWN && mousePressFirst == true) { // if the mouse is pressed this frame and not the last
-            takeShot(projectileList, renderer); // have the player shoot a projectile
-            mousePressFirst = false; // set the mouse to have been pressed this frame
-        } else if (eventHandler->type == SDL_MOUSEBUTTONUP) { // if the mouse is released
-            mousePressFirst = true;
+        if (eventHandler->type == SDL_MOUSEBUTTONDOWN) { // if the mouse is pressed this frame and not the last
+            weapon->takeShot(projectileList, renderer, this); // have the player shoot a projectile
         }
     }
 }
@@ -324,34 +321,14 @@ void Player::move(forward_list<Wall> wallContainer) {
         }
     }
 
-    // if the player is partway through reloading, take a frame of the time
-    if (reloadFramesLeft > 0) {
-        reloadFramesLeft--;
-    }
+    // update the gun for the frame
+    weapon->updateGun();
 }
 
 
 void Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
     red = (red+25)%255; // placeholder thing till actual damage mechanics added
-}
-
-void Player::beginReload(void) {
-    // function to make the character enter the reload state
-    currAmmo = CHARACTER_AMMO_MAX; // refill ammo
-    reloadFramesLeft = CHARACTER_RELOAD_FRAMES; // set the player to begin the reload animation
-}
-
-void Player::takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
-    // function that is called when the player shoots their gun
-    double projectileAngle = angle; // angle projectile is facing
-    if (currAmmo > 0 && reloadFramesLeft == 0) { // check the player has enough ammo left to shoot
-        currAmmo -= 1; // take one bullet from the player magazine
-        projectileAngle += (rand() % (2*CHARACTER_WEAPON_SPREAD_MAX) - CHARACTER_WEAPON_SPREAD_MAX); // add a random element to the bullets start
-        projectileList->push_front(Projectile(centreX, centreY, projectileAngle, renderer)); // create the new projectile and add it to the array
-    } else if (currAmmo == 0) {
-        beginReload();
-    }
 }
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {
@@ -370,8 +347,30 @@ void Player::render(SDL_Renderer* renderer, double scaleFactor) {
 void Player::deleteObject(void) {
     // clears any memory used by the player
     SDL_DestroyTexture(playerImage);
+    //delete weapon;
 }
 
+Weapon::Weapon(void) {
+
+}
+
+AssaultRifle::AssaultRifle(void): Weapon() {
+    currAmmo = AR_CLIP_SIZE;
+}
+
+void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
+ SDL_Renderer* renderer, Player* player) {
+    double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD*2);
+    projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+}
+
+void AssaultRifle::beginReload(void) {
+
+}
+
+void AssaultRifle::updateGun(void) {
+
+}
 
 // Functions related to the wall class
 Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
@@ -720,8 +719,8 @@ int main(int argc, char const *argv[])
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID),
-        Player(renderer, 300, 300, 2)
+        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID, new AssaultRifle),
+        Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
     forward_list<Wall> wallContainer = { // container for the walls used in the game

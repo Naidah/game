@@ -44,6 +44,30 @@ const int CHARACTER_RELOAD_FRAMES = 120; // number of frames the reload animatio
 
 const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
 
+// codes for the different weapons player can use
+const int CHARACTER_WEAPON_ASSAULT_RIFLE = 1;
+const int CHARACTER_WEAPON_PISTOL = 2;
+const int CHARACTER_WEAPON_SHOTGUN = 3;
+const int CHARACTER_WEAPON_SNIPER = 4;
+
+// Weapon Related Constants
+// ASSAULT RIFLE
+const int AR_CLIP_SIZE = 24; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 180; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 120; // number of frames in reload animation
+const int AR_SHOT_DELAY = 5; //number of frames between each projectile firing
+
+// PISTOL
+
+
+// SHOTGUN
+
+
+// SNIPER
+
+
+
+
 // Projectile related constants
 const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png"; // location of the bulet sprite
 const double PROJECTILE_SPEED = 16.0; // velocity of the projectile
@@ -69,7 +93,7 @@ const int WALL_SHADOW_GREEN = 200; // green component of walls shadow
 const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
-const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
+const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
 const int SCREEN_WIDTH = 1200; // size of screen
 const int SCREEN_HEIGHT = 800; // size of screen
 
@@ -82,8 +106,11 @@ const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the scree
 
 // declarations of different classes
 class Player;
+class Weapon;
 class Wall;
 class Projectile;
+
+class assualtRifle;
 
 // Class definitions
 
@@ -106,10 +133,8 @@ private:
     int green;
     int blue;
 
-    int currAmmo; // ammo player has left in their clip
-    int reloadFramesLeft; // number of frames left for the reload animation to complete
+    Weapon* weapon;
 
-    bool mousePressFirst; // flag for whether mouse was pressed last frame
     int id; // ID number of the player object to differentiate it
 
     // the sprite sheet for the player
@@ -117,7 +142,7 @@ private:
 
 public:
     // initializer function for the class
-    Player(SDL_Renderer* renderer, int startX, int startY, int idNum);
+    Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* weapon);
 
     //getters for the private variables
     int getX(void) {return centreX;}
@@ -133,13 +158,35 @@ public:
     void move(forward_list<Wall> wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
-    void takeShot(forward_list<Projectile>* projectileList,
-     SDL_Renderer* renderer);
-    void beginReload(void); // Function called when reload animation begins
     void deleteObject(void); // frees any variables from memory as needed
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer, double scaleFactor);
+};
+
+// Weapon base class
+class Weapon {
+protected:
+    int currAmmo;
+    int reloadFramesLeft;
+public:
+    Weapon(void);
+    virtual void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer, Player* player) = 0;
+    virtual void beginReload(void) = 0;
+    virtual void updateGun() = 0;
+};
+
+// Weapon Derived classes
+// Assault rifle
+class AssaultRifle: public Weapon {
+private:
+    int shotDelay;
+    bool mouseDown;
+public:
+    AssaultRifle(void);
+    void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer, Player* player);
+    void beginReload(void);
+    void updateGun(void);
 };
 
 // Wall objects found throughout the environment
