@@ -13,13 +13,10 @@ MAJOR:
 MINOR:
     - Add rolling
     - Add different guns
-        - Pistol (recoil)
-        - AR (full auto, fixed spread)
-        - Shotgun (several shots at once, delay on shots)
         - Sniper (charge time, reduced speed when firing)
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
-    - Allow for the player class to be able to spawn with more conditions
+    - Give each gun a different projectile speed
 */
 
 
@@ -284,10 +281,7 @@ void Player::updateState(SDL_Event* eventHandler,
         angle = atan2((double)(centreY*scaleFactor-mouseY),
          (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
 
-        // check if player is shooting
-        if (eventHandler->type == SDL_MOUSEBUTTONDOWN) { // if the mouse is pressed this frame and not the last
-            weapon->takeShot(projectileList, renderer, this); // have the player shoot a projectile
-        }
+        weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
     }
 }
 
@@ -355,22 +349,129 @@ Weapon::Weapon(void) {
 }
 
 AssaultRifle::AssaultRifle(void): Weapon() {
+    mouseDown = false;
     currAmmo = AR_CLIP_SIZE;
+    reloadFramesLeft = 0;
 }
 
 void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
- SDL_Renderer* renderer, Player* player) {
-    double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD*2);
-    projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+ SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
+    if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
+        mouseDown = true;
+    } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+        mouseDown = false;
+    }
+    double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD/2);
+    if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
+        if (currAmmo > 0) {
+            projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+            shotDelay = AR_SHOT_DELAY;
+            currAmmo--;
+        } else {
+            beginReload();
+        }
+    }
 }
 
 void AssaultRifle::beginReload(void) {
-
+    currAmmo = AR_CLIP_SIZE;
+    reloadFramesLeft = AR_RELOAD_FRAMES;
 }
 
 void AssaultRifle::updateGun(void) {
+    if (shotDelay > 0) {
+        shotDelay--;
+    }
+    if (reloadFramesLeft > 0) {
+        reloadFramesLeft--;
+    }
+}
+
+
+Pistol::Pistol(void): Weapon() {
+    mouseDown = false;
+    currRecoil = 0;
+    currAmmo = PISTOL_CLIP_SIZE;
+    reloadFramesLeft = 0;
+}
+
+void Pistol::takeShot(forward_list<Projectile>* projectileList,
+ SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
+    cout << currRecoil << "\n";
+    double projectileAngle = player->getAngle();
+    if (currRecoil > 0) {
+         projectileAngle = player->getAngle()+((rand()%currRecoil)-currRecoil/2);
+    }
+    if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
+        if (mouseDown != true && reloadFramesLeft == 0) {
+            if (currAmmo > 0) {
+                mouseDown = true;
+                currAmmo--;
+                currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
+                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+            } else {
+                beginReload();
+            }
+        }
+    } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+        mouseDown = false;
+    }
+}
+
+void Pistol::beginReload(void) {
+    currAmmo = PISTOL_CLIP_SIZE;
+    reloadFramesLeft = PISTOL_RELOAD_FRAMES;
+}
+
+void Pistol::updateGun(void) {
+    if (currRecoil > 0) {
+        currRecoil -= PISTOL_RECOIL_RECOVERY_PER_FRAME;
+    }
+    if (currRecoil > PISTOL_MAX_BULLET_SPREAD) {
+        currRecoil = PISTOL_MAX_BULLET_SPREAD;
+    } else if (currRecoil < 0) {
+        currRecoil = 0;
+    }
+    if (reloadFramesLeft > 0) {
+        reloadFramesLeft--;
+    }
+}
+
+
+
+Shotgun::Shotgun(void): Weapon() {
+    mouseDown = false;
+    shotDelay = 0;
+}
+
+void Shotgun::takeShot(forward_list<Projectile>* projectileList,
+ SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
+    double projectileAngle;
+    if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
+        if (mouseDown != true && shotDelay == 0) {
+            mouseDown = true;
+            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
+                projectileAngle = player->getAngle()+((rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2);
+                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+            }
+            shotDelay = SHOTGUN_SHOT_DELAY;
+        }
+    } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+        mouseDown = false;
+    }
+}
+
+void Shotgun::beginReload(void) {
 
 }
+
+void Shotgun::updateGun(void) {
+    if (shotDelay > 0) {
+        shotDelay--;
+    }
+}
+
+
 
 // Functions related to the wall class
 Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
@@ -719,7 +820,7 @@ int main(int argc, char const *argv[])
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID, new AssaultRifle),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID, new Shotgun),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -781,12 +882,13 @@ int main(int argc, char const *argv[])
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             bullet->render(renderer, scaleFactor);
         }
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        /*for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
-        }
+        }*/
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->render(renderer, scaleFactor);
         }
+        cout << playerMainX+playerMainY << "\n";
 
         // update the screen to the renderers current state
         SDL_RenderPresent(renderer);

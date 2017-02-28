@@ -53,15 +53,21 @@ const int CHARACTER_WEAPON_SNIPER = 4;
 // Weapon Related Constants
 // ASSAULT RIFLE
 const int AR_CLIP_SIZE = 24; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 180; // max angle bullets can deflect by
+const int AR_MAX_BULLET_SPREAD = 12; // max angle bullets can deflect by
 const int AR_RELOAD_FRAMES = 120; // number of frames in reload animation
-const int AR_SHOT_DELAY = 5; //number of frames between each projectile firing
+const int AR_SHOT_DELAY = 7; //number of frames between each projectile firing
 
 // PISTOL
-
+const int PISTOL_CLIP_SIZE = 8;
+const int PISTOL_MAX_BULLET_SPREAD = 80;
+const int PISTOL_RELOAD_FRAMES = 80;
+const int PISTOL_RECOIL_INCREASE_PER_SHOT = 40;
+const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 2;
 
 // SHOTGUN
-
+const int SHOTGUN_PROJECTILES_PER_SHOT = 7;
+const int SHOTGUN_PROJECTILE_SPREAD = 55;
+const int SHOTGUN_SHOT_DELAY = 60;
 
 // SNIPER
 
@@ -93,7 +99,7 @@ const int WALL_SHADOW_GREEN = 200; // green component of walls shadow
 const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
-const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
+const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
 const int SCREEN_WIDTH = 1200; // size of screen
 const int SCREEN_HEIGHT = 800; // size of screen
 
@@ -171,7 +177,8 @@ protected:
     int reloadFramesLeft;
 public:
     Weapon(void);
-    virtual void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer, Player* player) = 0;
+    virtual void takeShot(forward_list<Projectile>* projectileList,
+     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) = 0;
     virtual void beginReload(void) = 0;
     virtual void updateGun() = 0;
 };
@@ -184,7 +191,32 @@ private:
     bool mouseDown;
 public:
     AssaultRifle(void);
-    void takeShot(forward_list<Projectile>* projectileList, SDL_Renderer* renderer, Player* player);
+    void takeShot(forward_list<Projectile>* projectileList,
+     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
+    void beginReload(void);
+    void updateGun(void);
+};
+
+class Pistol: public Weapon {
+private:
+    int currRecoil;
+    bool mouseDown;
+public:
+    Pistol(void);
+    void takeShot(forward_list<Projectile>* projectileList,
+     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
+    void beginReload(void);
+    void updateGun(void);
+};
+
+class Shotgun: public Weapon {
+private:
+    int shotDelay;
+    bool mouseDown;
+public:
+    Shotgun(void);
+    void takeShot(forward_list<Projectile>* projectileList,
+     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
 };
