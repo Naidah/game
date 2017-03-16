@@ -52,22 +52,43 @@ const int CHARACTER_WEAPON_SNIPER = 4;
 
 // Weapon Related Constants
 // ASSAULT RIFLE
-const int AR_CLIP_SIZE = 24; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 12; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 120; // number of frames in reload animation
-const int AR_SHOT_DELAY = 7; //number of frames between each projectile firing
+const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
+const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
-const int PISTOL_MAX_BULLET_SPREAD = 80;
-const int PISTOL_RELOAD_FRAMES = 80;
-const int PISTOL_RECOIL_INCREASE_PER_SHOT = 40;
-const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 2;
+const int PISTOL_MAX_BULLET_SPREAD = 40;
+const int PISTOL_RELOAD_FRAMES = 60;
+const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
+const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 7;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 8;
 const int SHOTGUN_PROJECTILE_SPREAD = 55;
-const int SHOTGUN_SHOT_DELAY = 60;
+const int SHOTGUN_SHOT_DELAY = 40;
+
+
+/* Defaults
+// ASSAULT RIFLE
+const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
+const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
+
+// PISTOL
+const int PISTOL_CLIP_SIZE = 8;
+const int PISTOL_MAX_BULLET_SPREAD = 40;
+const int PISTOL_RELOAD_FRAMES = 60;
+const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
+const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
+
+// SHOTGUN
+const int SHOTGUN_PROJECTILES_PER_SHOT = 8;
+const int SHOTGUN_PROJECTILE_SPREAD = 55;
+const int SHOTGUN_SHOT_DELAY = 40;
+*/
 
 // SNIPER
 
@@ -107,6 +128,18 @@ const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 800; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
+// constants used in netcode
+const int CHARBUFF_LENGTH = 256;
+
+
+
+// constants used in debugging
+const bool DEBUG_DRAW_SHADOWS = true;
+
+
+/*-------------------------- Typedefs ------------------------------*/
+
+typedef char charbuff[CHARBUFF_LENGTH];
 
 /*-------------------------- Class Definitions -------------------------*/
 
@@ -221,6 +254,8 @@ public:
     void updateGun(void);
 };
 
+
+
 // Wall objects found throughout the environment
 class Wall {
 private:
@@ -242,6 +277,8 @@ public:
     void deleteObject(void); // frees any memory associated with the wall
 };
 
+
+// projectiles shot by the player
 class Projectile {
 private:
     // detail about the projectile (location of top left corner, width and height)
@@ -265,17 +302,102 @@ private:
     int green;
     int blue;
 
+    // ID of the player who shot the projectile instance
+    int ownerID;
+
     // spritesheet of the projectile
     SDL_Texture* projectileImage;
 public:
-    Projectile(int x, int y, double a, SDL_Renderer* renderer);
-    int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int shooterID);
-    bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList, int playerID);
+    Projectile(int x, int y, double a, SDL_Renderer* renderer, int id);
+    int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
+    bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer, double scaleFactor);
     void deleteObject(void);
 };
 
+
+
+// Classes related to networking aspect of the game
+
+class CNetMessage {
+protected:
+    charbuff buffer;
+    enum bufferStates {
+        EMPTY,
+        READING,
+        WRITING,
+        FULL
+    };
+    bufferStates state;
+    void reset();
+
+public:
+    CNetMessage();
+    virtual int numToLoad(); // returns how many bytes can be loaded into the message
+    virtual int numToUnload(); // returns how many bytes can be downloaded from the message
+
+    void loadBytes(charbuff& inputBuffer, int n); //load a set of characters into the message
+    void unloadBytes(charbuff& destBuffer); // unload a set of characters from the message
+    void finish(void); // set object to full
+};
+
+
+class CIpAddress {
+private:
+    IPaddress m_Ip; // the IPaddress structure
+protected:
+    CIpAddress(); // base constructor
+    CIpAddress(Uint16 port); // constructor that assigns default port
+    CIpAddress(string host, Uint16 port); // constructor that associates a port and host
+    void setIp(IPaddress sdl_ip); // set IP from an SDL_ip instance
+    bool Ok() const; // True when the instance has a port and host assigned
+    IPaddress getIpAddress() const; // return a SDL_net IPaddress structure
+    Uint32 getHost() const; // return host
+    Uint16 getPort() const; // return port
+};
+
+
+class CTcpSocket {
+protected:
+    TCPsocket m_Socket; // TCPsocket structure
+    SDLNet_SocketSet set; // a set of sockets
+public:
+    CTcpSocket();
+    virtual ~CTcpSocket();
+    virtual void setSocket(TCPsocket sdlSocket); // set an instance from an existing SDL socket
+    bool Ok() const; // check if a TCPsocket is associated to the instance
+    bool Ready() const; // true if there are bytes to be read
+    virtual void OnReady(); // pure virtual
+};
+
+
+class CClientSocket;
+
+
+class CHostSocket : public CTcpSocket {
+public:
+    CHostSocket(CIpAddress& ipAddress); // create a socket with a CIpAddress object
+    CHostSocket(Uint16 port); // create and open a socket at an existing port
+    bool Accept(CClientSocket&); // set a client CTcpSocket object after listening to the port
+    virtual void onReady(); // pure virtual
+};
+
+
+class CClientSocket : public CTcpSocket {
+private:
+    CIpAddress m_remoteIP; // CIpAddress object corresponding to remote host
+public:
+    CClientSocket();
+    CClientSocket(string host, Uint16 port); // create the object and connect to a host in a given port
+    bool Connect(CIpAddress& remoteIP); // make a connection to communicate to a remote host
+    bool Connect(CHostSocket& listenerSocket); // make a connection to communicate with a client
+    void setSocket(TCPsocket sdlSocket); // set a socket from and existing SDL_socket
+    CIpAddress GetIPAddress() const; // return CIpAddress associtated with remote host
+    virtual void onReady(); // pure virtual
+    bool Recieve(CNetMessage& rData); // recieve data and load it into an CNetMessage object
+    bool Send (CNetMessage& sData); // send data in a CNetMessage object
+};
 
 
 /*--------------------- Function definitions -------------------------*/

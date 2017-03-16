@@ -17,6 +17,7 @@ MINOR:
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
     - Give each gun a different projectile speed
+    - Add barrier around map edge or destroy projectiles leaving the screen
 */
 
 
@@ -27,6 +28,7 @@ MINOR:
 
 #include <SDL.h> // sdl library for graphics features
 #include <SDL_image.h> // sdl library for using PNGs and other image formats
+#include <SDL_net.h>
 #include <SDL2_gfxPrimitives.h> // contains library for drawing arbitrary polygons
 
 #include <string> // tools for string manipulations
@@ -87,6 +89,10 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
                 if (!(IMG_Init(imgFlags) & imgFlags)) { // initialize SDL_image, returning an error if it fails
                     cout << "SDL_Image failed to initialize. Image Error" << IMG_GetError();
                     success = false;
+                } else {
+                    if (SDLNet_Init() < 0) {
+                        cout << "Error initializing SDLNet: " << SDLNet_GetError() << "\n";
+                    }
                 }
             }
         }
@@ -364,7 +370,7 @@ void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
     double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD/2);
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
-            projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+            projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         } else {
@@ -397,7 +403,6 @@ Pistol::Pistol(void): Weapon() {
 
 void Pistol::takeShot(forward_list<Projectile>* projectileList,
  SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
-    cout << currRecoil << "\n";
     double projectileAngle = player->getAngle();
     if (currRecoil > 0) {
          projectileAngle = player->getAngle()+((rand()%currRecoil)-currRecoil/2);
@@ -408,7 +413,7 @@ void Pistol::takeShot(forward_list<Projectile>* projectileList,
                 mouseDown = true;
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
-                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
             } else {
                 beginReload();
             }
@@ -452,7 +457,7 @@ void Shotgun::takeShot(forward_list<Projectile>* projectileList,
             mouseDown = true;
             for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
                 projectileAngle = player->getAngle()+((rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2);
-                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer));
+                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
@@ -462,7 +467,7 @@ void Shotgun::takeShot(forward_list<Projectile>* projectileList,
 }
 
 void Shotgun::beginReload(void) {
-
+    // shotgun has no reload state
 }
 
 void Shotgun::updateGun(void) {
@@ -711,7 +716,7 @@ void Wall::deleteObject(void) {
 
 
 // Functions related to the projectile class
- Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer) {
+ Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer, int id) {
     // set the location of the projectile
     currPosX = x;
     currPosY = y;
@@ -733,6 +738,8 @@ void Wall::deleteObject(void) {
     velx = -PROJECTILE_SPEED * cos(angle*M_PI/180);
     vely = -PROJECTILE_SPEED * sin(angle*M_PI/180);
 
+    ownerID = id;
+
     // load the spritesheet to memory
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, renderer);
  }
@@ -743,12 +750,12 @@ void Projectile::setProjectileCentre(void) {
 }
 
 int Projectile::checkCollision(forward_list<Wall>* wallContainer,
- forward_list<Player>* playerList, int shooterID) {
+ forward_list<Player>* playerList) {
     int output = PROJECTILE_COLLISION_NONE; // default to no collision
     for (auto character = playerList->begin(); character != playerList->end(); character++) {
         if (distBetweenPoints(centreX, centreY, character->getX(),
          character->getY()) < (radius + character->getRadius())) { // check whether the projectile is contacting the player
-            if (character->getID() != shooterID) { // check the player hit is not the one who shot the projectile
+            if (character->getID() != ownerID) { // check the player hit is not the one who shot the projectile
                 character->successfulShot(); // tell the player they are hit
                 output = PROJECTILE_COLLISION_PLAYER;
             }
@@ -765,7 +772,7 @@ int Projectile::checkCollision(forward_list<Wall>* wallContainer,
 }
 
 bool Projectile::move(forward_list<Wall>* wallContainer,
- forward_list<Player>* playerList, int playerID) {
+ forward_list<Player>* playerList) {
     // moves the projectile,  returns true if the projectile collided and needs to be destroyed
     bool destroyed = false;
     int collision = PROJECTILE_COLLISION_NONE;
@@ -780,7 +787,7 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
     setProjectileCentre();
 
     // check if the projectile collided this frame
-    collision = checkCollision(wallContainer, playerList, playerID);
+    collision = checkCollision(wallContainer, playerList);
     if (collision != PROJECTILE_COLLISION_NONE) {
         destroyed = true;
     }
@@ -805,6 +812,141 @@ void Projectile::deleteObject(void) {
     SDL_DestroyTexture(projectileImage);
 }
 
+
+CNetMessage::CNetMessage() {
+    reset();
+}
+
+void CNetMessage::reset() {
+    for (int i = 0; i < CHARBUFF_LENGTH; i++) {
+        buffer[i] = 0;
+    }
+    state = EMPTY;
+}
+
+int CNetMessage::numToLoad() {
+    int output = 0;
+    if (state == EMPTY) {
+        output = 255;
+    }
+    return output;
+}
+
+int CNetMessage::numToUnload() {
+    int output = 0;
+    if (state == FULL) {
+        return strlen(buffer) + 1;
+    }
+    return output;
+}
+
+void CNetMessage::loadBytes(charbuff& inputBuffer, int n) {
+    for (int i = 0; i < n; i++) {
+        buffer[i] = inputBuffer[i];
+    }
+    state = READING;
+}
+
+void CNetMessage::unloadBytes(charbuff& destBuffer) {
+    for (int i = 0; i < this->numToUnload(); i++) {
+        destBuffer[i] = buffer[i];
+    }
+    reset();
+}
+
+void CNetMessage::finish(void) {
+    if (state == READING) {
+        state = FULL;
+    }
+}
+
+
+CIpAddress::CIpAddress() {
+    m_Ip.host = 0;
+    m_Ip.port = 0;
+}
+
+CIpAddress::CIpAddress(Uint16 port) {
+    if (SDLNet_ResolveHost(&m_Ip, NULL, port) < 0) {
+        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
+        m_Ip.host = 0;
+        m_Ip.port = 0;
+    }
+}
+
+CIpAddress::CIpAddress(string host, Uint16 port) {
+    if (SDLNet_ResolveHost(&m_Ip, host.c_str(), port) < 0) {
+        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
+        m_Ip.host = 0;
+        m_Ip.port = 0;
+    }
+}
+
+bool CIpAddress::Ok() const {
+    return (m_Ip.port != 0);
+}
+
+void CIpAddress::setIp(IPaddress sdl_ip) {
+    m_Ip = sdl_ip;
+}
+
+IPaddress CIpAddress::getIpAddress() const {
+    return m_Ip;
+}
+
+Uint32 CIpAddress::getHost() const {
+    return m_Ip.host;
+}
+
+Uint16 CIpAddress::getPort() const {
+    return m_Ip.port;
+}
+
+CTcpSocket::CTcpSocket() {
+    m_Socket = NULL;
+    set = SDLNet_AllocSocketSet(1);
+}
+
+CTcpSocket::~CTcpSocket() {
+    if (m_Socket != NULL) {
+        SDLNet_TCP_DelSocket(set, m_Socket);
+        SDLNet_FreeSocketSet(set);
+        SDLNet_TCP_Close(m_Socket);
+    }
+}
+
+void CTcpSocket::setSocket(TCPsocket sdlSocket) {
+    if (m_Socket != NULL) {
+        SDLNet_TCP_DelSocket(set, m_Socket);
+        SDLNet_TCP_Close(m_Socket);
+    }
+    m_Socket = sdlSocket;
+    if (SDLNet_TCP_AddSocket(set, m_Socket) == -1) {
+        cout << "SDLNet_TCP_AddSocket: " << SDLNet_GetError() << "\n";
+        m_Socket = NULL;
+    }
+}
+
+bool CTcpSocket::Ok() const {
+    bool rd = false;
+    int numready = SDLNet_CheckSockets(set, 0);
+    if (numready == -1) {
+        cout << "SDLNet_CheckSockets: " << SDLNet_GetError() << "\n";
+    } else if (numready) {
+        rd = SDLNet_SocketReady(m_Socket);
+    }
+    return rd;
+}
+
+void CTcpSocket::OnReady() {
+
+}
+
+/*CHostSocket::CHostSocket (CIpAddress& ipAddress) {
+    
+}*/
+
+
 int main(int argc, char const *argv[])
 {
     // control/important variables for throughout the program
@@ -820,7 +962,7 @@ int main(int argc, char const *argv[])
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID, new Shotgun),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID, new AssaultRifle),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -862,7 +1004,7 @@ int main(int argc, char const *argv[])
 
         newList.clear();
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if (bullet->move(&wallContainer, &playerList, CHARACTER_MAIN_ID) != true){
+            if (bullet->move(&wallContainer, &playerList) != true){
                 newList.push_front(*bullet);
             } else {
                 bullet->deleteObject();
@@ -875,20 +1017,20 @@ int main(int argc, char const *argv[])
         SDL_RenderClear(renderer);
 
         // render all objects to the screen
-        
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             character->render(renderer, scaleFactor);
         }
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
             bullet->render(renderer, scaleFactor);
         }
-        /*for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
-        }*/
+        if (DEBUG_DRAW_SHADOWS == true) {
+            for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+                wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
+            }
+        }
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->render(renderer, scaleFactor);
         }
-        cout << playerMainX+playerMainY << "\n";
 
         // update the screen to the renderers current state
         SDL_RenderPresent(renderer);
