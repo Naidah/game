@@ -42,6 +42,107 @@ MINOR:
 using namespace std;
 
 
+
+
+int main(int argc, char const *argv[]) {
+    // control/important variables for throughout the program
+    bool gameRunning = true; // variable to control the game loop
+    SDL_Window* window = NULL; // window the game is displayed on, set in init function
+    SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
+    SDL_Event eventHandler; // event handler for the game
+    double scaleFactor;
+    int playerMainX;
+    int playerMainY;
+
+
+    init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
+
+    forward_list<Player> playerList = { // list containing all players in the game
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Pistol),
+        Player(renderer, 300, 300, 2, new Shotgun)
+    };
+
+    forward_list<Wall> wallContainer = { // container for the walls used in the game
+        Wall(600, 200, 80, 200),
+        Wall(100, 100, 200, 300),
+        Wall(300, 400, 50, 90)
+    };
+
+    forward_list<Projectile> projectileList;
+    forward_list<Projectile> newList;
+
+    while (gameRunning == true) {
+        while (SDL_PollEvent(&eventHandler) != 0) {
+            if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
+                gameRunning = false;
+            } else if (eventHandler.type == SDL_KEYDOWN) {
+                if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
+                    gameRunning = false;
+                }
+            }
+        }
+
+        // update the state of the controlled character
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            character->updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
+        }
+
+
+        // move all players and projectiles
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            character->move(wallContainer);
+            if (character->getID() == CHARACTER_MAIN_ID) {
+                playerMainX = character->getX();
+                playerMainY = character->getY();
+            }
+
+        }
+
+        newList.clear();
+        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+            if (bullet->move(&wallContainer, &playerList) != true){
+                newList.push_front(*bullet);
+            } else {
+                bullet->deleteObject();
+            }
+        }
+        projectileList = newList; // create a new list of projectiles to store all that remain on screen
+
+        // reset the screen for the next frame
+        SDL_SetRenderDrawColor(renderer, 200, 200, 255, 255);
+        SDL_RenderClear(renderer);
+
+        // render all objects to the screen
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            character->render(renderer, scaleFactor);
+        }
+        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+            bullet->render(renderer, scaleFactor);
+        }
+        if (DEBUG_DRAW_SHADOWS == true) {
+            for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+                wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
+            }
+        }
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            wall->render(renderer, scaleFactor);
+        }
+
+        // update the screen to the renderers current state
+        SDL_RenderPresent(renderer);
+    }
+
+    quitGame(window, playerList, wallContainer, projectileList);
+
+    return EXIT_SUCCESS; // return success if the program terminates correctly
+}
+
+
+
+
+
+
+
 /* -------------------------- FUNCTIONS ------------------------- */
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<Wall> wallContainer, forward_list<Projectile> projectileList) {
@@ -166,6 +267,13 @@ int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
     double m = (double)(x1-x2)/(double)(y1-y2); // find the gradient
     output = (double)(interceptX-x1)/m + y1; // caluculate the y-value
     return output;
+}
+
+bool checkExitMap(int x, int y, int r) {
+    return y-r < 0
+     || x-r < 0
+     || y+r > SCREEN_HEIGHT_DEFAULT
+     || x+r > SCREEN_WIDTH_DEFAULT;
 }
 
 
@@ -303,7 +411,8 @@ void Player::move(forward_list<Wall> wallContainer) {
 
     // go through each wall, and if the player movement would cause a collision, undo the movement along x
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        if ((*wall).checkCollision(centreX, centreY, radius) == true) {
+        if (wall->checkCollision(centreX, centreY, radius) == true
+         || checkExitMap(centreX, centreY, radius)) {
             playerRect.x = posOrigX;
             velx = 0;
             setPlayerCentre();
@@ -314,7 +423,8 @@ void Player::move(forward_list<Wall> wallContainer) {
     playerRect.y += vely;
     setPlayerCentre();
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        if ((*wall).checkCollision(centreX, centreY, radius) == true) {
+        if (wall->checkCollision(centreX, centreY, radius) == true
+             || checkExitMap(centreX, centreY, radius)) {
             playerRect.y = posOrigY;
             vely = 0;
             setPlayerCentre();
@@ -790,6 +900,8 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
     collision = checkCollision(wallContainer, playerList);
     if (collision != PROJECTILE_COLLISION_NONE) {
         destroyed = true;
+    } else if (checkExitMap(projectileRect.x, projectileRect.y, radius) == true) {
+        destroyed = true;
     }
     return destroyed;
 }
@@ -945,98 +1057,3 @@ void CTcpSocket::OnReady() {
 /*CHostSocket::CHostSocket (CIpAddress& ipAddress) {
     
 }*/
-
-
-int main(int argc, char const *argv[])
-{
-    // control/important variables for throughout the program
-    bool gameRunning = true; // variable to control the game loop
-    SDL_Window* window = NULL; // window the game is displayed on, set in init function
-    SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
-    SDL_Event eventHandler; // event handler for the game
-    double scaleFactor;
-    int playerMainX;
-    int playerMainY;
-
-
-    init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
-
-    forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, CHARACTER_MAIN_ID, new AssaultRifle),
-        Player(renderer, 300, 300, 2, new AssaultRifle)
-    };
-
-    forward_list<Wall> wallContainer = { // container for the walls used in the game
-        Wall(600, 200, 80, 200),
-        Wall(100, 100, 200, 300),
-        Wall(300, 400, 50, 90)
-    };
-
-    forward_list<Projectile> projectileList;
-    forward_list<Projectile> newList;
-
-    while (gameRunning == true) {
-        while (SDL_PollEvent(&eventHandler) != 0) {
-            if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
-                gameRunning = false;
-            } else if (eventHandler.type == SDL_KEYDOWN) {
-                if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
-                    gameRunning = false;
-                }
-            }
-        }
-
-        // update the state of the controlled character
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
-        }
-
-
-        // move all players and projectiles
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->move(wallContainer);
-            if (character->getID() == CHARACTER_MAIN_ID) {
-                playerMainX = character->getX();
-                playerMainY = character->getY();
-            }
-
-        }
-
-        newList.clear();
-        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if (bullet->move(&wallContainer, &playerList) != true){
-                newList.push_front(*bullet);
-            } else {
-                bullet->deleteObject();
-            }
-        }
-        projectileList = newList; // create a new list of projectiles to store all that remain on screen
-
-        // reset the screen for the next frame
-        SDL_SetRenderDrawColor(renderer, 200, 200, 255, 255);
-        SDL_RenderClear(renderer);
-
-        // render all objects to the screen
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->render(renderer, scaleFactor);
-        }
-        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            bullet->render(renderer, scaleFactor);
-        }
-        if (DEBUG_DRAW_SHADOWS == true) {
-            for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-                wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
-            }
-        }
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->render(renderer, scaleFactor);
-        }
-
-        // update the screen to the renderers current state
-        SDL_RenderPresent(renderer);
-    }
-
-    quitGame(window, playerList, wallContainer, projectileList);
-
-    return EXIT_SUCCESS; // return success if the program terminates correctly
-}

@@ -121,11 +121,11 @@ const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
-const int SCREEN_WIDTH = 1200; // size of screen
-const int SCREEN_HEIGHT = 800; // size of screen
+const int SCREEN_WIDTH = 600; // size of screen
+const int SCREEN_HEIGHT = 360; // size of screen
 
 const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
-const int SCREEN_HEIGHT_DEFAULT = 800; // height of screen to scale against
+const int SCREEN_HEIGHT_DEFAULT = 720; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
 // constants used in netcode
@@ -404,8 +404,9 @@ public:
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
      forward_list<Wall> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
-bool init(SDL_Window** window, SDL_Renderer** renderer); // initializes the same (including SDL)
+bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
+bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
