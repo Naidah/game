@@ -43,7 +43,6 @@ using namespace std;
 
 
 
-
 int main(int argc, char const *argv[]) {
     // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
@@ -58,7 +57,7 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Pistol),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
         Player(renderer, 300, 300, 2, new Shotgun)
     };
 
@@ -108,27 +107,12 @@ int main(int argc, char const *argv[]) {
         }
         projectileList = newList; // create a new list of projectiles to store all that remain on screen
 
-        // reset the screen for the next frame
-        SDL_SetRenderDrawColor(renderer, 200, 200, 255, 255);
-        SDL_RenderClear(renderer);
 
-        // render all objects to the screen
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->render(renderer, scaleFactor);
-        }
-        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            bullet->render(renderer, scaleFactor);
-        }
-        if (DEBUG_DRAW_SHADOWS == true) {
-            for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-                wall->renderShadow(playerMainX, playerMainY, 10, 10, 50, renderer, scaleFactor);
-            }
-        }
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->render(renderer, scaleFactor);
-        }
+        renderGameSpace(renderer, wallContainer, playerList, projectileList, scaleFactor,
+             playerMainX, playerMainY);
+        renderGameUI();
 
-        // update the screen to the renderers current state
+        // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
     }
 
@@ -160,14 +144,13 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<
 }
 
 bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { // initialize important SDL functionalities
-    int height;
     bool success = true; // flag to check whether program runs successfully
     if (SDL_Init(SDL_INIT_VIDEO) < 0) { // Make sure SDL can initialize properly, otherwise return error code
         cout << "Error Initializing SDL./n SDL_Error " << SDL_GetError() << "\n";
         success = false;
     } else {
         *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, //create the window
-            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_WIDTH,
+            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
              SDL_WINDOW_SHOWN);
         if (window == NULL) { // check if cratewindow returned a valid pointer
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
@@ -176,7 +159,6 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
             if (SCREEN_FULLSCREEN == true) { // If the game is set to be in fullscreen, set it to fullscreen
                 SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
             }
-            SDL_GetWindowSize(*window, NULL, &height); // get the height of the window
             *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT; // store the ratio between the size of the screen and the screen size the game is built around
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC); // create renderer object
@@ -216,6 +198,42 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
         SDL_FreeSurface(surfaceAtPath); // remove the surface now that it is no longer needed
     }
     return output;
+}
+
+void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
+     forward_list<Player> playerList, forward_list<Projectile> projectileList,
+      double scaleFactor, int playerMainX, int playerMainY) {
+    // reset the screen for the next frame
+    SDL_Rect gamespaceViewport;
+    gamespaceViewport.x = GAMESPACE_TOPLEFT_X;
+    gamespaceViewport.y = GAMESPACE_TOPLEFT_Y;
+    gamespaceViewport.w = GAMESPACE_WIDTH;
+    gamespaceViewport.h = GAMESPACE_HEIGHT;
+    SDL_RenderSetViewport(renderer, &gamespaceViewport);
+    SDL_SetRenderDrawColor(renderer, UI_BACKGROUND_COLOR_RED,
+     UI_BACKGROUND_COLOR_GREEN, UI_BACKGROUND_COLOR_BLUE, UI_BACKGROUND_COLOR_ALPHA);
+    SDL_RenderClear(renderer);
+
+    // render all objects to the screen
+    for (auto character = playerList.begin(); character != playerList.end(); character++) {
+        character->render(renderer, scaleFactor);
+    }
+    for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+        bullet->render(renderer, scaleFactor);
+    }
+    if (DEBUG_DRAW_SHADOWS == true) {
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            wall->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
+             UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, renderer, scaleFactor);
+        }
+    }
+    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        wall->render(renderer, scaleFactor);
+    }
+}
+
+void renderGameUI() {
+
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
@@ -273,7 +291,7 @@ bool checkExitMap(int x, int y, int r) {
     return y-r < 0
      || x-r < 0
      || y+r > SCREEN_HEIGHT_DEFAULT
-     || x+r > SCREEN_WIDTH_DEFAULT;
+     || x+r > SCREEN_HEIGHT_DEFAULT;
 }
 
 
@@ -320,7 +338,8 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
 }
 
 void Player::setPlayerCentre(void) {
-    centreX = playerRect.x + radius; // calculate the X and Y centres of the player
+    // calculate the X and Y centres of the player
+    centreX = playerRect.x + radius;
     centreY = playerRect.y + radius;
 }
 
@@ -330,8 +349,8 @@ void Player::updateState(SDL_Event* eventHandler,
     int direction = MOVE_NONE;
 
     // used to store the x and y coordinates of the mouse
-    int mouseX;
-    int mouseY;
+    int mouseX = 0;
+    int mouseY = 0;
 
     // update velocity in the y direction
     if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
@@ -392,6 +411,8 @@ void Player::updateState(SDL_Event* eventHandler,
         // rotate the player to look toward the mouse
         // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
         SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
+        mouseX -= GAMESPACE_TOPLEFT_X;
+        mouseX *= gHeight/GAMESPACE_WIDTH;
         angle = atan2((double)(centreY*scaleFactor-mouseY),
          (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
 

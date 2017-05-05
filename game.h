@@ -121,12 +121,28 @@ const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
-const int SCREEN_WIDTH = 600; // size of screen
-const int SCREEN_HEIGHT = 360; // size of screen
+const int SCREEN_WIDTH = 960; // size of screen
+const int SCREEN_HEIGHT = 576; // size of screen
 
 const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 720; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
+
+// Gamespace parameters
+const int GAMESPACE_WIDTH = SCREEN_HEIGHT; // the gameplay space takes a square on the far right
+const int GAMESPACE_HEIGHT = SCREEN_HEIGHT;
+const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH - GAMESPACE_WIDTH;
+const int GAMESPACE_TOPLEFT_Y = 0;
+
+// Game UI parameters
+const int UI_BACKGROUND_COLOR_RED = 200;
+const int UI_BACKGROUND_COLOR_GREEN = 200;
+const int UI_BACKGROUND_COLOR_BLUE = 255;
+const int UI_BACKGROUND_COLOR_ALPHA = 255;
+
+const int UI_SHADOW_COLOR_RED = 10;
+const int UI_SHADOW_COLOR_GREEN = 10;
+const int UI_SHADOW_COLOR_BLUE = 50;
 
 // constants used in netcode
 const int CHARBUFF_LENGTH = 256;
@@ -410,3 +426,7 @@ double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance 
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
+void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
+     forward_list<Player> playerList, forward_list<Projectile> projectileList,
+     double scaleFactor, int playerMainX, int playerMainY);
+void renderGameUI();
