@@ -28,9 +28,11 @@ const int MOVE_DOWN_RIGHT = 8;
 
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
+
 const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
 const double CHARACTER_ACCEL_PER_FRAME = 0.6; // Acceleration speed of the plater
 const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate player when not giving input movement
+
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
@@ -38,11 +40,9 @@ const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
 const int CHARACTER_BLUE = 255; // blue hue of player
 
-const int CHARACTER_AMMO_MAX = 40; // number of bullets in player clip
-const int CHARACTER_WEAPON_SPREAD_MAX = 4; // Maximum angle of deviation in the players shot from straight ahead
-const int CHARACTER_RELOAD_FRAMES = 120; // number of frames the reload animation takes
-
 const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
+
+const int CHARACTER_MAX_HP = 3; // max health a player can have
 
 // codes for the different weapons player can use
 const int CHARACTER_WEAPON_ASSAULT_RIFLE = 1;
@@ -135,6 +135,8 @@ const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
 
 // Game UI parameters
+const int UI_COLOR_MAX_VALUE = 255;
+
 const int UI_BACKGROUND_COLOR_RED = 200;
 const int UI_BACKGROUND_COLOR_GREEN = 200;
 const int UI_BACKGROUND_COLOR_BLUE = 255;
@@ -188,7 +190,11 @@ private:
     int green;
     int blue;
 
-    Weapon* weapon;
+    Weapon* weapon; // address of the player's weapon object
+
+    // life values of the player
+    int health;
+    bool alive;
 
     int id; // ID number of the player object to differentiate it
 
@@ -205,6 +211,7 @@ public:
     int getRadius(void) {return radius;}
     int getID(void) {return id;}
     double getAngle(void) {return angle;}
+    bool isAlive(void) {return alive;}
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler,
@@ -225,7 +232,6 @@ protected:
     int currAmmo;
     int reloadFramesLeft;
 public:
-    Weapon(void);
     virtual void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) = 0;
     virtual void beginReload(void) = 0;

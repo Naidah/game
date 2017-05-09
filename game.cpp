@@ -7,7 +7,7 @@ MAJOR:
     - Start artwork for objects and background
     - Comment current work
     - Begin to add networking   
-    - Create the game space and add UI
+    - Add UI
     - Add weapon deconstructor
 
 MINOR:
@@ -17,7 +17,6 @@ MINOR:
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
     - Give each gun a different projectile speed
-    - Add barrier around map edge or destroy projectiles leaving the screen
 */
 
 
@@ -57,7 +56,7 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Shotgun),
         Player(renderer, 300, 300, 2, new Shotgun)
     };
 
@@ -99,7 +98,7 @@ int main(int argc, char const *argv[]) {
 
         newList.clear();
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if (bullet->move(&wallContainer, &playerList) != true){
+            if (bullet->move(&wallContainer, &playerList) != true) {
                 newList.push_front(*bullet);
             } else {
                 bullet->deleteObject();
@@ -166,7 +165,8 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
                 cout << "Renderer failed to initialize. SDL_Error" << SDL_GetError();
                 success = false;
             } else {
-                SDL_SetRenderDrawColor(*renderer, 255, 255, 255, 255); // Give the renderer a default white state
+                SDL_SetRenderDrawColor(*renderer, UI_COLOR_MAX_VALUE,
+                 UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE); // Give the renderer a default white state
 
                 int imgFlags = IMG_INIT_PNG;
                 if (!(IMG_Init(imgFlags) & imgFlags)) { // initialize SDL_image, returning an error if it fails
@@ -216,7 +216,9 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
 
     // render all objects to the screen
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
-        character->render(renderer, scaleFactor);
+        if (character->isAlive() == true) {
+            character->render(renderer, scaleFactor);
+        }
     }
     for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
         bullet->render(renderer, scaleFactor);
@@ -329,6 +331,10 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     // assign the weapon pointer to a variable
     weapon = gun;
 
+    // start the player on max health
+    health = CHARACTER_MAX_HP;
+    alive = true;
+
     id = idNum; // set the ID number to the one provided
 
     // set the players color scheme
@@ -412,7 +418,7 @@ void Player::updateState(SDL_Event* eventHandler,
         // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
         SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
         mouseX -= GAMESPACE_TOPLEFT_X;
-        mouseX *= gHeight/GAMESPACE_WIDTH;
+        mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
         angle = atan2((double)(centreY*scaleFactor-mouseY),
          (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
 
@@ -459,7 +465,11 @@ void Player::move(forward_list<Wall> wallContainer) {
 
 void Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
-    red = (red+25)%255; // placeholder thing till actual damage mechanics added
+    health -= 1;
+    if (health <= 0) { // check if the shot was a lethal blow
+        alive = false; // kill the player if they loose all their life
+    }
+    red -= 255/3; // placeholder thing till actual damage mechanics added
 }
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {
@@ -481,9 +491,11 @@ void Player::deleteObject(void) {
     //delete weapon;
 }
 
-Weapon::Weapon(void) {
 
-}
+
+
+
+// Weapon object functions
 
 AssaultRifle::AssaultRifle(void): Weapon() {
     mouseDown = false;
@@ -691,7 +703,7 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
     renderRect.h = floor(wallLocation.h * scaleFactor);
 
     // draws the wall to the screen using the supplied renderer
-    SDL_SetRenderDrawColor(renderer, red, green, blue, 255);
+    SDL_SetRenderDrawColor(renderer, red, green, blue, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &renderRect);
 }
 
@@ -837,7 +849,7 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
         coordsY[i] *= scaleFactor;
     }
 
-    filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, 255); // draws the shadow using the renderer
+    filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, UI_COLOR_MAX_VALUE); // draws the shadow using the renderer
 }
 
 void Wall::deleteObject(void) {
@@ -886,7 +898,7 @@ int Projectile::checkCollision(forward_list<Wall>* wallContainer,
     for (auto character = playerList->begin(); character != playerList->end(); character++) {
         if (distBetweenPoints(centreX, centreY, character->getX(),
          character->getY()) < (radius + character->getRadius())) { // check whether the projectile is contacting the player
-            if (character->getID() != ownerID) { // check the player hit is not the one who shot the projectile
+            if (character->getID() != ownerID && character->isAlive() == true) { // check the player hit is not the one who shot the projectile and is still alive
                 character->successfulShot(); // tell the player they are hit
                 output = PROJECTILE_COLLISION_PLAYER;
             }
