@@ -43,6 +43,7 @@ const int CHARACTER_BLUE = 255; // blue hue of player
 const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
+const int CHARACTER_DEATH_DURATION = 500; // the number of frames the player remains dead for
 
 // codes for the different weapons player can use
 const int CHARACTER_WEAPON_ASSAULT_RIFLE = 1;
@@ -52,10 +53,10 @@ const int CHARACTER_WEAPON_SNIPER = 4;
 
 // Weapon Related Constants
 // ASSAULT RIFLE
-const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
-const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
+const int AR_CLIP_SIZE = 75; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 40; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 1; // number of frames in reload animation
+const int AR_SHOT_DELAY = 3; //number of frames between each projectile firing
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
@@ -65,9 +66,9 @@ const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
 const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 8;
-const int SHOTGUN_PROJECTILE_SPREAD = 55;
-const int SHOTGUN_SHOT_DELAY = 40;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 13;
+const int SHOTGUN_PROJECTILE_SPREAD = 58;
+const int SHOTGUN_SHOT_DELAY = 60;
 
 
 /* Defaults
@@ -85,9 +86,9 @@ const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
 const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 8;
-const int SHOTGUN_PROJECTILE_SPREAD = 55;
-const int SHOTGUN_SHOT_DELAY = 40;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 13;
+const int SHOTGUN_PROJECTILE_SPREAD = 58;
+const int SHOTGUN_SHOT_DELAY = 60;
 */
 
 // SNIPER
@@ -121,18 +122,29 @@ const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
 const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
-const int SCREEN_WIDTH = 960; // size of screen
-const int SCREEN_HEIGHT = 576; // size of screen
 
-const int SCREEN_WIDTH_DEFAULT = 1200; // width of screen to scale against
-const int SCREEN_HEIGHT_DEFAULT = 720; // height of screen to scale against
+const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
+const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
+
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT; // size of screen
 
 // Gamespace parameters
 const int GAMESPACE_WIDTH = SCREEN_HEIGHT; // the gameplay space takes a square on the far right
 const int GAMESPACE_HEIGHT = SCREEN_HEIGHT;
 const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
+
+// HUD parameters
+const int HUD_WIDTH = SCREEN_WIDTH - GAMESPACE_WIDTH;
+const int HUD_HEIGHT = SCREEN_HEIGHT;
+
+const int HUD_AMMO_WIDTH = HUD_WIDTH/2;
+const int HUD_AMMO_HEIGHT = 100;
+const int HUD_AMMO_TOPLEFT_X = HUD_AMMO_WIDTH;
+const int HUD_AMMO_TOPLEFT_Y = HUD_HEIGHT - HUD_AMMO_HEIGHT;
+
 
 // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
@@ -170,7 +182,6 @@ class Projectile;
 class assualtRifle;
 
 // Class definitions
-
 // Class to represent all player controlled characters
 class Player {
 private:
@@ -195,6 +206,7 @@ private:
     // life values of the player
     int health;
     bool alive;
+    int deathFrames; // counter containing how long the player remains dead
 
     int id; // ID number of the player object to differentiate it
 
@@ -220,7 +232,9 @@ public:
     void move(forward_list<Wall> wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
-    void deleteObject(void); // frees any variables from memory as needed
+    void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
+    void setNewPosition(void); // sets a new position for any time the player spawns in
+    void respawn(void); // respawn the player after death
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer, double scaleFactor);
@@ -435,4 +449,4 @@ bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius 
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
      double scaleFactor, int playerMainX, int playerMainY);
-void renderGameUI();
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor);

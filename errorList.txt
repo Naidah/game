@@ -1,0 +1,6 @@
+9/6/17
+Wrote SDL_RendererDrawRect instead of SDL_RenderDrawRect. Fixed through proper reference to the documentation.
+
+Wrote SDL_RenderSetViewport(renderer, hudViewport); in place of SDL_RenderSetViewport(renderer, &hudViewport), causing a syntax/runtime error
+
+Wrote HUD_AMMO_HEIGHT = HUD_AMMO_HEIGHT, fixed after identifying it held an unexpected value and examined the code

@@ -1,4 +1,4 @@
-// By Aidan Hunt, first created 24/1/17, last edited 14/2/17
+// By Aidan Hunt, first created 24/1/17, last edited 9/5/17
 // [Project description here]
 
 // TODO
@@ -17,6 +17,12 @@ MINOR:
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
     - Give each gun a different projectile speed
+*/
+
+/* Current balance considerations:
+- Shotguns to got at mid ranges
+- Pistols to good at all ranges (base scatter?)
+
 */
 
 
@@ -56,7 +62,7 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Shotgun),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
         Player(renderer, 300, 300, 2, new Shotgun)
     };
 
@@ -109,7 +115,7 @@ int main(int argc, char const *argv[]) {
 
         renderGameSpace(renderer, wallContainer, playerList, projectileList, scaleFactor,
              playerMainX, playerMainY);
-        renderGameUI();
+        renderGameUI(renderer, scaleFactor);
 
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
@@ -209,6 +215,7 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     gamespaceViewport.y = GAMESPACE_TOPLEFT_Y;
     gamespaceViewport.w = GAMESPACE_WIDTH;
     gamespaceViewport.h = GAMESPACE_HEIGHT;
+
     SDL_RenderSetViewport(renderer, &gamespaceViewport);
     SDL_SetRenderDrawColor(renderer, UI_BACKGROUND_COLOR_RED,
      UI_BACKGROUND_COLOR_GREEN, UI_BACKGROUND_COLOR_BLUE, UI_BACKGROUND_COLOR_ALPHA);
@@ -234,8 +241,27 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     }
 }
 
-void renderGameUI() {
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor) {
+    SDL_Rect hudViewport;
+    hudViewport.x = 0;
+    hudViewport.y = 0;
+    hudViewport.w = HUD_WIDTH;
+    hudViewport.h = HUD_HEIGHT;
+    SDL_RenderSetViewport(renderer, &hudViewport);
 
+    // draw ammo counter
+    SDL_Rect ammoCounter;
+    ammoCounter.w = HUD_AMMO_WIDTH;
+    ammoCounter.h = HUD_AMMO_HEIGHT;
+    ammoCounter.x = HUD_AMMO_TOPLEFT_X;
+    ammoCounter.y = HUD_AMMO_TOPLEFT_Y;
+
+    SDL_SetRenderDrawColor(renderer, 100, 200, 0, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(renderer, &ammoCounter);
+
+    SDL_SetRenderDrawColor(renderer, 200, 100, 0, UI_COLOR_MAX_VALUE);
+    ammoCounter.w *= 0.6;
+    SDL_RenderFillRect(renderer, &ammoCounter);
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
@@ -334,6 +360,7 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     // start the player on max health
     health = CHARACTER_MAX_HP;
     alive = true;
+    deathFrames = 0;
 
     id = idNum; // set the ID number to the one provided
 
@@ -351,79 +378,85 @@ void Player::setPlayerCentre(void) {
 
 void Player::updateState(SDL_Event* eventHandler,
  forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor) {
-    // get the keyboard state containing which keys are actively pressed
-    int direction = MOVE_NONE;
+    if (alive == true) {
+        // get the keyboard state containing which keys are actively pressed
+        int direction = MOVE_NONE;
 
-    // used to store the x and y coordinates of the mouse
-    int mouseX = 0;
-    int mouseY = 0;
+        // used to store the x and y coordinates of the mouse
+        int mouseX = 0;
+        int mouseY = 0;
 
-    // update velocity in the y direction
-    if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
-        // directional movement
-        direction = getDirections(); // get the direction of movement for the player at the current frame
-        // increment the velocity in each direction according to the movement direction
-        if (direction == MOVE_UP) {
-            vely -= CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_DOWN) {
-            vely += CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_LEFT) {
-            velx -= CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_RIGHT) {
-            velx += CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_UP_LEFT) {
-            vely -= CHARACTER_ACCEL_PER_FRAME;
-            velx -= CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_UP_RIGHT) {
-            vely -= CHARACTER_ACCEL_PER_FRAME;
-            velx += CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_DOWN_LEFT) {
-            vely += CHARACTER_ACCEL_PER_FRAME;
-            velx -= CHARACTER_ACCEL_PER_FRAME;
-        } else if (direction == MOVE_DOWN_RIGHT) {
-            vely += CHARACTER_ACCEL_PER_FRAME;
-            velx += CHARACTER_ACCEL_PER_FRAME;
-        }
-
-        if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
-            // if the player has no movement in the x direction, reduce speed along that axis
-            if (velx > 0) { // decrease toward 0 if the player is moving right 
-                velx -= CHARACTER_DECEL_PER_FRAME;
-            } else if (velx < 0) { // increase toward 0 if the player is moving left
-                velx += CHARACTER_DECEL_PER_FRAME;
+        // update velocity in the y direction
+        if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
+            // directional movement
+            direction = getDirections(); // get the direction of movement for the player at the current frame
+            // increment the velocity in each direction according to the movement direction
+            if (direction == MOVE_UP) {
+                vely -= CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_DOWN) {
+                vely += CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_LEFT) {
+                velx -= CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_RIGHT) {
+                velx += CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_UP_LEFT) {
+                vely -= CHARACTER_ACCEL_PER_FRAME;
+                velx -= CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_UP_RIGHT) {
+                vely -= CHARACTER_ACCEL_PER_FRAME;
+                velx += CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_DOWN_LEFT) {
+                vely += CHARACTER_ACCEL_PER_FRAME;
+                velx -= CHARACTER_ACCEL_PER_FRAME;
+            } else if (direction == MOVE_DOWN_RIGHT) {
+                vely += CHARACTER_ACCEL_PER_FRAME;
+                velx += CHARACTER_ACCEL_PER_FRAME;
             }
-            if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
-                velx = 0; // if the velocity would wrap the other way next frame, set it to 0
-            }
-        }
-        if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
-            if (vely > 0) {
-                vely -= CHARACTER_DECEL_PER_FRAME;
-            } else if (vely < 0) {
-                vely += CHARACTER_DECEL_PER_FRAME;
-            }
-            if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
-                vely = 0; // if the velocity would wrap the other way next frame, set it to 0
-            }
-        }
 
-        double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
-        if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
-            // scale x and y down so they are at the correct speed
-            vely *= CHARACTER_VEL_MAX/currSpeed;
-            velx *= CHARACTER_VEL_MAX/currSpeed;
+            if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
+                // if the player has no movement in the x direction, reduce speed along that axis
+                if (velx > 0) { // decrease toward 0 if the player is moving right 
+                    velx -= CHARACTER_DECEL_PER_FRAME;
+                } else if (velx < 0) { // increase toward 0 if the player is moving left
+                    velx += CHARACTER_DECEL_PER_FRAME;
+                }
+                if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
+                    velx = 0; // if the velocity would wrap the other way next frame, set it to 0
+                }
+            }
+            if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
+                if (vely > 0) {
+                    vely -= CHARACTER_DECEL_PER_FRAME;
+                } else if (vely < 0) {
+                    vely += CHARACTER_DECEL_PER_FRAME;
+                }
+                if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
+                    vely = 0; // if the velocity would wrap the other way next frame, set it to 0
+                }
+            }
+
+            double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
+            if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
+                // scale x and y down so they are at the correct speed
+                vely *= CHARACTER_VEL_MAX/currSpeed;
+                velx *= CHARACTER_VEL_MAX/currSpeed;
+            }
+
+            // rotate the player to look toward the mouse
+            // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
+            SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
+            mouseX -= GAMESPACE_TOPLEFT_X;
+            mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
+            angle = atan2((double)(centreY*scaleFactor-mouseY),
+             (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
         }
-
-        // rotate the player to look toward the mouse
-        // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
-        SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
-        mouseX -= GAMESPACE_TOPLEFT_X;
-        mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
-        angle = atan2((double)(centreY*scaleFactor-mouseY),
-         (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
-
-        weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
+    } else {
+        deathFrames -= 1;
+        if (deathFrames <= 0) {
+            respawn();
+        }
     }
+    weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
 }
 
 void Player::move(forward_list<Wall> wallContainer) {
@@ -468,8 +501,22 @@ void Player::successfulShot(void) {
     health -= 1;
     if (health <= 0) { // check if the shot was a lethal blow
         alive = false; // kill the player if they loose all their life
+        deathFrames = CHARACTER_DEATH_DURATION;
     }
     red -= 255/3; // placeholder thing till actual damage mechanics added
+}
+
+void Player::setNewPosition(void) {
+    playerRect.x = playerRect.x; // placeholder code
+    playerRect.y = playerRect.y;
+    setPlayerCentre();
+}
+
+void Player::respawn(void) {
+    alive = true;
+    deathFrames = 0;
+    setNewPosition();
+    health = CHARACTER_MAX_HP;
 }
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {
@@ -859,7 +906,7 @@ void Wall::deleteObject(void) {
 
 
 // Functions related to the projectile class
- Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer, int id) {
+Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer, int id) {
     // set the location of the projectile
     currPosX = x;
     currPosY = y;
