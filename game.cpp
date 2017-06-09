@@ -63,7 +63,7 @@ int main(int argc, char const *argv[]) {
 
     forward_list<Player> playerList = { // list containing all players in the game
         Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
-        Player(renderer, 300, 300, 2, new Shotgun)
+        Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
     forward_list<Wall> wallContainer = { // container for the walls used in the game
@@ -99,7 +99,6 @@ int main(int argc, char const *argv[]) {
                 playerMainX = character->getX();
                 playerMainY = character->getY();
             }
-
         }
 
         newList.clear();
@@ -115,7 +114,11 @@ int main(int argc, char const *argv[]) {
 
         renderGameSpace(renderer, wallContainer, playerList, projectileList, scaleFactor,
              playerMainX, playerMainY);
-        renderGameUI(renderer, scaleFactor);
+        for (auto character = playerList.begin(); character != playerList.end(); character++) {
+            if (character->getID() == CHARACTER_MAIN_ID) {
+                renderGameUI(renderer, scaleFactor, *character);
+            }
+        }
 
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
@@ -241,7 +244,8 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     }
 }
 
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor) {
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter) {
+    Weapon* userWeapon = userCharacter.getWeapon();
     SDL_Rect hudViewport;
     hudViewport.x = 0;
     hudViewport.y = 0;
@@ -260,7 +264,7 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor) {
     SDL_RenderFillRect(renderer, &ammoCounter);
 
     SDL_SetRenderDrawColor(renderer, 200, 100, 0, UI_COLOR_MAX_VALUE);
-    ammoCounter.w *= 0.6;
+    ammoCounter.w *= (double)userWeapon->getCurrAmmo()/(double)userWeapon->getMaxAmmo();
     SDL_RenderFillRect(renderer, &ammoCounter);
 }
 

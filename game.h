@@ -53,10 +53,10 @@ const int CHARACTER_WEAPON_SNIPER = 4;
 
 // Weapon Related Constants
 // ASSAULT RIFLE
-const int AR_CLIP_SIZE = 75; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 40; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 1; // number of frames in reload animation
-const int AR_SHOT_DELAY = 3; //number of frames between each projectile firing
+const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
+const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
@@ -184,7 +184,7 @@ class assualtRifle;
 // Class definitions
 // Class to represent all player controlled characters
 class Player {
-private:
+protected:
     // details about the characters location
     SDL_Rect playerRect; // constains the position and size of the player's image for rendering
     double angle; // stores angle player is pointing
@@ -218,6 +218,7 @@ public:
     Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* weapon);
 
     //getters for the private variables
+    Weapon* getWeapon(void) {return weapon;}
     int getX(void) {return centreX;}
     int getY(void) {return centreY;}
     int getRadius(void) {return radius;}
@@ -246,6 +247,8 @@ protected:
     int currAmmo;
     int reloadFramesLeft;
 public:
+    virtual int getMaxAmmo(void) = 0;
+    virtual int getCurrAmmo(void) = 0;
     virtual void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) = 0;
     virtual void beginReload(void) = 0;
@@ -260,6 +263,10 @@ private:
     bool mouseDown;
 public:
     AssaultRifle(void);
+
+    int getMaxAmmo(void) {return AR_CLIP_SIZE;}
+    int getCurrAmmo(void) {return currAmmo;}
+
     void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
@@ -449,4 +456,4 @@ bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius 
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
      double scaleFactor, int playerMainX, int playerMainY);
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor);
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter);
