@@ -43,7 +43,7 @@ const int CHARACTER_BLUE = 255; // blue hue of player
 const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
-const int CHARACTER_DEATH_DURATION = 500; // the number of frames the player remains dead for
+const int CHARACTER_DEATH_DURATION = 50; // the number of frames the player remains dead for
 
 // codes for the different weapons player can use
 const int CHARACTER_WEAPON_ASSAULT_RIFLE = 1;
@@ -66,8 +66,8 @@ const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
 const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 13;
-const int SHOTGUN_PROJECTILE_SPREAD = 58;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
+const int SHOTGUN_PROJECTILE_SPREAD = 45;
 const int SHOTGUN_SHOT_DELAY = 60;
 
 
@@ -130,6 +130,19 @@ const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the scree
 const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen
 const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT; // size of screen
 
+
+// Game UI parameters
+const int UI_COLOR_MAX_VALUE = 255;
+
+const int UI_BACKGROUND_COLOR_RED = 200;
+const int UI_BACKGROUND_COLOR_GREEN = 200;
+const int UI_BACKGROUND_COLOR_BLUE = 255;
+const int UI_BACKGROUND_COLOR_ALPHA = 255;
+
+const int UI_SHADOW_COLOR_RED = 10;
+const int UI_SHADOW_COLOR_GREEN = 10;
+const int UI_SHADOW_COLOR_BLUE = 50;
+
 // Gamespace parameters
 const int GAMESPACE_WIDTH = SCREEN_HEIGHT; // the gameplay space takes a square on the far right
 const int GAMESPACE_HEIGHT = SCREEN_HEIGHT;
@@ -145,18 +158,24 @@ const int HUD_AMMO_HEIGHT = 100;
 const int HUD_AMMO_TOPLEFT_X = HUD_AMMO_WIDTH;
 const int HUD_AMMO_TOPLEFT_Y = HUD_HEIGHT - HUD_AMMO_HEIGHT;
 
+const int HUD_AMMO_BOX_RED = 255;
+const int HUD_AMMO_BOX_BLUE = 255;
+const int HUD_AMMO_BOX_GREEN = 255;
 
-// Game UI parameters
-const int UI_COLOR_MAX_VALUE = 255;
+const int HUD_AMMO_BAR_RED = 100;
+const int HUD_AMMO_BAR_BLUE = 100;
+const int HUD_AMMO_BAR_GREEN = 100;
 
-const int UI_BACKGROUND_COLOR_RED = 200;
-const int UI_BACKGROUND_COLOR_GREEN = 200;
-const int UI_BACKGROUND_COLOR_BLUE = 255;
-const int UI_BACKGROUND_COLOR_ALPHA = 255;
+const int HUD_HEALTH_WIDTH = HUD_WIDTH;
+const int HUD_HEALTH_HEIGHT = 30;
+const int HUD_HEALTH_TOPLEFT_X = 0;
+const int HUD_HEALTH_TOPLEFT_Y = HUD_HEIGHT - (HUD_AMMO_HEIGHT + HUD_HEALTH_HEIGHT);
 
-const int UI_SHADOW_COLOR_RED = 10;
-const int UI_SHADOW_COLOR_GREEN = 10;
-const int UI_SHADOW_COLOR_BLUE = 50;
+const int HUD_HEALTH_BOX_RED = 255;
+const int HUD_HEALTH_BOX_BLUE = 0;
+const int HUD_HEALTH_BOX_GREEN = 0;
+
+
 
 // constants used in netcode
 const int CHARBUFF_LENGTH = 256;
@@ -246,9 +265,14 @@ class Weapon {
 protected:
     int currAmmo;
     int reloadFramesLeft;
+    bool reloading;
 public:
     virtual int getMaxAmmo(void) = 0;
     virtual int getCurrAmmo(void) = 0;
+    virtual int getReloadFrames(void) = 0;
+    virtual int getMaxReloadFrames(void) = 0;
+    virtual bool isReloading(void) = 0;
+
     virtual void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) = 0;
     virtual void beginReload(void) = 0;
@@ -266,6 +290,9 @@ public:
 
     int getMaxAmmo(void) {return AR_CLIP_SIZE;}
     int getCurrAmmo(void) {return currAmmo;}
+    int getReloadFrames(void) {return reloadFramesLeft;}
+    int getMaxReloadFrames(void) {return AR_RELOAD_FRAMES;}
+    bool isReloading(void) {return reloading;}
 
     void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
@@ -279,6 +306,13 @@ private:
     bool mouseDown;
 public:
     Pistol(void);
+
+    int getMaxAmmo(void) {return PISTOL_CLIP_SIZE;}
+    int getCurrAmmo(void) {return currAmmo;}
+    int getReloadFrames(void) {return reloadFramesLeft;}
+    int getMaxReloadFrames(void) {return PISTOL_RELOAD_FRAMES;}
+    bool isReloading(void) {return reloading;}
+
     void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
@@ -291,6 +325,13 @@ private:
     bool mouseDown;
 public:
     Shotgun(void);
+
+    int getMaxAmmo(void) {return 1;} // shotguns do not use ammo, so return 1 as default (not 0 to avoid errors)
+    int getCurrAmmo(void) {return currAmmo;}
+    int getReloadFrames(void) {return shotDelay;}
+    int getMaxReloadFrames(void) {return SHOTGUN_SHOT_DELAY;}
+    bool isReloading(void) {return true;} // treat shot delay as reloading
+
     void takeShot(forward_list<Projectile>* projectileList,
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
@@ -455,5 +496,5 @@ int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the 
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-     double scaleFactor, int playerMainX, int playerMainY);
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter);
+     double scaleFactor, int playerMainX, int playerMainY); // render the gameplay area of the screen
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter); // render the HUD area of the screen

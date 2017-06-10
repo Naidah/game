@@ -20,7 +20,7 @@ MINOR:
 */
 
 /* Current balance considerations:
-- Shotguns to got at mid ranges
+- Shotguns to good at mid ranges
 - Pistols to good at all ranges (base scatter?)
 
 */
@@ -62,7 +62,7 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Shotgun),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -245,27 +245,47 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
 }
 
 void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter) {
+    SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
+
     Weapon* userWeapon = userCharacter.getWeapon();
+
     SDL_Rect hudViewport;
     hudViewport.x = 0;
     hudViewport.y = 0;
     hudViewport.w = HUD_WIDTH;
     hudViewport.h = HUD_HEIGHT;
     SDL_RenderSetViewport(renderer, &hudViewport);
+    SDL_SetRenderDrawColor(renderer, 100, 100, 200, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(renderer, &hudViewport);
 
     // draw ammo counter
-    SDL_Rect ammoCounter;
-    ammoCounter.w = HUD_AMMO_WIDTH;
-    ammoCounter.h = HUD_AMMO_HEIGHT;
-    ammoCounter.x = HUD_AMMO_TOPLEFT_X;
-    ammoCounter.y = HUD_AMMO_TOPLEFT_Y;
+    elementRect.w = HUD_AMMO_WIDTH;
+    elementRect.h = HUD_AMMO_HEIGHT;
+    elementRect.x = HUD_AMMO_TOPLEFT_X;
+    elementRect.y = HUD_AMMO_TOPLEFT_Y;
 
-    SDL_SetRenderDrawColor(renderer, 100, 200, 0, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &ammoCounter);
+    SDL_SetRenderDrawColor(renderer, HUD_AMMO_BOX_RED, HUD_AMMO_BOX_BLUE, HUD_AMMO_BOX_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(renderer, &elementRect);
 
-    SDL_SetRenderDrawColor(renderer, 200, 100, 0, UI_COLOR_MAX_VALUE);
-    ammoCounter.w *= (double)userWeapon->getCurrAmmo()/(double)userWeapon->getMaxAmmo();
-    SDL_RenderFillRect(renderer, &ammoCounter);
+    // create a second bar over the first to show percent of ammo remaining
+    SDL_SetRenderDrawColor(renderer, HUD_AMMO_BAR_RED, HUD_AMMO_BAR_BLUE, HUD_AMMO_BAR_GREEN, UI_COLOR_MAX_VALUE);
+    if (userWeapon->isReloading() == false) {
+        elementRect.w *= (double)userWeapon->getCurrAmmo()/(double)userWeapon->getMaxAmmo();
+    } else { // of the player is reloading, show how much time left before reload is finished
+        elementRect.w *= 1 - (double)userWeapon->getReloadFrames()/(double)userWeapon->getMaxReloadFrames();
+    }
+    SDL_RenderFillRect(renderer, &elementRect);
+
+
+
+    // draw the health bar
+    elementRect.w = HUD_HEALTH_WIDTH;
+    elementRect.h = HUD_HEALTH_HEIGHT;
+    elementRect.x = HUD_HEALTH_TOPLEFT_X;
+    elementRect.y = HUD_HEALTH_TOPLEFT_Y;
+
+    SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BOX_RED, HUD_HEALTH_BOX_BLUE, HUD_HEALTH_BOX_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(renderer, &elementRect);
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
@@ -460,7 +480,9 @@ void Player::updateState(SDL_Event* eventHandler,
             respawn();
         }
     }
-    weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
+    if (id == CHARACTER_MAIN_ID) {
+        weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
+    }
 }
 
 void Player::move(forward_list<Wall> wallContainer) {
@@ -550,6 +572,7 @@ void Player::deleteObject(void) {
 
 AssaultRifle::AssaultRifle(void): Weapon() {
     mouseDown = false;
+    reloading = false;
     currAmmo = AR_CLIP_SIZE;
     reloadFramesLeft = 0;
 }
@@ -567,14 +590,16 @@ void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
             projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
-        } else {
-            beginReload();
         }
+    }
+    if (currAmmo == 0 && reloadFramesLeft == 0) {
+        beginReload();
     }
 }
 
 void AssaultRifle::beginReload(void) {
-    currAmmo = AR_CLIP_SIZE;
+    cout << "hi\n";
+    reloading = true;
     reloadFramesLeft = AR_RELOAD_FRAMES;
 }
 
@@ -582,14 +607,19 @@ void AssaultRifle::updateGun(void) {
     if (shotDelay > 0) {
         shotDelay--;
     }
-    if (reloadFramesLeft > 0) {
+    if (reloading == true) {
         reloadFramesLeft--;
+        if (reloadFramesLeft == 0) {
+            reloading = false;
+            currAmmo = AR_CLIP_SIZE;
+        }
     }
 }
 
 
 Pistol::Pistol(void): Weapon() {
     mouseDown = false;
+    reloading = false;
     currRecoil = 0;
     currAmmo = PISTOL_CLIP_SIZE;
     reloadFramesLeft = 0;
@@ -608,17 +638,18 @@ void Pistol::takeShot(forward_list<Projectile>* projectileList,
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
                 projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
-            } else {
-                beginReload();
             }
         }
     } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
         mouseDown = false;
     }
+    if (currAmmo == 0 && reloadFramesLeft == 0) {
+        beginReload();
+    }
 }
 
 void Pistol::beginReload(void) {
-    currAmmo = PISTOL_CLIP_SIZE;
+    reloading = true;
     reloadFramesLeft = PISTOL_RELOAD_FRAMES;
 }
 
@@ -631,8 +662,12 @@ void Pistol::updateGun(void) {
     } else if (currRecoil < 0) {
         currRecoil = 0;
     }
-    if (reloadFramesLeft > 0) {
+    if (reloading == true) {
         reloadFramesLeft--;
+        if (reloadFramesLeft == 0) {
+            reloading = false;
+            currAmmo = PISTOL_CLIP_SIZE;
+        }
     }
 }
 
