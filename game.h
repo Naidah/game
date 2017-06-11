@@ -46,7 +46,7 @@ const int CHARACTER_WIDTH = 32; // width of the player on the default screen siz
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
 const int CHARACTER_ROLL_DURATION = 8;
-const int CHARACTER_ROLL_SPEED = 10;
+const int CHARACTER_ROLL_SPEED = 13;
 const int CHARACTER_ROLL_COOLDOWN = 140;
 
 const int CHARACTER_RED = 255; // red hue of player

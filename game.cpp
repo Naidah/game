@@ -62,7 +62,7 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Shotgun),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Pistol),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -438,6 +438,9 @@ void Player::updateState(SDL_Event* eventHandler,
                 rollFrames = CHARACTER_ROLL_DURATION;
                 rollDirection = direction;
             }
+            if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) {
+                weapon->beginReload();
+            }
             if (rolling == true) {
                 rollFrames--;
                 velx = rollDirection.x*CHARACTER_ROLL_SPEED;
@@ -618,9 +621,10 @@ void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
 }
 
 void AssaultRifle::beginReload(void) {
-    cout << "hi\n";
-    reloading = true;
-    reloadFramesLeft = AR_RELOAD_FRAMES;
+    if (currAmmo < AR_CLIP_SIZE) {
+        reloading = true;
+        reloadFramesLeft = AR_RELOAD_FRAMES;
+    }
 }
 
 void AssaultRifle::updateGun(void) {
@@ -669,8 +673,10 @@ void Pistol::takeShot(forward_list<Projectile>* projectileList,
 }
 
 void Pistol::beginReload(void) {
-    reloading = true;
-    reloadFramesLeft = PISTOL_RELOAD_FRAMES;
+    if (currAmmo < PISTOL_CLIP_SIZE) {
+        reloading = true;
+        reloadFramesLeft = PISTOL_RELOAD_FRAMES;
+    }
 }
 
 void Pistol::updateGun(void) {
