@@ -15,6 +15,9 @@ MINOR:
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
     - Health bar deplete on damage
+    - Roll icon
+    - Particle effects as bullets/players explode
+    - Add weapon reseting on respawn
 */
 
 /* Current balance considerations:
@@ -45,7 +48,6 @@ MINOR:
 using namespace std;
 
 
-
 int main(int argc, char const *argv[]) {
     // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
@@ -55,9 +57,11 @@ int main(int argc, char const *argv[]) {
     double scaleFactor;
     int playerMainX;
     int playerMainY;
+    hudInfo hudInfoContainer;
 
 
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
+    hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
     forward_list<Player> playerList = { // list containing all players in the game
         Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
@@ -114,7 +118,7 @@ int main(int argc, char const *argv[]) {
              playerMainX, playerMainY);
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
-                renderGameUI(renderer, scaleFactor, *character);
+                renderGameUI(renderer, scaleFactor, *character, hudInfoContainer);
             }
         }
 
@@ -242,7 +246,8 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     }
 }
 
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter) {
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter,
+     hudInfo hudInfoContainer) {
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
 
     Weapon* userWeapon = userCharacter.getWeapon();
@@ -274,6 +279,14 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     }
     SDL_RenderFillRect(renderer, &elementRect);
 
+    elementRect.w = HUD_AMMO_ICON_WIDTH;
+    elementRect.h = HUD_AMMO_ICON_HEIGHT;
+    elementRect.x = HUD_AMMO_ICON_TOPLEFT_X;
+    elementRect.y = HUD_AMMO_ICON_TOPLEFT_Y;
+    SDL_SetTextureAlphaMod(hudInfoContainer.ammoIcon, HUD_AMMO_ICON_ALPHA);
+    SDL_SetTextureColorMod(hudInfoContainer.ammoIcon, HUD_AMMO_ICON_RED, HUD_AMMO_ICON_GREEN, HUD_AMMO_ICON_BLUE);
+    SDL_RenderCopy(renderer, hudInfoContainer.ammoIcon, NULL, &elementRect);
+
 
     // draw roll cooldown bar
     elementRect.w = HUD_COOLDOWN_WIDTH;
@@ -284,7 +297,7 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     SDL_SetRenderDrawColor(renderer, HUD_COOLDOWN_BOX_RED, HUD_COOLDOWN_BOX_BLUE, HUD_COOLDOWN_BOX_GREEN, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &elementRect);
 
-    // create a second bar over the first to show percent of ammo remaining
+    // create a second bar over the first to show amount of cooldown remaining
     SDL_SetRenderDrawColor(renderer, HUD_COOLDOWN_BAR_RED, HUD_COOLDOWN_BAR_BLUE, HUD_COOLDOWN_BAR_GREEN, UI_COLOR_MAX_VALUE);
     elementRect.w *= 1-userCharacter.getRollCooldown()/(double)CHARACTER_ROLL_COOLDOWN;
     SDL_RenderFillRect(renderer, &elementRect);
@@ -298,6 +311,15 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     elementRect.y = HUD_HEALTH_TOPLEFT_Y;
 
     SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BOX_RED, HUD_HEALTH_BOX_BLUE, HUD_HEALTH_BOX_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(renderer, &elementRect);
+
+    if (userCharacter.isAlive()) {
+        elementRect.w *= (double)userCharacter.getHealth()/(double)CHARACTER_MAX_HP;
+    } else {
+        elementRect.w *= 1 - (double)userCharacter.getDeathFrames()/(double)CHARACTER_DEATH_DURATION;
+    }
+
+    SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BAR_RED, HUD_HEALTH_BAR_GREEN, HUD_HEALTH_BAR_BLUE, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &elementRect);
 }
 
@@ -438,6 +460,7 @@ void Player::updateState(SDL_Event* eventHandler,
             }
             if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) {
                 weapon->beginReload();
+                health--; //DEBUG
             }
             if (rolling == true) {
                 rollFrames--;
@@ -500,6 +523,9 @@ void Player::updateState(SDL_Event* eventHandler,
                 }
             }
         }
+        if (health <= 0) { //DEBUG
+            killPlayer();
+        }
     } else {
         deathFrames -= 1;
         if (deathFrames <= 0) {
@@ -552,10 +578,17 @@ void Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
     health -= 1;
     if (health <= 0) { // check if the shot was a lethal blow
-        alive = false; // kill the player if they loose all their life
-        deathFrames = CHARACTER_DEATH_DURATION;
+        killPlayer();
     }
-    red -= 255/3; // placeholder thing till actual damage mechanics added
+}
+
+void Player::killPlayer(void) {
+    alive = false;
+    deathFrames = CHARACTER_DEATH_DURATION;
+    velx = 0;
+    vely = 0;
+    rolling = false;
+    rollDirection = MOVE_NONE;
 }
 
 void Player::setNewPosition(void) {
@@ -569,6 +602,7 @@ void Player::respawn(void) {
     deathFrames = 0;
     setNewPosition();
     health = CHARACTER_MAX_HP;
+    rollCooldown = 0;
 }
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {

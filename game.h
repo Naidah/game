@@ -19,6 +19,11 @@ bool operator!=(const direction lhs, const direction rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y;
 }
 
+typedef struct _hudInfo {
+    SDL_Texture* ammoIcon;
+    SDL_Texture* cooldownIcon;
+} hudInfo;
+
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
@@ -177,10 +182,17 @@ const int HUD_WIDTH = SCREEN_WIDTH - GAMESPACE_WIDTH;
 const int HUD_HEIGHT = SCREEN_HEIGHT;
 
 // ammo box parameters
+const string HUD_AMMO_ICON_LOCATION = "images/ammoIcon.png";
+
 const int HUD_AMMO_WIDTH = HUD_WIDTH/2;
 const int HUD_AMMO_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_AMMO_TOPLEFT_X = HUD_AMMO_WIDTH;
 const int HUD_AMMO_TOPLEFT_Y = HUD_HEIGHT - HUD_AMMO_HEIGHT;
+
+const int HUD_AMMO_ICON_WIDTH = HUD_AMMO_WIDTH*0.6;
+const int HUD_AMMO_ICON_HEIGHT = HUD_AMMO_HEIGHT*0.6;
+const int HUD_AMMO_ICON_TOPLEFT_X = HUD_AMMO_TOPLEFT_X+(HUD_AMMO_WIDTH - HUD_AMMO_ICON_WIDTH)/2;
+const int HUD_AMMO_ICON_TOPLEFT_Y = HUD_AMMO_TOPLEFT_Y+(HUD_AMMO_HEIGHT - HUD_AMMO_ICON_HEIGHT)/2;
 
 const int HUD_AMMO_BOX_RED = 255;
 const int HUD_AMMO_BOX_BLUE = 255;
@@ -189,6 +201,11 @@ const int HUD_AMMO_BOX_GREEN = 255;
 const int HUD_AMMO_BAR_RED = 100;
 const int HUD_AMMO_BAR_BLUE = 100;
 const int HUD_AMMO_BAR_GREEN = 100;
+
+const int HUD_AMMO_ICON_RED = 0;
+const int HUD_AMMO_ICON_GREEN = 200;
+const int HUD_AMMO_ICON_BLUE = 200;
+const int HUD_AMMO_ICON_ALPHA = 155;
 
 // rool cooldown display parameters
 const int HUD_COOLDOWN_WIDTH = HUD_WIDTH/2;
@@ -210,9 +227,13 @@ const int HUD_HEALTH_HEIGHT = HUD_HEIGHT*0.05;
 const int HUD_HEALTH_TOPLEFT_X = 0;
 const int HUD_HEALTH_TOPLEFT_Y = HUD_HEIGHT - (HUD_AMMO_HEIGHT + HUD_HEALTH_HEIGHT);
 
-const int HUD_HEALTH_BOX_RED = 255;
+const int HUD_HEALTH_BOX_RED = 100;
 const int HUD_HEALTH_BOX_BLUE = 0;
 const int HUD_HEALTH_BOX_GREEN = 0;
+
+const int HUD_HEALTH_BAR_RED = 255;
+const int HUD_HEALTH_BAR_GREEN = 0;
+const int HUD_HEALTH_BAR_BLUE = 0;
 
 
 
@@ -289,6 +310,8 @@ public:
     int getID(void) {return id;}
     double getAngle(void) {return angle;}
     int getRollCooldown(void) {return rollCooldown;}
+    int getDeathFrames(void) {return deathFrames;}
+    int getHealth(void) {return health;}
     bool isAlive(void) {return alive;}
 
     // functions to update the players state
@@ -298,6 +321,7 @@ public:
     void move(forward_list<Wall> wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
+    void killPlayer(void); // kills the player
     void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
     void setNewPosition(void); // sets a new position for any time the player spawns in
     void respawn(void); // respawn the player after death
@@ -544,4 +568,5 @@ bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius 
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
      double scaleFactor, int playerMainX, int playerMainY); // render the gameplay area of the screen
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter); // render the HUD area of the screen
+void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter,
+ hudInfo hudInfoContainer); // render the HUD area of the screen
