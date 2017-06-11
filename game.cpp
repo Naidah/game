@@ -6,17 +6,15 @@
 MAJOR:
     - Start artwork for objects and background
     - Comment current work
-    - Begin to add networking   
-    - Add UI
+    - Begin to add networking
     - Add weapon deconstructor
 
 MINOR:
-    - Add rolling
     - Add different guns
         - Sniper (charge time, reduced speed when firing)
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
-    - Give each gun a different projectile speed
+    - Health bar deplete on damage
 */
 
 /* Current balance considerations:
@@ -62,7 +60,7 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Pistol),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -433,7 +431,7 @@ void Player::updateState(SDL_Event* eventHandler,
 
         if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
-            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false && rollCooldown == 0) {
+            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false && rollCooldown == 0 && direction != MOVE_NONE) {
                 rolling = true;
                 rollFrames = CHARACTER_ROLL_DURATION;
                 rollDirection = direction;
@@ -443,8 +441,13 @@ void Player::updateState(SDL_Event* eventHandler,
             }
             if (rolling == true) {
                 rollFrames--;
-                velx = rollDirection.x*CHARACTER_ROLL_SPEED;
-                vely = rollDirection.y*CHARACTER_ROLL_SPEED;
+                if (direction == MOVE_UP || direction == MOVE_LEFT || direction == MOVE_DOWN || direction == MOVE_RIGHT) {
+                    velx = rollDirection.x*CHARACTER_ROLL_SPEED;
+                    vely = rollDirection.y*CHARACTER_ROLL_SPEED;
+                } else {
+                    velx = rollDirection.x*CHARACTER_ROLL_SPEED/sqrt(2);
+                    vely = rollDirection.y*CHARACTER_ROLL_SPEED/sqrt(2);
+                }
                 if (rollFrames == 0) {
                     rolling = false;
                     rollDirection = MOVE_NONE;
@@ -610,7 +613,8 @@ void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
     double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD/2);
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
-            projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
+            projectileList->push_front(Projectile(player->getX(), player->getY(),
+             projectileAngle, AR_PROJECTILE_SPEED, renderer, player->getID()));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         }
@@ -661,7 +665,8 @@ void Pistol::takeShot(forward_list<Projectile>* projectileList,
                 mouseDown = true;
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
-                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
+                projectileList->push_front(Projectile(player->getX(), player->getY(),
+                 projectileAngle, PISTOL_PROJECTILE_SPEED, renderer, player->getID()));
             }
         }
     } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
@@ -712,7 +717,8 @@ void Shotgun::takeShot(forward_list<Projectile>* projectileList,
             mouseDown = true;
             for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
                 projectileAngle = player->getAngle()+((rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2);
-                projectileList->push_front(Projectile(player->getX(), player->getY(), projectileAngle, renderer, player->getID()));
+                projectileList->push_front(Projectile(player->getX(), player->getY(),
+                 projectileAngle, SHOTGUN_PROJECTILE_SPEED, renderer, player->getID()));
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
@@ -971,7 +977,7 @@ void Wall::deleteObject(void) {
 
 
 // Functions related to the projectile class
-Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer, int id) {
+Projectile::Projectile(int x, int y, double a, const double speed, SDL_Renderer* renderer, int id) {
     // set the location of the projectile
     currPosX = x;
     currPosY = y;
@@ -990,8 +996,8 @@ Projectile::Projectile(int x, int y, double a, SDL_Renderer* renderer, int id) {
     setProjectileCentre();
 
     // initialize the speed of the projectile based on the angle it fired at
-    velx = -PROJECTILE_SPEED * cos(angle*M_PI/180);
-    vely = -PROJECTILE_SPEED * sin(angle*M_PI/180);
+    velx = -speed * cos(angle*M_PI/180);
+    vely = -speed * sin(angle*M_PI/180);
 
     ownerID = id;
 

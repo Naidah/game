@@ -15,6 +15,10 @@ bool operator==(const direction lhs, const direction rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
 
+bool operator!=(const direction lhs, const direction rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y;
+}
+
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
@@ -45,8 +49,8 @@ const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate p
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
-const int CHARACTER_ROLL_DURATION = 8;
-const int CHARACTER_ROLL_SPEED = 13;
+const int CHARACTER_ROLL_DURATION = 16;
+const int CHARACTER_ROLL_SPEED = 12;
 const int CHARACTER_ROLL_COOLDOWN = 140;
 
 const int CHARACTER_RED = 255; // red hue of player
@@ -59,10 +63,12 @@ const int CHARACTER_MAX_HP = 3; // max health a player can have
 const int CHARACTER_DEATH_DURATION = 50; // the number of frames the player remains dead for
 
 // codes for the different weapons player can use
-const int CHARACTER_WEAPON_ASSAULT_RIFLE = 1;
-const int CHARACTER_WEAPON_PISTOL = 2;
-const int CHARACTER_WEAPON_SHOTGUN = 3;
-const int CHARACTER_WEAPON_SNIPER = 4;
+enum CHARACTER_WEAPONS {
+    CHARACTER_WEAPON_ASSAULT_RIFLE,
+    CHARACTER_WEAPON_PISTOL,
+    CHARACTER_WEAPON_SHOTGUN,
+    CHARACTER_WEAPON_SNIPER
+};
 
 // Weapon Related Constants
 // ASSAULT RIFLE
@@ -70,6 +76,7 @@ const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
 const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
 const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
 const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
+const double AR_PROJECTILE_SPEED = 18.0;
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
@@ -77,11 +84,13 @@ const int PISTOL_MAX_BULLET_SPREAD = 40;
 const int PISTOL_RELOAD_FRAMES = 60;
 const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
 const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
+const double PISTOL_PROJECTILE_SPEED = 16.0;
 
 // SHOTGUN
 const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
 const int SHOTGUN_PROJECTILE_SPREAD = 45;
 const int SHOTGUN_SHOT_DELAY = 60;
+const double SHOTGUN_PROJECTILE_SPEED = 12.0;
 
 
 /* Defaults
@@ -111,7 +120,6 @@ const int SHOTGUN_SHOT_DELAY = 60;
 
 // Projectile related constants
 const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png"; // location of the bulet sprite
-const double PROJECTILE_SPEED = 16.0; // velocity of the projectile
 const int PROJECTILE_WIDTH = 8; // width of projectile image on default screen size
 const int PROJECTILE_HEIGHT = 8; // height of projectile image on default screen size
 
@@ -170,7 +178,7 @@ const int HUD_HEIGHT = SCREEN_HEIGHT;
 
 // ammo box parameters
 const int HUD_AMMO_WIDTH = HUD_WIDTH/2;
-const int HUD_AMMO_HEIGHT = 100;
+const int HUD_AMMO_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_AMMO_TOPLEFT_X = HUD_AMMO_WIDTH;
 const int HUD_AMMO_TOPLEFT_Y = HUD_HEIGHT - HUD_AMMO_HEIGHT;
 
@@ -184,7 +192,7 @@ const int HUD_AMMO_BAR_GREEN = 100;
 
 // rool cooldown display parameters
 const int HUD_COOLDOWN_WIDTH = HUD_WIDTH/2;
-const int HUD_COOLDOWN_HEIGHT = 100;
+const int HUD_COOLDOWN_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_COOLDOWN_TOPLEFT_X = 0;
 const int HUD_COOLDOWN_TOPLEFT_Y = HUD_HEIGHT - HUD_COOLDOWN_HEIGHT;
 
@@ -198,7 +206,7 @@ const int HUD_COOLDOWN_BAR_GREEN = 100;
 
 // health bar parameters
 const int HUD_HEALTH_WIDTH = HUD_WIDTH;
-const int HUD_HEALTH_HEIGHT = 30;
+const int HUD_HEALTH_HEIGHT = HUD_HEIGHT*0.05;
 const int HUD_HEALTH_TOPLEFT_X = 0;
 const int HUD_HEALTH_TOPLEFT_Y = HUD_HEIGHT - (HUD_AMMO_HEIGHT + HUD_HEALTH_HEIGHT);
 
@@ -405,7 +413,7 @@ class Projectile {
 private:
     // detail about the projectile (location of top left corner, width and height)
     SDL_Rect projectileRect;
-    int centreX; // location of hte bullets centre
+    int centreX; // location of the bullets centre
     int centreY;
     double angle; // rotation of the projectile
 
@@ -430,7 +438,7 @@ private:
     // spritesheet of the projectile
     SDL_Texture* projectileImage;
 public:
-    Projectile(int x, int y, double a, SDL_Renderer* renderer, int id);
+    Projectile(int x, int y, double a, const double speed, SDL_Renderer* renderer, int id);
     int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     void setProjectileCentre(void);
