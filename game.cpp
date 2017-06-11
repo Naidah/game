@@ -277,6 +277,21 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     SDL_RenderFillRect(renderer, &elementRect);
 
 
+    // draw roll cooldown bar
+    elementRect.w = HUD_COOLDOWN_WIDTH;
+    elementRect.h = HUD_COOLDOWN_HEIGHT;
+    elementRect.x = HUD_COOLDOWN_TOPLEFT_X;
+    elementRect.y = HUD_COOLDOWN_TOPLEFT_Y;
+
+    SDL_SetRenderDrawColor(renderer, HUD_COOLDOWN_BOX_RED, HUD_COOLDOWN_BOX_BLUE, HUD_COOLDOWN_BOX_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(renderer, &elementRect);
+
+    // create a second bar over the first to show percent of ammo remaining
+    SDL_SetRenderDrawColor(renderer, HUD_COOLDOWN_BAR_RED, HUD_COOLDOWN_BAR_BLUE, HUD_COOLDOWN_BAR_GREEN, UI_COLOR_MAX_VALUE);
+    elementRect.w *= 1-userCharacter.getRollCooldown()/(double)CHARACTER_ROLL_COOLDOWN;
+    SDL_RenderFillRect(renderer, &elementRect);
+
+
 
     // draw the health bar
     elementRect.w = HUD_HEALTH_WIDTH;
@@ -381,6 +396,7 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     rolling = false;
     rollDirection = MOVE_NONE;
     rollFrames = 0;
+    rollCooldown = 0;
 
     // assign the weapon pointer to a variable
     weapon = gun;
@@ -417,7 +433,7 @@ void Player::updateState(SDL_Event* eventHandler,
 
         if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
-            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false) {
+            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false && rollCooldown == 0) {
                 rolling = true;
                 rollFrames = CHARACTER_ROLL_DURATION;
                 rollDirection = direction;
@@ -429,6 +445,7 @@ void Player::updateState(SDL_Event* eventHandler,
                 if (rollFrames == 0) {
                     rolling = false;
                     rollDirection = MOVE_NONE;
+                    rollCooldown = CHARACTER_ROLL_COOLDOWN;
                 }
             } else {
                 // directional movement
@@ -472,6 +489,9 @@ void Player::updateState(SDL_Event* eventHandler,
                 mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
                 angle = atan2((double)(centreY*scaleFactor-mouseY),
                  (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
+                if (rollCooldown > 0) {
+                    rollCooldown--;
+                }
             }
         }
     } else {

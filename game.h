@@ -47,6 +47,7 @@ const int CHARACTER_HEIGHT = 32; // height of the player in the default screen s
 
 const int CHARACTER_ROLL_DURATION = 8;
 const int CHARACTER_ROLL_SPEED = 10;
+const int CHARACTER_ROLL_COOLDOWN = 140;
 
 const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
@@ -119,9 +120,11 @@ const int PROJECTILE_GREEN = 255; // green hue of projectile
 const int PROJECTILE_BLUE = 255; // blue hue of projectile
 
 // identifiers for which object type an object collides with
-const int PROJECTILE_COLLISION_NONE = 0;
-const int PROJECTILE_COLLISION_PLAYER = 1;
-const int PROJECTILE_COLLISION_WALL = 2;
+enum PROJECTILE_COLLISION_IDENTIFIERS {
+    PROJECTILE_COLLISION_NONE,
+    PROJECTILE_COLLISION_PLAYER,
+    PROJECTILE_COLLISION_WALL
+};
 
 // Wall related constats
 const int WALL_RED = 0; // red hue of wall
@@ -165,6 +168,7 @@ const int GAMESPACE_TOPLEFT_Y = 0;
 const int HUD_WIDTH = SCREEN_WIDTH - GAMESPACE_WIDTH;
 const int HUD_HEIGHT = SCREEN_HEIGHT;
 
+// ammo box parameters
 const int HUD_AMMO_WIDTH = HUD_WIDTH/2;
 const int HUD_AMMO_HEIGHT = 100;
 const int HUD_AMMO_TOPLEFT_X = HUD_AMMO_WIDTH;
@@ -178,6 +182,21 @@ const int HUD_AMMO_BAR_RED = 100;
 const int HUD_AMMO_BAR_BLUE = 100;
 const int HUD_AMMO_BAR_GREEN = 100;
 
+// rool cooldown display parameters
+const int HUD_COOLDOWN_WIDTH = HUD_WIDTH/2;
+const int HUD_COOLDOWN_HEIGHT = 100;
+const int HUD_COOLDOWN_TOPLEFT_X = 0;
+const int HUD_COOLDOWN_TOPLEFT_Y = HUD_HEIGHT - HUD_COOLDOWN_HEIGHT;
+
+const int HUD_COOLDOWN_BOX_RED = 0;
+const int HUD_COOLDOWN_BOX_BLUE = 0;
+const int HUD_COOLDOWN_BOX_GREEN = 0;
+
+const int HUD_COOLDOWN_BAR_RED = 50;
+const int HUD_COOLDOWN_BAR_BLUE = 150;
+const int HUD_COOLDOWN_BAR_GREEN = 100;
+
+// health bar parameters
 const int HUD_HEALTH_WIDTH = HUD_WIDTH;
 const int HUD_HEALTH_HEIGHT = 30;
 const int HUD_HEALTH_TOPLEFT_X = 0;
@@ -231,6 +250,7 @@ protected:
     bool rolling;
     direction rollDirection;
     int rollFrames;
+    int rollCooldown;
 
     // color of the players sprite
     int red;
@@ -260,6 +280,7 @@ public:
     int getRadius(void) {return radius;}
     int getID(void) {return id;}
     double getAngle(void) {return angle;}
+    int getRollCooldown(void) {return rollCooldown;}
     bool isAlive(void) {return alive;}
 
     // functions to update the players state
