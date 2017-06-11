@@ -297,8 +297,8 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
     return output;
 }
 
-int getDirections(void) {
-    int output = MOVE_NONE; // set the default output to no keys pressed
+direction getDirections(void) {
+    direction output = MOVE_NONE; // set the default output to no keys pressed
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL); // load the array of keyboard states
 
     // go through each key combination (A, SD, WD, etc) and see if the corresponding key
@@ -378,6 +378,10 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     velx = 0;
     vely = 0;
 
+    rolling = false;
+    rollDirection = MOVE_NONE;
+    rollFrames = 0;
+
     // assign the weapon pointer to a variable
     weapon = gun;
 
@@ -402,77 +406,73 @@ void Player::setPlayerCentre(void) {
 
 void Player::updateState(SDL_Event* eventHandler,
  forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor) {
+    const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
     if (alive == true) {
         // get the keyboard state containing which keys are actively pressed
-        int direction = MOVE_NONE;
+        direction direction = MOVE_NONE;
 
         // used to store the x and y coordinates of the mouse
         int mouseX = 0;
         int mouseY = 0;
 
-        // update velocity in the y direction
         if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
-            // directional movement
             direction = getDirections(); // get the direction of movement for the player at the current frame
-            // increment the velocity in each direction according to the movement direction
-            if (direction == MOVE_UP) {
-                vely -= CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_DOWN) {
-                vely += CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_LEFT) {
-                velx -= CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_RIGHT) {
-                velx += CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_UP_LEFT) {
-                vely -= CHARACTER_ACCEL_PER_FRAME;
-                velx -= CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_UP_RIGHT) {
-                vely -= CHARACTER_ACCEL_PER_FRAME;
-                velx += CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_DOWN_LEFT) {
-                vely += CHARACTER_ACCEL_PER_FRAME;
-                velx -= CHARACTER_ACCEL_PER_FRAME;
-            } else if (direction == MOVE_DOWN_RIGHT) {
-                vely += CHARACTER_ACCEL_PER_FRAME;
-                velx += CHARACTER_ACCEL_PER_FRAME;
+            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false) {
+                rolling = true;
+                rollFrames = CHARACTER_ROLL_DURATION;
+                rollDirection = direction;
             }
+            if (rolling == true) {
+                rollFrames--;
+                velx = rollDirection.x*CHARACTER_ROLL_SPEED;
+                vely = rollDirection.y*CHARACTER_ROLL_SPEED;
+                if (rollFrames == 0) {
+                    rolling = false;
+                    rollDirection = MOVE_NONE;
+                }
+            } else {
+                // directional movement
+                // increment the velocity in each direction according to the movement direction
+                velx += direction.x*CHARACTER_ACCEL_PER_FRAME;
+                vely += direction.y*CHARACTER_ACCEL_PER_FRAME;
 
-            if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
-                // if the player has no movement in the x direction, reduce speed along that axis
-                if (velx > 0) { // decrease toward 0 if the player is moving right 
-                    velx -= CHARACTER_DECEL_PER_FRAME;
-                } else if (velx < 0) { // increase toward 0 if the player is moving left
-                    velx += CHARACTER_DECEL_PER_FRAME;
+                if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
+                    // if the player has no movement in the x direction, reduce speed along that axis
+                    if (velx > 0) { // decrease toward 0 if the player is moving right 
+                        velx -= CHARACTER_DECEL_PER_FRAME;
+                    } else if (velx < 0) { // increase toward 0 if the player is moving left
+                        velx += CHARACTER_DECEL_PER_FRAME;
+                    }
+                    if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
+                        velx = 0; // if the velocity would wrap the other way next frame, set it to 0
+                    }
                 }
-                if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
-                    velx = 0; // if the velocity would wrap the other way next frame, set it to 0
+                if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
+                    if (vely > 0) {
+                        vely -= CHARACTER_DECEL_PER_FRAME;
+                    } else if (vely < 0) {
+                        vely += CHARACTER_DECEL_PER_FRAME;
+                    }
+                    if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
+                        vely = 0; // if the velocity would wrap the other way next frame, set it to 0
+                    }
                 }
-            }
-            if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
-                if (vely > 0) {
-                    vely -= CHARACTER_DECEL_PER_FRAME;
-                } else if (vely < 0) {
-                    vely += CHARACTER_DECEL_PER_FRAME;
-                }
-                if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
-                    vely = 0; // if the velocity would wrap the other way next frame, set it to 0
-                }
-            }
 
-            double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
-            if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
-                // scale x and y down so they are at the correct speed
-                vely *= CHARACTER_VEL_MAX/currSpeed;
-                velx *= CHARACTER_VEL_MAX/currSpeed;
-            }
+                double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
+                if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
+                    // scale x and y down so they are at the correct speed
+                    vely *= CHARACTER_VEL_MAX/currSpeed;
+                    velx *= CHARACTER_VEL_MAX/currSpeed;
+                }
 
-            // rotate the player to look toward the mouse
-            // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
-            SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
-            mouseX -= GAMESPACE_TOPLEFT_X;
-            mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
-            angle = atan2((double)(centreY*scaleFactor-mouseY),
-             (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
+                // rotate the player to look toward the mouse
+                // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
+                SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
+                mouseX -= GAMESPACE_TOPLEFT_X;
+                mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
+                angle = atan2((double)(centreY*scaleFactor-mouseY),
+                 (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
+            }
         }
     } else {
         deathFrames -= 1;
@@ -1042,6 +1042,8 @@ void Projectile::deleteObject(void) {
     // clears any memory used  by the projectile
     SDL_DestroyTexture(projectileImage);
 }
+
+
 
 
 CNetMessage::CNetMessage() {

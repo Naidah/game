@@ -6,6 +6,15 @@
 
 using namespace std;
 
+typedef struct _direction {
+    double x;
+    double y;
+} direction;
+
+bool operator==(const direction lhs, const direction rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
@@ -16,15 +25,15 @@ const int COLOR_KEY_GREEN = 255;
 const int COLOR_KEY_BLUE = 255;
 
 // directions returned by the get direction function for movement
-const int MOVE_NONE = 0;
-const int MOVE_UP = 1;
-const int MOVE_DOWN = 2;
-const int MOVE_LEFT = 3;
-const int MOVE_RIGHT = 4;
-const int MOVE_UP_LEFT = 5;
-const int MOVE_UP_RIGHT = 6;
-const int MOVE_DOWN_LEFT = 7;
-const int MOVE_DOWN_RIGHT = 8;
+const direction MOVE_NONE = {0,0};
+const direction MOVE_UP = {0,-1};
+const direction MOVE_DOWN = {0,1};
+const direction MOVE_LEFT = {-1,0};
+const direction MOVE_RIGHT = {1,0};
+const direction MOVE_UP_LEFT = {-1,-1};
+const direction MOVE_UP_RIGHT = {1,-1};
+const direction MOVE_DOWN_LEFT = {-1,1};
+const direction MOVE_DOWN_RIGHT = {1,1};
 
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
@@ -35,6 +44,9 @@ const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate p
 
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
+
+const int CHARACTER_ROLL_DURATION = 8;
+const int CHARACTER_ROLL_SPEED = 10;
 
 const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
@@ -214,6 +226,11 @@ protected:
     // players velocity in each direction
     double velx;
     double vely;
+
+    // variables to store the state of the players roll
+    bool rolling;
+    direction rollDirection;
+    int rollFrames;
 
     // color of the players sprite
     int red;
@@ -493,6 +510,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image fr
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
+direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
