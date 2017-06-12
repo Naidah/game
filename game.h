@@ -24,6 +24,13 @@ typedef struct _hudInfo {
     SDL_Texture* cooldownIcon;
 } hudInfo;
 
+typedef struct _colorSet {
+    int red;
+    int green;
+    int blue;
+    double alpha;
+} colorSet;
+
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
@@ -46,6 +53,7 @@ const direction MOVE_DOWN_RIGHT = {1,1};
 
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
+const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 
 const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
 const double CHARACTER_ACCEL_PER_FRAME = 0.6; // Acceleration speed of the plater
@@ -54,13 +62,9 @@ const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate p
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
-const int CHARACTER_ROLL_DURATION = 60;
-const int CHARACTER_ROLL_SPEED = 4;
-const int CHARACTER_ROLL_COOLDOWN = 40;
-
-/*const int CHARACTER_ROLL_DURATION = 16;
-const int CHARACTER_ROLL_SPEED = 12;
-const int CHARACTER_ROLL_COOLDOWN = 140;*/
+const int CHARACTER_ROLL_DURATION = 16;
+const int CHARACTER_ROLL_SPEED = 10;
+const int CHARACTER_ROLL_COOLDOWN = 180;
 
 const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
@@ -69,7 +73,7 @@ const int CHARACTER_BLUE = 255; // blue hue of player
 const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
-const int CHARACTER_DEATH_DURATION = 50; // the number of frames the player remains dead for
+const int CHARACTER_DEATH_DURATION = 150; // the number of frames the player remains dead for
 
 // codes for the different weapons player can use
 enum CHARACTER_WEAPONS {
@@ -132,9 +136,9 @@ const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png"; // location of t
 const int PROJECTILE_WIDTH = 8; // width of projectile image on default screen size
 const int PROJECTILE_HEIGHT = 8; // height of projectile image on default screen size
 
-const int PROJECTILE_RED = 255; // red hue of projectile
-const int PROJECTILE_GREEN = 255; // green hue of projectile
-const int PROJECTILE_BLUE = 255; // blue hue of projectile
+const int PROJECTILE_RED = 0; // red hue of projectile
+const int PROJECTILE_GREEN = 100; // green hue of projectile
+const int PROJECTILE_BLUE = 0; // blue hue of projectile
 
 // identifiers for which object type an object collides with
 enum PROJECTILE_COLLISION_IDENTIFIERS {
@@ -159,8 +163,8 @@ const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT; // size of screen
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*0.8; // size of screen
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.8;
 
 
 // Game UI parameters
@@ -184,6 +188,10 @@ const int GAMESPACE_TOPLEFT_Y = 0;
 // HUD parameters
 const int HUD_WIDTH = SCREEN_WIDTH - GAMESPACE_WIDTH;
 const int HUD_HEIGHT = SCREEN_HEIGHT;
+
+const int HUD_RED = 50;
+const int HUD_GREEN = 50;
+const int HUD_BLUE = 255;
 
 // ammo box parameters
 const string HUD_AMMO_ICON_LOCATION = "images/ammoIcon.png";
@@ -248,6 +256,7 @@ const int CHARBUFF_LENGTH = 256;
 
 // constants used in debugging
 const bool DEBUG_DRAW_SHADOWS = true;
+const bool DEBUG_KILL_PLAYER = true;
 
 
 /*-------------------------- Typedefs ------------------------------*/
@@ -258,6 +267,7 @@ typedef char charbuff[CHARBUFF_LENGTH];
 
 // declarations of different classes
 class Player;
+class DeathObject;
 class Weapon;
 class Wall;
 class Projectile;
@@ -286,9 +296,7 @@ protected:
     int rollCooldown;
 
     // color of the players sprite
-    int red;
-    int green;
-    int blue;
+    colorSet playerColors;
 
     Weapon* weapon; // address of the player's weapon object
 
@@ -301,6 +309,9 @@ protected:
 
     // the sprite sheet for the player
     SDL_Texture* playerImage;
+    SDL_Renderer* playerRenderer;
+
+    DeathObject* deathMarker;
 
 public:
     // initializer function for the class
@@ -331,6 +342,18 @@ public:
     void respawn(void); // respawn the player after death
 
     //draws the player to the screen
+    void render(SDL_Renderer* renderer, double scaleFactor);
+};
+
+class DeathObject {
+protected:
+    SDL_Texture* circleImage;
+    SDL_Rect circleRect;
+    colorSet circleColors;
+public:
+    DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates, colorSet playerColors);
+    ~DeathObject(void);
+    void updateState(void);
     void render(SDL_Renderer* renderer, double scaleFactor);
 };
 
@@ -424,9 +447,7 @@ private:
     // Rect object to hold info on the wall location
     SDL_Rect wallLocation;
     // color of the wall
-    int red;
-    int green;
-    int blue;
+    colorSet wallColors;
 
 
 public:
@@ -460,9 +481,7 @@ private:
     double currPosY;
 
     // color of the projectiles
-    int red;
-    int green;
-    int blue;
+    colorSet projectileColors;
 
     // ID of the player who shot the projectile instance
     int ownerID;

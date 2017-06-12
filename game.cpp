@@ -9,6 +9,7 @@ MAJOR:
     - Begin to add networking
     - Add weapon deconstructor
     - Move code to be in different files to make editing easier
+    - Update angle before taking shots
 
 MINOR:
     - Add different guns
@@ -227,9 +228,7 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
 
     // render all objects to the screen
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
-        if (character->isAlive() == true) {
-            character->render(renderer, scaleFactor);
-        }
+        character->render(renderer, scaleFactor);
     }
     for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
         bullet->render(renderer, scaleFactor);
@@ -257,7 +256,7 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     hudViewport.w = HUD_WIDTH;
     hudViewport.h = HUD_HEIGHT;
     SDL_RenderSetViewport(renderer, &hudViewport);
-    SDL_SetRenderDrawColor(renderer, 100, 100, 200, UI_COLOR_MAX_VALUE);
+    SDL_SetRenderDrawColor(renderer, HUD_RED, HUD_GREEN, HUD_BLUE, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &hudViewport);
 
     // draw ammo counter
@@ -428,9 +427,13 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     id = idNum; // set the ID number to the one provided
 
     // set the players color scheme
-    red = CHARACTER_RED;
-    green = CHARACTER_GREEN;
-    blue = CHARACTER_BLUE;
+    playerColors.red = CHARACTER_RED;
+    playerColors.green = CHARACTER_GREEN;
+    playerColors.blue = CHARACTER_BLUE;
+    playerColors.alpha = UI_COLOR_MAX_VALUE;
+
+    playerRenderer = renderer;
+    deathMarker = NULL;
 }
 
 void Player::setPlayerCentre(void) {
@@ -460,6 +463,11 @@ void Player::updateState(SDL_Event* eventHandler,
             if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) {
                 weapon->beginReload();
             }
+
+            if (keyboardState[SDL_SCANCODE_K] && DEBUG_KILL_PLAYER == true) {
+                killPlayer();
+            }
+
             if (rolling == true) {
                 rollFrames--;
                 if (direction == MOVE_UP || direction == MOVE_LEFT || direction == MOVE_DOWN || direction == MOVE_RIGHT) {
@@ -509,25 +517,27 @@ void Player::updateState(SDL_Event* eventHandler,
                     velx *= CHARACTER_VEL_MAX/currSpeed;
                 }
 
-                // rotate the player to look toward the mouse
+                if (rollCooldown > 0) {
+                    rollCooldown--;
+                }
+            }
+            // rotate the player to look toward the mouse
                 // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
                 SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
                 mouseX -= GAMESPACE_TOPLEFT_X;
                 mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
                 angle = atan2((double)(centreY*scaleFactor-mouseY),
                  (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
-                if (rollCooldown > 0) {
-                    rollCooldown--;
-                }
-            }
         }
     } else {
         deathFrames -= 1;
         if (deathFrames <= 0) {
             respawn();
+        } else {
+            deathMarker->updateState();
         }
     }
-    if (id == CHARACTER_MAIN_ID) {
+    if (id == CHARACTER_MAIN_ID && alive == true) {
         weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
     }
 }
@@ -538,29 +548,31 @@ void Player::move(forward_list<Wall> wallContainer) {
     int posOrigY = playerRect.y;
     // moves the player based on the final velocity of each frame
 
-    // move the player along x and reset the centre
-    playerRect.x += velx;
-    setPlayerCentre();
+    if (alive == true) {
+        // move the player along x and reset the centre
+        playerRect.x += velx;
+        setPlayerCentre();
 
-    // go through each wall, and if the player movement would cause a collision, undo the movement along x
-    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        if (wall->checkCollision(centreX, centreY, radius) == true
-         || checkExitMap(centreX, centreY, radius)) {
-            playerRect.x = posOrigX;
-            velx = 0;
-            setPlayerCentre();
-        }
-    }
-
-    //repeat the process for x with y
-    playerRect.y += vely;
-    setPlayerCentre();
-    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        if (wall->checkCollision(centreX, centreY, radius) == true
+        // go through each wall, and if the player movement would cause a collision, undo the movement along x
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            if (wall->checkCollision(centreX, centreY, radius) == true
              || checkExitMap(centreX, centreY, radius)) {
-            playerRect.y = posOrigY;
-            vely = 0;
-            setPlayerCentre();
+                playerRect.x = posOrigX;
+                velx = 0;
+                setPlayerCentre();
+            }
+        }
+
+        //repeat the process for x with y
+        playerRect.y += vely;
+        setPlayerCentre();
+        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+            if (wall->checkCollision(centreX, centreY, radius) == true
+                 || checkExitMap(centreX, centreY, radius)) {
+                playerRect.y = posOrigY;
+                vely = 0;
+                setPlayerCentre();
+            }
         }
     }
 
@@ -584,6 +596,7 @@ void Player::killPlayer(void) {
     vely = 0;
     rolling = false;
     rollDirection = MOVE_NONE;
+    deathMarker = new DeathObject(playerRenderer, playerRect, playerColors);
 }
 
 void Player::setNewPosition(void) {
@@ -599,28 +612,82 @@ void Player::respawn(void) {
     health = CHARACTER_MAX_HP;
     rollCooldown = 0;
     weapon->resetGun();
+    delete deathMarker;
+    deathMarker = NULL;
 }
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {
     // draws the player to the screen using the supplied renderer
-    SDL_Rect renderRect; // create a rect containing the players scale coordinates and size
-    renderRect.x = floor(playerRect.x * scaleFactor);
-    renderRect.y = floor(playerRect.y * scaleFactor);
-    renderRect.w = floor(playerRect.w * scaleFactor);
-    renderRect.h = floor(playerRect.h * scaleFactor);
+    if (alive == true) {
+        SDL_Rect renderRect; // create a rect containing the players scale coordinates and size
+        renderRect.x = floor(playerRect.x * scaleFactor);
+        renderRect.y = floor(playerRect.y * scaleFactor);
+        renderRect.w = floor(playerRect.w * scaleFactor);
+        renderRect.h = floor(playerRect.h * scaleFactor);
 
-    SDL_SetTextureColorMod(playerImage, red, green, blue); // modulates the color based on the players settings
-    SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
-     angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
+        SDL_SetTextureAlphaMod(playerImage, UI_COLOR_MAX_VALUE);
+        SDL_SetTextureColorMod(playerImage, playerColors.red,
+         playerColors.green, playerColors.blue); // modulates the color based on the players settings
+        SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
+         angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
+    } else {SDL_Rect renderRect; // create a rect containing the players scale coordinates and size
+        renderRect.x = floor(playerRect.x * scaleFactor);
+        renderRect.y = floor(playerRect.y * scaleFactor);
+        renderRect.w = floor(playerRect.w * scaleFactor);
+        renderRect.h = floor(playerRect.h * scaleFactor);
+
+        SDL_SetTextureAlphaMod(playerImage, 100);
+        SDL_SetTextureColorMod(playerImage, playerColors.red,
+         playerColors.green, playerColors.blue); // modulates the color based on the players settings
+        SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
+         angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
+        deathMarker->render(renderer, scaleFactor);
+    }
 }
 
 void Player::deleteObject(void) {
     // clears any memory used by the player
     SDL_DestroyTexture(playerImage);
+    if (deathMarker) {
+        delete deathMarker;
+    }
     //delete weapon;
 }
 
 
+
+DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
+ colorSet playerColors) {
+    circleImage = loadImage(CHARACTER_DEATH_IMAGE, renderer);
+    circleRect.x = playerCoordinates.x;
+    circleRect.y = playerCoordinates.y;
+    circleRect.w = playerCoordinates.w;
+    circleRect.h = playerCoordinates.h;
+    circleColors.red = playerColors.red;
+    circleColors.blue = playerColors.blue;
+    circleColors.green = playerColors.green;
+    circleColors.alpha = UI_COLOR_MAX_VALUE;
+}
+
+void DeathObject::updateState(void) {
+    circleColors.alpha -= (double)UI_COLOR_MAX_VALUE/(double)CHARACTER_DEATH_DURATION;
+}
+
+void DeathObject::render(SDL_Renderer* renderer, double scaleFactor) {
+    SDL_Rect renderRect;
+    renderRect.x = circleRect.x*scaleFactor;
+    renderRect.y = circleRect.y*scaleFactor;
+    renderRect.w = circleRect.w*scaleFactor;
+    renderRect.h = circleRect.h*scaleFactor;
+    SDL_SetTextureColorMod(circleImage, circleColors.red,
+     circleColors.green, circleColors.blue);
+    SDL_SetTextureAlphaMod(circleImage, circleColors.alpha);
+    SDL_RenderCopy(renderer, circleImage, NULL, &renderRect);
+}
+
+DeathObject::~DeathObject(void) {
+    SDL_DestroyTexture(circleImage);
+}
 
 
 
@@ -799,9 +866,9 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
     wallLocation.h = h;
 
     // set the walls color
-    red = WALL_RED;
-    green = WALL_GREEN;
-    blue = WALL_BLUE;
+    wallColors.red = WALL_RED;
+    wallColors.green = WALL_GREEN;
+    wallColors.blue = WALL_BLUE;
 }
 
 bool Wall::checkCollision(int x, int y, int radius) {
@@ -872,7 +939,8 @@ void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
     renderRect.h = floor(wallLocation.h * scaleFactor);
 
     // draws the wall to the screen using the supplied renderer
-    SDL_SetRenderDrawColor(renderer, red, green, blue, UI_COLOR_MAX_VALUE);
+    SDL_SetRenderDrawColor(renderer, wallColors.red, wallColors.green,
+     wallColors.blue, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &renderRect);
 }
 
@@ -1050,6 +1118,10 @@ Projectile::Projectile(int x, int y, double a, const double speed, SDL_Renderer*
     velx = -speed * cos(angle*M_PI/180);
     vely = -speed * sin(angle*M_PI/180);
 
+    projectileColors.red = PROJECTILE_RED;
+    projectileColors.blue = PROJECTILE_BLUE;
+    projectileColors.green = PROJECTILE_GREEN;
+
     ownerID = id;
 
     // load the spritesheet to memory
@@ -1116,7 +1188,9 @@ void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
     renderRect.w = floor(projectileRect.w * scaleFactor);
     renderRect.h = floor(projectileRect.h * scaleFactor);
 
-    SDL_SetTextureColorMod(projectileImage, red, green, blue); // modulates the color based on the players settings
+    cout << projectileColors.red << "\n";
+    SDL_SetTextureColorMod(projectileImage, projectileColors.red,
+     projectileColors.green, projectileColors.blue); // modulates the color based on the players settings
     SDL_RenderCopyEx(renderer, projectileImage, NULL, &renderRect,
      angle, NULL, SDL_FLIP_NONE);// draw the projectile to the window
 }
