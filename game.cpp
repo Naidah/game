@@ -316,9 +316,18 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     } else {
         elementRect.w *= 1 - (double)userCharacter.getDeathFrames()/(double)CHARACTER_DEATH_DURATION;
     }
-
     SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BAR_RED, HUD_HEALTH_BAR_GREEN, HUD_HEALTH_BAR_BLUE, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &elementRect);
+
+    elementRect.w = HUD_HEALTH_DIVIDE_WIDTH;
+    elementRect.h = HUD_HEALTH_DIVIDE_HEIGHT;
+    elementRect.y = HUD_HEALTH_DIVIDE_TOPLEFT_Y;
+    SDL_SetRenderDrawColor(renderer, HUD_HEALTH_DIVIDE_RED,
+     HUD_HEALTH_DIVIDE_BLUE, HUD_HEALTH_DIVIDE_GREEN, UI_COLOR_MAX_VALUE);
+    for (int i=1;i<CHARACTER_MAX_HP;i++) {
+        elementRect.x = (HUD_HEALTH_WIDTH/CHARACTER_MAX_HP)*i-(elementRect.w/2);
+        SDL_RenderFillRect(renderer, &elementRect);
+    }
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
@@ -625,22 +634,11 @@ void Player::render(SDL_Renderer* renderer, double scaleFactor) {
         renderRect.w = floor(playerRect.w * scaleFactor);
         renderRect.h = floor(playerRect.h * scaleFactor);
 
-        SDL_SetTextureAlphaMod(playerImage, UI_COLOR_MAX_VALUE);
         SDL_SetTextureColorMod(playerImage, playerColors.red,
          playerColors.green, playerColors.blue); // modulates the color based on the players settings
         SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
          angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
-    } else {SDL_Rect renderRect; // create a rect containing the players scale coordinates and size
-        renderRect.x = floor(playerRect.x * scaleFactor);
-        renderRect.y = floor(playerRect.y * scaleFactor);
-        renderRect.w = floor(playerRect.w * scaleFactor);
-        renderRect.h = floor(playerRect.h * scaleFactor);
-
-        SDL_SetTextureAlphaMod(playerImage, 100);
-        SDL_SetTextureColorMod(playerImage, playerColors.red,
-         playerColors.green, playerColors.blue); // modulates the color based on the players settings
-        SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
-         angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
+    } else {
         deathMarker->render(renderer, scaleFactor);
     }
 }
@@ -1188,7 +1186,6 @@ void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
     renderRect.w = floor(projectileRect.w * scaleFactor);
     renderRect.h = floor(projectileRect.h * scaleFactor);
 
-    cout << projectileColors.red << "\n";
     SDL_SetTextureColorMod(projectileImage, projectileColors.red,
      projectileColors.green, projectileColors.blue); // modulates the color based on the players settings
     SDL_RenderCopyEx(renderer, projectileImage, NULL, &renderRect,

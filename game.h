@@ -163,8 +163,8 @@ const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*0.8; // size of screen
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.8;
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 
 // Game UI parameters
@@ -239,13 +239,21 @@ const int HUD_HEALTH_HEIGHT = HUD_HEIGHT*0.05;
 const int HUD_HEALTH_TOPLEFT_X = 0;
 const int HUD_HEALTH_TOPLEFT_Y = HUD_HEIGHT - (HUD_AMMO_HEIGHT + HUD_HEALTH_HEIGHT);
 
-const int HUD_HEALTH_BOX_RED = 100;
+const int HUD_HEALTH_BOX_RED = 175;
 const int HUD_HEALTH_BOX_BLUE = 0;
 const int HUD_HEALTH_BOX_GREEN = 0;
 
 const int HUD_HEALTH_BAR_RED = 255;
 const int HUD_HEALTH_BAR_GREEN = 0;
 const int HUD_HEALTH_BAR_BLUE = 0;
+
+const int HUD_HEALTH_DIVIDE_WIDTH = HUD_WIDTH*0.01;
+const int HUD_HEALTH_DIVIDE_HEIGHT = HUD_HEALTH_HEIGHT;
+const int HUD_HEALTH_DIVIDE_TOPLEFT_Y = HUD_HEALTH_TOPLEFT_Y;
+
+const int HUD_HEALTH_DIVIDE_RED = 100;
+const int HUD_HEALTH_DIVIDE_GREEN = 0;
+const int HUD_HEALTH_DIVIDE_BLUE = 0;
 
 
 
