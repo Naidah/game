@@ -54,9 +54,13 @@ const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate p
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
-const int CHARACTER_ROLL_DURATION = 16;
+const int CHARACTER_ROLL_DURATION = 60;
+const int CHARACTER_ROLL_SPEED = 4;
+const int CHARACTER_ROLL_COOLDOWN = 40;
+
+/*const int CHARACTER_ROLL_DURATION = 16;
 const int CHARACTER_ROLL_SPEED = 12;
-const int CHARACTER_ROLL_COOLDOWN = 140;
+const int CHARACTER_ROLL_COOLDOWN = 140;*/
 
 const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
@@ -347,6 +351,7 @@ public:
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) = 0;
     virtual void beginReload(void) = 0;
     virtual void updateGun() = 0;
+    virtual void resetGun() = 0;
 };
 
 // Weapon Derived classes
@@ -368,6 +373,7 @@ public:
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
+    void resetGun(void);
 };
 
 class Pistol: public Weapon {
@@ -387,6 +393,7 @@ public:
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
+    void resetGun(void);
 };
 
 class Shotgun: public Weapon {
@@ -406,6 +413,7 @@ public:
      SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
+    void resetGun(void);
 };
 
 

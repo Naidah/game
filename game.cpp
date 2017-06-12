@@ -8,16 +8,15 @@ MAJOR:
     - Comment current work
     - Begin to add networking
     - Add weapon deconstructor
+    - Move code to be in different files to make editing easier
 
 MINOR:
     - Add different guns
         - Sniper (charge time, reduced speed when firing)
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
-    - Health bar deplete on damage
     - Roll icon
     - Particle effects as bullets/players explode
-    - Add weapon reseting on respawn
 */
 
 /* Current balance considerations:
@@ -460,7 +459,6 @@ void Player::updateState(SDL_Event* eventHandler,
             }
             if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) {
                 weapon->beginReload();
-                health--; //DEBUG
             }
             if (rolling == true) {
                 rollFrames--;
@@ -522,9 +520,6 @@ void Player::updateState(SDL_Event* eventHandler,
                     rollCooldown--;
                 }
             }
-        }
-        if (health <= 0) { //DEBUG
-            killPlayer();
         }
     } else {
         deathFrames -= 1;
@@ -603,6 +598,7 @@ void Player::respawn(void) {
     setNewPosition();
     health = CHARACTER_MAX_HP;
     rollCooldown = 0;
+    weapon->resetGun();
 }
 
 void Player::render(SDL_Renderer* renderer, double scaleFactor) {
@@ -678,6 +674,14 @@ void AssaultRifle::updateGun(void) {
     }
 }
 
+void AssaultRifle::resetGun(void) {
+    currAmmo = AR_CLIP_SIZE;
+    reloadFramesLeft = 0;
+    shotDelay = 0;
+    reloading = false;
+    mouseDown = false;
+}
+
 
 Pistol::Pistol(void): Weapon() {
     mouseDown = false;
@@ -736,6 +740,14 @@ void Pistol::updateGun(void) {
     }
 }
 
+void Pistol::resetGun(void) {
+    currAmmo = PISTOL_CLIP_SIZE;
+    reloadFramesLeft = 0;
+    reloading = false;
+    currRecoil = 0;
+    mouseDown = false;
+}
+
 
 
 Shotgun::Shotgun(void): Weapon() {
@@ -769,6 +781,11 @@ void Shotgun::updateGun(void) {
     if (shotDelay > 0) {
         shotDelay--;
     }
+}
+
+void Shotgun::resetGun() {
+    shotDelay = 0;
+    mouseDown = false;
 }
 
 
