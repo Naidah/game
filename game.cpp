@@ -17,7 +17,7 @@ MINOR:
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
     - Roll icon
-    - Particle effects as bullets/players explode
+    - Particle effects as bullets collide (expanding/fading circle?)
 */
 
 /* Current balance considerations:
@@ -64,7 +64,7 @@ int main(int argc, char const *argv[]) {
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Shotgun),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -325,7 +325,7 @@ void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharact
     SDL_SetRenderDrawColor(renderer, HUD_HEALTH_DIVIDE_RED,
      HUD_HEALTH_DIVIDE_BLUE, HUD_HEALTH_DIVIDE_GREEN, UI_COLOR_MAX_VALUE);
     for (int i=1;i<CHARACTER_MAX_HP;i++) {
-        elementRect.x = (HUD_HEALTH_WIDTH/CHARACTER_MAX_HP)*i-(elementRect.w/2);
+        elementRect.x = ((double)HUD_HEALTH_WIDTH/(double)CHARACTER_MAX_HP)*i-((double)elementRect.w/2.0);
         SDL_RenderFillRect(renderer, &elementRect);
     }
 }
@@ -826,8 +826,9 @@ void Shotgun::takeShot(forward_list<Projectile>* projectileList,
     if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
         if (mouseDown != true && shotDelay == 0) {
             mouseDown = true;
-            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
-                projectileAngle = player->getAngle()+((rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2);
+            for (int n = -SHOTGUN_PROJECTILES_PER_SHOT/2; n < SHOTGUN_PROJECTILES_PER_SHOT/2; n++) {
+                projectileAngle = player->getAngle()+n*SHOTGUN_PROJECTILE_SPREAD; // set base angle of projectile
+                projectileAngle += (rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2;
                 projectileList->push_front(Projectile(player->getX(), player->getY(),
                  projectileAngle, SHOTGUN_PROJECTILE_SPEED, renderer, player->getID()));
             }
