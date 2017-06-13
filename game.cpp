@@ -17,7 +17,7 @@ MINOR:
         - LMG (delay on start, bouncing bullet, infinite ammo)
         - GL? (slow speed, bounce on wall)
     - Roll icon
-    - Particle effects as bullets collide (expanding/fading circle?)
+    - Make projectile explosion object appear on surface of collision getLocation
 */
 
 /* Current balance considerations:
@@ -64,7 +64,7 @@ int main(int argc, char const *argv[]) {
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Shotgun),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Pistol),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -76,6 +76,8 @@ int main(int argc, char const *argv[]) {
 
     forward_list<Projectile> projectileList;
     forward_list<Projectile> newList;
+    forward_list<BulletExplosion> explosionList;
+    forward_list<BulletExplosion> explosionUpdated;
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
@@ -93,6 +95,16 @@ int main(int argc, char const *argv[]) {
             character->updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
         }
 
+        explosionUpdated.clear();
+        for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
+            if (explosion->updateState() == true) {
+                explosion->deleteObject();
+            } else {
+                explosionUpdated.push_front(*explosion);
+            }
+        }
+        explosionList = explosionUpdated;
+
 
         // move all players and projectiles
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
@@ -108,13 +120,14 @@ int main(int argc, char const *argv[]) {
             if (bullet->move(&wallContainer, &playerList) != true) {
                 newList.push_front(*bullet);
             } else {
+                explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
                 bullet->deleteObject();
             }
         }
         projectileList = newList; // create a new list of projectiles to store all that remain on screen
 
 
-        renderGameSpace(renderer, wallContainer, playerList, projectileList, scaleFactor,
+        renderGameSpace(renderer, wallContainer, playerList, projectileList, explosionList, scaleFactor,
              playerMainX, playerMainY);
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
@@ -213,7 +226,8 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-      double scaleFactor, int playerMainX, int playerMainY) {
+     forward_list<BulletExplosion> explosionList, double scaleFactor,
+      int playerMainX, int playerMainY) {
     // reset the screen for the next frame
     SDL_Rect gamespaceViewport;
     gamespaceViewport.x = GAMESPACE_TOPLEFT_X;
@@ -241,6 +255,9 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     }
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
         wall->render(renderer, scaleFactor);
+    }
+    for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
+        explosion->render(renderer, scaleFactor);
     }
 }
 
@@ -1198,6 +1215,54 @@ void Projectile::deleteObject(void) {
     SDL_DestroyTexture(projectileImage);
 }
 
+BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLocation, colorSet projectileColors) {
+    explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, renderer);
+
+    explosionLocation.w = PROJECTILE_EXPLOSION_START_RADIUS*2;
+    explosionLocation.h = PROJECTILE_EXPLOSION_START_RADIUS*2;
+    explosionLocation.x = projectileLocation.x-explosionLocation.w/2;
+    explosionLocation.y = projectileLocation.y-explosionLocation.h/2;
+    radius = PROJECTILE_EXPLOSION_START_RADIUS;
+
+    explosionColors.red = projectileColors.red;
+    explosionColors.blue = projectileColors.blue;
+    explosionColors.green = projectileColors.green;
+    explosionColors.alpha = UI_COLOR_MAX_VALUE;
+}
+
+void BulletExplosion::deleteObject(void) {
+    SDL_DestroyTexture(explosionImage);
+}
+
+bool BulletExplosion::updateState(void) {
+    bool expired = false;
+    double dradius = ((double)(PROJECTILE_EXPLOSION_END_RADIUS-PROJECTILE_EXPLOSION_START_RADIUS)/
+     (double)PROJECTILE_EXPLOSION_DURATION);
+    radius += dradius;
+    explosionColors.alpha -= (double)UI_COLOR_MAX_VALUE/(double)PROJECTILE_EXPLOSION_DURATION;
+    explosionLocation.h = radius*2;
+    explosionLocation.w = radius*2;
+    explosionLocation.x -= (int)dradius;
+    explosionLocation.y -= (int)dradius;
+    if (explosionColors.alpha < 0) {
+        expired = true;
+    }
+    return expired;
+}
+
+void BulletExplosion::render(SDL_Renderer* renderer, double scaleFactor) {
+    // create a scaled rect to use for displaying the object
+    SDL_Rect renderRect;
+    renderRect.x = floor(explosionLocation.x * scaleFactor);
+    renderRect.y = floor(explosionLocation.y * scaleFactor);
+    renderRect.w = floor(explosionLocation.w * scaleFactor);
+    renderRect.h = floor(explosionLocation.h * scaleFactor);
+
+    SDL_SetTextureColorMod(explosionImage, explosionColors.red,
+     explosionColors.green, explosionColors.blue);
+    SDL_SetTextureAlphaMod(explosionImage, explosionColors.alpha);
+    SDL_RenderCopy(renderer, explosionImage, NULL, &renderRect);
+}
 
 
 

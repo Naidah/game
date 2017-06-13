@@ -147,6 +147,11 @@ enum PROJECTILE_COLLISION_IDENTIFIERS {
     PROJECTILE_COLLISION_WALL
 };
 
+const int PROJECTILE_EXPLOSION_START_RADIUS = 8;
+const int PROJECTILE_EXPLOSION_END_RADIUS = 12;
+const int PROJECTILE_EXPLOSION_DURATION = 10;
+const string PROJECTILE_EXPLOSION_IMAGE = "images/deathCircle.png";
+
 // Wall related constats
 const int WALL_RED = 0; // red hue of wall
 const int WALL_GREEN = 0; // green hue of wall
@@ -279,6 +284,7 @@ class DeathObject;
 class Weapon;
 class Wall;
 class Projectile;
+class BulletExplosion;
 
 class assualtRifle;
 
@@ -498,11 +504,28 @@ private:
     SDL_Texture* projectileImage;
 public:
     Projectile(int x, int y, double a, const double speed, SDL_Renderer* renderer, int id);
+
+    SDL_Rect getLocation(void) {return projectileRect;}
+    colorSet getColors(void) {return projectileColors;}
+
     int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer, double scaleFactor);
     void deleteObject(void);
+};
+
+class BulletExplosion {
+protected:
+    SDL_Texture* explosionImage;
+    SDL_Rect explosionLocation;
+    colorSet explosionColors;
+    double radius;
+public:
+    BulletExplosion(SDL_Renderer* render, SDL_Rect projectileLocation, colorSet projectileColors);
+    void deleteObject(void);
+    bool updateState(void);
+    void render(SDL_Renderer* renderer, double scaleFactor);
 };
 
 
@@ -602,6 +625,7 @@ direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-     double scaleFactor, int playerMainX, int playerMainY); // render the gameplay area of the screen
+      forward_list<BulletExplosion> explosionList, double scaleFactor,
+       int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter,
  hudInfo hudInfoContainer); // render the HUD area of the screen
