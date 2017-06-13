@@ -6,6 +6,10 @@
 
 using namespace std;
 
+
+
+
+
 typedef struct _direction {
     double x;
     double y;
@@ -168,8 +172,8 @@ const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*1.1; // size of screen
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.8;
 
 
 // Game UI parameters
@@ -185,14 +189,14 @@ const int UI_SHADOW_COLOR_GREEN = 10;
 const int UI_SHADOW_COLOR_BLUE = 50;
 
 // Gamespace parameters
-const int GAMESPACE_WIDTH = SCREEN_HEIGHT; // the gameplay space takes a square on the far right
-const int GAMESPACE_HEIGHT = SCREEN_HEIGHT;
-const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH - GAMESPACE_WIDTH;
+const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT; // the gameplay space takes a square on the far right
+const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
+const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
 
 // HUD parameters
-const int HUD_WIDTH = SCREEN_WIDTH - GAMESPACE_WIDTH;
-const int HUD_HEIGHT = SCREEN_HEIGHT;
+const int HUD_WIDTH = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
+const int HUD_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 const int HUD_RED = 50;
 const int HUD_GREEN = 50;
@@ -268,13 +272,16 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_DRAW_SHADOWS = true;
+const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = true;
+const bool DEBUG_DRAW_MOUSE_POINT = true;
 
 
 /*-------------------------- Typedefs ------------------------------*/
 
 typedef char charbuff[CHARBUFF_LENGTH];
+
+
 
 /*-------------------------- Class Definitions -------------------------*/
 
@@ -378,6 +385,7 @@ protected:
     int reloadFramesLeft;
     bool reloading;
 public:
+    virtual ~Weapon(void) = 0;
     virtual int getMaxAmmo(void) = 0;
     virtual int getCurrAmmo(void) = 0;
     virtual int getReloadFrames(void) = 0;
@@ -399,6 +407,7 @@ private:
     bool mouseDown;
 public:
     AssaultRifle(void);
+    ~AssaultRifle(void);
 
     int getMaxAmmo(void) {return AR_CLIP_SIZE;}
     int getCurrAmmo(void) {return currAmmo;}
@@ -419,6 +428,7 @@ private:
     bool mouseDown;
 public:
     Pistol(void);
+    ~Pistol(void);
 
     int getMaxAmmo(void) {return PISTOL_CLIP_SIZE;}
     int getCurrAmmo(void) {return currAmmo;}
@@ -439,6 +449,7 @@ private:
     bool mouseDown;
 public:
     Shotgun(void);
+    ~Shotgun(void);
 
     int getMaxAmmo(void) {return 1;} // shotguns do not use ammo, so return 1 as default (not 0 to avoid errors)
     int getCurrAmmo(void) {return currAmmo;}

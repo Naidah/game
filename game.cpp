@@ -10,6 +10,8 @@ MAJOR:
     - Add weapon deconstructor
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
+    - Remove references to scaleFactor
+    - Get fullscreen working
 
 MINOR:
     - Add different guns
@@ -18,6 +20,7 @@ MINOR:
         - GL? (slow speed, bounce on wall)
     - Roll icon
     - Make projectile explosion object appear on surface of collision getLocation
+    - Fix bullets travelling through corners
 */
 
 /* Current balance considerations:
@@ -126,7 +129,8 @@ int main(int argc, char const *argv[]) {
         }
         projectileList = newList; // create a new list of projectiles to store all that remain on screen
 
-
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE);
+        SDL_RenderClear(renderer);
         renderGameSpace(renderer, wallContainer, playerList, projectileList, explosionList, scaleFactor,
              playerMainX, playerMainY);
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
@@ -182,7 +186,8 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
             if (SCREEN_FULLSCREEN == true) { // If the game is set to be in fullscreen, set it to fullscreen
                 SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
             }
-            *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT; // store the ratio between the size of the screen and the screen size the game is built around
+            *scaleFactor = 1;
+            // *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT; // store the ratio between the size of the screen and the screen size the game is built around
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC); // create renderer object
             if (renderer == NULL) { // if the renderer failed to initialize, return an error
@@ -191,6 +196,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
             } else {
                 SDL_SetRenderDrawColor(*renderer, UI_COLOR_MAX_VALUE,
                  UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE); // Give the renderer a default white state
+                SDL_RenderSetLogicalSize(*renderer, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT);
 
                 int imgFlags = IMG_INIT_PNG;
                 if (!(IMG_Init(imgFlags) & imgFlags)) { // initialize SDL_image, returning an error if it fails
@@ -238,7 +244,9 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     SDL_RenderSetViewport(renderer, &gamespaceViewport);
     SDL_SetRenderDrawColor(renderer, UI_BACKGROUND_COLOR_RED,
      UI_BACKGROUND_COLOR_GREEN, UI_BACKGROUND_COLOR_BLUE, UI_BACKGROUND_COLOR_ALPHA);
-    SDL_RenderClear(renderer);
+
+    SDL_Rect background {0, 0, GAMESPACE_WIDTH, GAMESPACE_HEIGHT};
+    SDL_RenderFillRect(renderer, &background);
 
     // render all objects to the screen
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
@@ -247,7 +255,7 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
         bullet->render(renderer, scaleFactor);
     }
-    if (DEBUG_DRAW_SHADOWS == true) {
+    if (DEBUG_HIDE_SHADOWS != true) {
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
              UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, renderer, scaleFactor);
@@ -259,6 +267,20 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
         explosion->render(renderer, scaleFactor);
     }
+
+    if (DEBUG_DRAW_MOUSE_POINT == true) {
+        int mouseX = 0;
+        int mouseY = 0;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        cout << mouseX << " " << SCREEN_WIDTH << " " << SCREEN_WIDTH_DEFAULT;
+        mouseX -= GAMESPACE_TOPLEFT_X*(double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
+        mouseX *= (double)SCREEN_WIDTH/(double)GAMESPACE_WIDTH;
+        mouseY *= (double)SCREEN_HEIGHT_DEFAULT/(double)SCREEN_HEIGHT;
+        SDL_SetRenderDrawColor(renderer, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE);
+        SDL_Rect debugRect = {mouseX, mouseY, 10, 10};
+        SDL_RenderFillRect(renderer, &debugRect);
+    }
+
 }
 
 void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter,
@@ -550,8 +572,9 @@ void Player::updateState(SDL_Event* eventHandler,
             // rotate the player to look toward the mouse
                 // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
                 SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
-                mouseX -= GAMESPACE_TOPLEFT_X;
-                mouseX *= SCREEN_WIDTH/GAMESPACE_WIDTH;
+                mouseX -= GAMESPACE_TOPLEFT_X*(double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
+                mouseX *= (double)SCREEN_WIDTH/(double)GAMESPACE_WIDTH;
+                mouseY *= (double)SCREEN_WIDTH_DEFAULT/(double)SCREEN_WIDTH;
                 angle = atan2((double)(centreY*scaleFactor-mouseY),
                  (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
         }
@@ -666,7 +689,7 @@ void Player::deleteObject(void) {
     if (deathMarker) {
         delete deathMarker;
     }
-    //delete weapon;
+    delete weapon;
 }
 
 
@@ -708,11 +731,19 @@ DeathObject::~DeathObject(void) {
 
 // Weapon object functions
 
+Weapon::~Weapon(void) {
+
+}
+
 AssaultRifle::AssaultRifle(void): Weapon() {
     mouseDown = false;
     reloading = false;
     currAmmo = AR_CLIP_SIZE;
     reloadFramesLeft = 0;
+}
+
+AssaultRifle::~AssaultRifle(void) {
+
 }
 
 void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
@@ -771,6 +802,10 @@ Pistol::Pistol(void): Weapon() {
     currRecoil = 0;
     currAmmo = PISTOL_CLIP_SIZE;
     reloadFramesLeft = 0;
+}
+
+Pistol::~Pistol(void) {
+
 }
 
 void Pistol::takeShot(forward_list<Projectile>* projectileList,
@@ -835,6 +870,10 @@ void Pistol::resetGun(void) {
 Shotgun::Shotgun(void): Weapon() {
     mouseDown = false;
     shotDelay = 0;
+}
+
+Shotgun::~Shotgun(void) {
+
 }
 
 void Shotgun::takeShot(forward_list<Projectile>* projectileList,
