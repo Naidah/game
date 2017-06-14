@@ -176,8 +176,8 @@ const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*1.3; // size of screen
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*1.3;
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*1; // size of screen
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*1;
 
 
 // Game UI parameters
@@ -276,7 +276,7 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = true;
+const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 
@@ -356,8 +356,7 @@ public:
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler,
-     forward_list<Projectile>* projectileList, SDL_Renderer* renderer,
-     double scaleFactor);
+     forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
     void move(forward_list<Wall> wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
@@ -367,7 +366,7 @@ public:
     void respawn(void); // respawn the player after death
 
     //draws the player to the screen
-    void render(SDL_Renderer* renderer, double scaleFactor);
+    void render(SDL_Renderer* renderer);
 };
 
 class DeathObject {
@@ -379,7 +378,7 @@ public:
     DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates, colorSet playerColors);
     ~DeathObject(void);
     void updateState(void);
-    void render(SDL_Renderer* renderer, double scaleFactor);
+    void render(SDL_Renderer* renderer);
 };
 
 // Weapon base class
@@ -483,9 +482,9 @@ public:
     Wall(int x, int y, int w, int h); // initializer function
     SDL_Rect getLocation(void) {return wallLocation;} // returns the SDL_Rect describing the wall
     bool checkCollision(int x, int y, int radius); // checks if the object at (x, y) with radius r is in contact with the wall
-    void render(SDL_Renderer* renderer, double scaleFactor); // draw the wall to the screen
+    void render(SDL_Renderer* renderer); // draw the wall to the screen
     void renderShadow(int x, int y, int r, int g, int b,
-     SDL_Renderer* renderer, double scaleFactor); // draw the LOS shadow by the wall to the screen
+     SDL_Renderer* renderer); // draw the LOS shadow by the wall to the screen
     void deleteObject(void); // frees any memory associated with the wall
 };
 
@@ -526,7 +525,7 @@ public:
     int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
     void setProjectileCentre(void);
-    void render(SDL_Renderer* renderer, double scaleFactor);
+    void render(SDL_Renderer* renderer);
     void deleteObject(void);
 };
 
@@ -540,7 +539,7 @@ public:
     BulletExplosion(SDL_Renderer* render, SDL_Rect projectileLocation, colorSet projectileColors);
     void deleteObject(void);
     bool updateState(void);
-    void render(SDL_Renderer* renderer, double scaleFactor);
+    void render(SDL_Renderer* renderer);
 };
 
 
@@ -631,7 +630,7 @@ public:
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
      forward_list<Wall> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
-bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor); // initializes the same (including SDL)
+bool init(SDL_Window** window, SDL_Renderer** renderer); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
@@ -640,7 +639,7 @@ direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-      forward_list<BulletExplosion> explosionList, double scaleFactor,
-       int playerMainX, int playerMainY); // render the gameplay area of the screen
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter,
+      forward_list<BulletExplosion> explosionList, int playerMainX,
+       int playerMainY); // render the gameplay area of the screen
+void renderGameUI(SDL_Renderer* renderer, Player userCharacter,
  hudInfo hudInfoContainer); // render the HUD area of the screen

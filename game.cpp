@@ -9,7 +9,6 @@ MAJOR:
     - Begin to add networking
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
-    - Remove references to scaleFactor
     - Get fullscreen working
 
 MINOR:
@@ -52,13 +51,12 @@ int main(int argc, char const *argv[]) {
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
-    double scaleFactor;
     int playerMainX;
     int playerMainY;
     hudInfo hudInfoContainer;
 
 
-    init(&window, &renderer, &scaleFactor); // Initialize SDL and set the window and renderer for the game
+    init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
     forward_list<Player> playerList = { // list containing all players in the game
@@ -90,7 +88,7 @@ int main(int argc, char const *argv[]) {
 
         // update the state of the controlled character
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->updateState(&eventHandler, &projectileList, renderer, scaleFactor);   
+            character->updateState(&eventHandler, &projectileList, renderer);   
         }
 
         explosionUpdated.clear();
@@ -126,11 +124,11 @@ int main(int argc, char const *argv[]) {
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE);
         SDL_RenderClear(renderer);
-        renderGameSpace(renderer, wallContainer, playerList, projectileList, explosionList, scaleFactor,
+        renderGameSpace(renderer, wallContainer, playerList, projectileList, explosionList,
              playerMainX, playerMainY);
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
-                renderGameUI(renderer, scaleFactor, *character, hudInfoContainer);
+                renderGameUI(renderer, *character, hudInfoContainer);
             }
         }
 
@@ -165,7 +163,7 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<
     SDL_Quit();
 }
 
-bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { // initialize important SDL functionalities
+bool init(SDL_Window** window, SDL_Renderer** renderer) { // initialize important SDL functionalities
     bool success = true; // flag to check whether program runs successfully
     if (SDL_Init(SDL_INIT_VIDEO) < 0) { // Make sure SDL can initialize properly, otherwise return error code
         cout << "Error Initializing SDL./n SDL_Error " << SDL_GetError() << "\n";
@@ -181,8 +179,6 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, double* scaleFactor) { /
             if (SCREEN_FULLSCREEN == true) { // If the game is set to be in fullscreen, set it to fullscreen
                 SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
             }
-            *scaleFactor = 1;
-            // *scaleFactor = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT; // store the ratio between the size of the screen and the screen size the game is built around
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC); // create renderer object
             if (renderer == NULL) { // if the renderer failed to initialize, return an error
@@ -227,8 +223,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-     forward_list<BulletExplosion> explosionList, double scaleFactor,
-      int playerMainX, int playerMainY) {
+     forward_list<BulletExplosion> explosionList, int playerMainX, int playerMainY) {
     // reset the screen for the next frame
     SDL_Rect gamespaceViewport;
     gamespaceViewport.x = GAMESPACE_TOPLEFT_X;
@@ -245,22 +240,22 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
 
     // render all objects to the screen
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
-        character->render(renderer, scaleFactor);
+        character->render(renderer);
     }
     for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-        bullet->render(renderer, scaleFactor);
+        bullet->render(renderer);
     }
     if (DEBUG_HIDE_SHADOWS != true) {
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
             wall->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
-             UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, renderer, scaleFactor);
+             UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, renderer);
         }
     }
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        wall->render(renderer, scaleFactor);
+        wall->render(renderer);
     }
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-        explosion->render(renderer, scaleFactor);
+        explosion->render(renderer);
     }
 
     if (DEBUG_DRAW_MOUSE_POINT == true) {
@@ -284,8 +279,7 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
 
 }
 
-void renderGameUI(SDL_Renderer* renderer, double scaleFactor, Player userCharacter,
-     hudInfo hudInfoContainer) {
+void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoContainer) {
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
 
     Weapon* userWeapon = userCharacter.getWeapon();
@@ -492,7 +486,7 @@ void Player::setPlayerCentre(void) {
 }
 
 void Player::updateState(SDL_Event* eventHandler,
- forward_list<Projectile>* projectileList, SDL_Renderer* renderer, double scaleFactor) {
+ forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
     if (alive == true) {
         // get the keyboard state containing which keys are actively pressed
@@ -583,8 +577,8 @@ void Player::updateState(SDL_Event* eventHandler,
                 mouseX -= GAMESPACE_TOPLEFT_X*ratio;
                 mouseX /= ratio;
                 mouseY /= ratio;
-                angle = atan2((double)(centreY*scaleFactor-mouseY),
-                 (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
+                angle = atan2((double)(centreY-mouseY),
+                 (double)(centreX-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
         }
     } else {
         deathFrames -= 1;
@@ -673,21 +667,15 @@ void Player::respawn(void) {
     deathMarker = NULL;
 }
 
-void Player::render(SDL_Renderer* renderer, double scaleFactor) {
+void Player::render(SDL_Renderer* renderer) {
     // draws the player to the screen using the supplied renderer
     if (alive == true) {
-        SDL_Rect renderRect; // create a rect containing the players scale coordinates and size
-        renderRect.x = floor(playerRect.x * scaleFactor);
-        renderRect.y = floor(playerRect.y * scaleFactor);
-        renderRect.w = floor(playerRect.w * scaleFactor);
-        renderRect.h = floor(playerRect.h * scaleFactor);
-
         SDL_SetTextureColorMod(playerImage, playerColors.red,
          playerColors.green, playerColors.blue); // modulates the color based on the players settings
-        SDL_RenderCopyEx(renderer, playerImage, NULL, &renderRect,
+        SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
          angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
     } else {
-        deathMarker->render(renderer, scaleFactor);
+        deathMarker->render(renderer);
     }
 }
 
@@ -719,16 +707,11 @@ void DeathObject::updateState(void) {
     circleColors.alpha -= (double)UI_COLOR_MAX_VALUE/(double)CHARACTER_DEATH_DURATION;
 }
 
-void DeathObject::render(SDL_Renderer* renderer, double scaleFactor) {
-    SDL_Rect renderRect;
-    renderRect.x = circleRect.x*scaleFactor;
-    renderRect.y = circleRect.y*scaleFactor;
-    renderRect.w = circleRect.w*scaleFactor;
-    renderRect.h = circleRect.h*scaleFactor;
+void DeathObject::render(SDL_Renderer* renderer) {
     SDL_SetTextureColorMod(circleImage, circleColors.red,
      circleColors.green, circleColors.blue);
     SDL_SetTextureAlphaMod(circleImage, circleColors.alpha);
-    SDL_RenderCopy(renderer, circleImage, NULL, &renderRect);
+    SDL_RenderCopy(renderer, circleImage, NULL, &circleRect);
 }
 
 DeathObject::~DeathObject(void) {
@@ -994,20 +977,14 @@ bool Wall::checkCollision(int x, int y, int radius) {
 }
 
 
-void Wall::render(SDL_Renderer* renderer, double scaleFactor) {
-    SDL_Rect renderRect;
-    renderRect.x = floor(wallLocation.x * scaleFactor);
-    renderRect.y = floor(wallLocation.y * scaleFactor);
-    renderRect.w = floor(wallLocation.w * scaleFactor);
-    renderRect.h = floor(wallLocation.h * scaleFactor);
-
+void Wall::render(SDL_Renderer* renderer) {
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, wallColors.red, wallColors.green,
      wallColors.blue, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &renderRect);
+    SDL_RenderFillRect(renderer, &wallLocation);
 }
 
-void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer, double scaleFactor) {
+void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
     // arrays containing the coords of the corner
     Sint16 coordsX[5];
     Sint16 coordsY[5];
@@ -1144,10 +1121,6 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
             }
         }
     }
-    for (int i = 0; i < n; i++) { // go through each coordinate and scale it to the screen size
-        coordsX[i] *= scaleFactor;
-        coordsY[i] *= scaleFactor;
-    }
 
     filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, UI_COLOR_MAX_VALUE); // draws the shadow using the renderer
 }
@@ -1218,8 +1191,7 @@ int Projectile::checkCollision(forward_list<Wall>* wallContainer,
     return output;
 }
 
-bool Projectile::move(forward_list<Wall>* wallContainer,
- forward_list<Player>* playerList) {
+bool Projectile::move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList) {
     // moves the projectile,  returns true if the projectile collided and needs to be destroyed
     bool destroyed = false;
     int collision = PROJECTILE_COLLISION_NONE;
@@ -1243,17 +1215,11 @@ bool Projectile::move(forward_list<Wall>* wallContainer,
     return destroyed;
 }
 
-void Projectile::render(SDL_Renderer* renderer, double scaleFactor) {
-    // create a scaled rect to use for displaying the object
-    SDL_Rect renderRect;
-    renderRect.x = floor(projectileRect.x * scaleFactor);
-    renderRect.y = floor(projectileRect.y * scaleFactor);
-    renderRect.w = floor(projectileRect.w * scaleFactor);
-    renderRect.h = floor(projectileRect.h * scaleFactor);
+void Projectile::render(SDL_Renderer* renderer) {
 
     SDL_SetTextureColorMod(projectileImage, projectileColors.red,
      projectileColors.green, projectileColors.blue); // modulates the color based on the players settings
-    SDL_RenderCopyEx(renderer, projectileImage, NULL, &renderRect,
+    SDL_RenderCopyEx(renderer, projectileImage, NULL, &projectileRect,
      angle, NULL, SDL_FLIP_NONE);// draw the projectile to the window
 }
 
@@ -1262,7 +1228,8 @@ void Projectile::deleteObject(void) {
     SDL_DestroyTexture(projectileImage);
 }
 
-BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLocation, colorSet projectileColors) {
+BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLocation,
+ colorSet projectileColors) {
     explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, renderer);
 
     explosionLocation.w = PROJECTILE_EXPLOSION_START_RADIUS*2;
@@ -1297,18 +1264,11 @@ bool BulletExplosion::updateState(void) {
     return expired;
 }
 
-void BulletExplosion::render(SDL_Renderer* renderer, double scaleFactor) {
-    // create a scaled rect to use for displaying the object
-    SDL_Rect renderRect;
-    renderRect.x = floor(explosionLocation.x * scaleFactor);
-    renderRect.y = floor(explosionLocation.y * scaleFactor);
-    renderRect.w = floor(explosionLocation.w * scaleFactor);
-    renderRect.h = floor(explosionLocation.h * scaleFactor);
-
+void BulletExplosion::render(SDL_Renderer* renderer) {
     SDL_SetTextureColorMod(explosionImage, explosionColors.red,
      explosionColors.green, explosionColors.blue);
     SDL_SetTextureAlphaMod(explosionImage, explosionColors.alpha);
-    SDL_RenderCopy(renderer, explosionImage, NULL, &renderRect);
+    SDL_RenderCopy(renderer, explosionImage, NULL, &explosionLocation);
 }
 
 
