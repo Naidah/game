@@ -7,17 +7,12 @@ MAJOR:
     - Start artwork for objects and background
     - Comment current work
     - Begin to add networking
-    - Add weapon deconstructor
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
     - Remove references to scaleFactor
     - Get fullscreen working
 
 MINOR:
-    - Add different guns
-        - Sniper (charge time, reduced speed when firing)
-        - LMG (delay on start, bouncing bullet, infinite ammo)
-        - GL? (slow speed, bounce on wall)
     - Roll icon
     - Make projectile explosion object appear on surface of collision getLocation
     - Fix bullets travelling through corners
@@ -67,7 +62,7 @@ int main(int argc, char const *argv[]) {
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new Pistol),
+        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
@@ -269,13 +264,19 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     }
 
     if (DEBUG_DRAW_MOUSE_POINT == true) {
+        double ratio;
         int mouseX = 0;
         int mouseY = 0;
+        if ((double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT <
+         (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT) {
+            ratio = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT;
+        } else {
+            ratio = (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
+        }
         SDL_GetMouseState(&mouseX, &mouseY);
-        cout << mouseX << " " << SCREEN_WIDTH << " " << SCREEN_WIDTH_DEFAULT;
-        mouseX -= GAMESPACE_TOPLEFT_X*(double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
-        mouseX *= (double)SCREEN_WIDTH/(double)GAMESPACE_WIDTH;
-        mouseY *= (double)SCREEN_HEIGHT_DEFAULT/(double)SCREEN_HEIGHT;
+        mouseX -= GAMESPACE_TOPLEFT_X*ratio;
+        mouseX /= ratio;
+        mouseY /= ratio;
         SDL_SetRenderDrawColor(renderer, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE);
         SDL_Rect debugRect = {mouseX, mouseY, 10, 10};
         SDL_RenderFillRect(renderer, &debugRect);
@@ -500,6 +501,7 @@ void Player::updateState(SDL_Event* eventHandler,
         // used to store the x and y coordinates of the mouse
         int mouseX = 0;
         int mouseY = 0;
+        double ratio;
 
         if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
@@ -572,9 +574,15 @@ void Player::updateState(SDL_Event* eventHandler,
             // rotate the player to look toward the mouse
                 // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
                 SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
-                mouseX -= GAMESPACE_TOPLEFT_X*(double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
-                mouseX *= (double)SCREEN_WIDTH/(double)GAMESPACE_WIDTH;
-                mouseY *= (double)SCREEN_WIDTH_DEFAULT/(double)SCREEN_WIDTH;
+                if ((double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT <
+                 (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT) {
+                    ratio = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT;
+                } else {
+                    ratio = (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
+                }
+                mouseX -= GAMESPACE_TOPLEFT_X*ratio;
+                mouseX /= ratio;
+                mouseY /= ratio;
                 angle = atan2((double)(centreY*scaleFactor-mouseY),
                  (double)(centreX*scaleFactor-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
         }

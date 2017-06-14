@@ -89,6 +89,30 @@ enum CHARACTER_WEAPONS {
 
 // Weapon Related Constants
 // ASSAULT RIFLE
+const int AR_CLIP_SIZE = 200; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 2; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 80; // number of frames in reload animation
+const int AR_SHOT_DELAY = 0; //number of frames between each projectile firing
+const double AR_PROJECTILE_SPEED = 8.0;
+
+// PISTOL
+const int PISTOL_CLIP_SIZE = 8;
+const int PISTOL_MAX_BULLET_SPREAD = 40;
+const int PISTOL_RELOAD_FRAMES = 60;
+const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
+const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
+const double PISTOL_PROJECTILE_SPEED = 16.0;
+
+// SHOTGUN
+const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
+const int SHOTGUN_PROJECTILE_SPREAD = 7;
+const int SHOTGUN_SHOT_DELAY = 60;
+const double SHOTGUN_PROJECTILE_SPEED = 12.0;
+
+
+/* Defaults
+// Weapon Related Constants
+// ASSAULT RIFLE
 const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
 const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
 const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
@@ -108,26 +132,6 @@ const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
 const int SHOTGUN_PROJECTILE_SPREAD = 7;
 const int SHOTGUN_SHOT_DELAY = 60;
 const double SHOTGUN_PROJECTILE_SPEED = 12.0;
-
-
-/* Defaults
-// ASSAULT RIFLE
-const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
-const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
-
-// PISTOL
-const int PISTOL_CLIP_SIZE = 8;
-const int PISTOL_MAX_BULLET_SPREAD = 40;
-const int PISTOL_RELOAD_FRAMES = 60;
-const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
-const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
-
-// SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 13;
-const int SHOTGUN_PROJECTILE_SPREAD = 58;
-const int SHOTGUN_SHOT_DELAY = 60;
 */
 
 // SNIPER
@@ -172,8 +176,8 @@ const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*1.1; // size of screen
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.8;
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*1.3; // size of screen
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*1.3;
 
 
 // Game UI parameters
@@ -272,9 +276,9 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_HIDE_SHADOWS = true;
 const bool DEBUG_KILL_PLAYER = true;
-const bool DEBUG_DRAW_MOUSE_POINT = true;
+const bool DEBUG_DRAW_MOUSE_POINT = false;
 
 
 /*-------------------------- Typedefs ------------------------------*/
