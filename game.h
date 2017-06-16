@@ -3,6 +3,7 @@
 
 #include <string>
 #include <forward_list>
+#include <list>
 
 using namespace std;
 
@@ -34,6 +35,11 @@ typedef struct _colorSet {
     int blue;
     double alpha;
 } colorSet;
+
+typedef struct _coordSet {
+    int x;
+    int y;
+} coordSet;
 
 /*------------- All program constants defined here ------------------*/
 
@@ -89,11 +95,11 @@ enum CHARACTER_WEAPONS {
 
 // Weapon Related Constants
 // ASSAULT RIFLE
-const int AR_CLIP_SIZE = 200; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 2; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 80; // number of frames in reload animation
-const int AR_SHOT_DELAY = 0; //number of frames between each projectile firing
-const double AR_PROJECTILE_SPEED = 8.0;
+const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
+const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
+const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
+const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
+const double AR_PROJECTILE_SPEED = 18.0;
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
@@ -198,6 +204,13 @@ const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
 
+const int GAMESPACE_MARGIN = 50;
+
+
+// Constants related to map generation
+const int MAPBOX_START_ITERATIONS = 4;
+const int MAPBOX_DIVIDE_HORIZONTAL = 50;
+
 // HUD parameters
 const int HUD_WIDTH = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int HUD_HEIGHT = SCREEN_HEIGHT_DEFAULT;
@@ -276,7 +289,7 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_HIDE_SHADOWS = true;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 
@@ -296,8 +309,7 @@ class Weapon;
 class Wall;
 class Projectile;
 class BulletExplosion;
-
-class assualtRifle;
+class MapBox;
 
 // Class definitions
 // Class to represent all player controlled characters
@@ -357,7 +369,7 @@ public:
     // functions to update the players state
     void updateState(SDL_Event* eventHandler,
      forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
-    void move(forward_list<Wall> wallContainer); // moves the player based on their velocity
+    void move(forward_list<Wall*> wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
     void killPlayer(void); // kills the player
@@ -522,8 +534,8 @@ public:
     SDL_Rect getLocation(void) {return projectileRect;}
     colorSet getColors(void) {return projectileColors;}
 
-    int checkCollision(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
-    bool move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList);
+    int checkCollision(forward_list<Wall*>* wallContainer, forward_list<Player>* playerList);
+    bool move(forward_list<Wall*>* wallContainer, forward_list<Player>* playerList);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer);
     void deleteObject(void);
@@ -539,6 +551,27 @@ public:
     BulletExplosion(SDL_Renderer* render, SDL_Rect projectileLocation, colorSet projectileColors);
     void deleteObject(void);
     bool updateState(void);
+    void render(SDL_Renderer* renderer);
+};
+
+class MapBox {
+protected:
+    int x;
+    int y;
+    int w;
+    int h;
+    int iterations;
+public:
+    MapBox(int xinp, int yinp, int winp, int hinp, int iters);
+    ~MapBox(void);
+
+    coordSet getCentre(void);
+    int getIterations(void) {return iterations;}
+
+    list<MapBox*> divideBox(void);
+    bool checkConnection(MapBox* box);
+    Wall* GenerateWall(void);
+
     void render(SDL_Renderer* renderer);
 };
 
@@ -629,7 +662,7 @@ public:
 /*--------------------- Function definitions -------------------------*/
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
-     forward_list<Wall> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
+     forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
 bool init(SDL_Window** window, SDL_Renderer** renderer); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
@@ -637,9 +670,10 @@ int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the 
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
 direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
-void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallcontainer,
+void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
       forward_list<BulletExplosion> explosionList, int playerMainX,
        int playerMainY); // render the gameplay area of the screen
 void renderGameUI(SDL_Renderer* renderer, Player userCharacter,
  hudInfo hudInfoContainer); // render the HUD area of the screen
+void GenerateMap(forward_list<Wall*>* wallContainer);

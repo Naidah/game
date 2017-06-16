@@ -4,12 +4,14 @@
 // TODO
 /*
 MAJOR:
-    - Start artwork for objects and background
+    --- Start artwork for objects and background
     - Comment current work
     - Begin to add networking
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
     - Get fullscreen working
+    - 
+    --- NETCODE
 
 MINOR:
     - Roll icon
@@ -39,13 +41,17 @@ MINOR:
 #include <math.h> // contains math functions (sqrt, pow, etc) for use
 #include <algorithm> // contains min/max functions used
 #include <forward_list> // container structure used to hold objects in game
+#include <list>
+#include <ctime>
 
 #include "game.h" // contains program constants to avoid cluttering main file
 
 using namespace std;
 
 
+
 int main(int argc, char const *argv[]) {
+    srand(time(NULL));
     // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
@@ -60,15 +66,13 @@ int main(int argc, char const *argv[]) {
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
     forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, SCREEN_WIDTH_DEFAULT/3, SCREEN_HEIGHT_DEFAULT/3, CHARACTER_MAIN_ID, new AssaultRifle),
+        Player(renderer, 0, 0, CHARACTER_MAIN_ID, new Shotgun),
         Player(renderer, 300, 300, 2, new AssaultRifle)
     };
 
-    forward_list<Wall> wallContainer = { // container for the walls used in the game
-        Wall(600, 200, 80, 200),
-        Wall(100, 100, 200, 300),
-        Wall(300, 400, 50, 90)
-    };
+    forward_list<Wall*> wallContainer;
+
+    GenerateMap(&wallContainer);
 
     forward_list<Projectile> projectileList;
     forward_list<Projectile> newList;
@@ -149,7 +153,7 @@ int main(int argc, char const *argv[]) {
 
 /* -------------------------- FUNCTIONS ------------------------- */
 
-void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<Wall> wallContainer, forward_list<Projectile> projectileList) {
+void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList) {
     SDL_DestroyWindow(window);
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
         character->deleteObject();
@@ -158,7 +162,7 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<
         bullet->deleteObject();
     }
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        wall->deleteObject();
+        (*wall)->deleteObject();
     }
     SDL_Quit();
 }
@@ -221,7 +225,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
     return output;
 }
 
-void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
+void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallContainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
      forward_list<BulletExplosion> explosionList, int playerMainX, int playerMainY) {
     // reset the screen for the next frame
@@ -247,12 +251,12 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall> wallContainer,
     }
     if (DEBUG_HIDE_SHADOWS != true) {
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            wall->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
+            (*wall)->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
              UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, renderer);
         }
     }
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        wall->render(renderer);
+        (*wall)->render(renderer);
     }
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
         explosion->render(renderer);
@@ -593,7 +597,7 @@ void Player::updateState(SDL_Event* eventHandler,
     }
 }
 
-void Player::move(forward_list<Wall> wallContainer) {
+void Player::move(forward_list<Wall*> wallContainer) {
     // store the original location of the player
     int posOrigX = playerRect.x;
     int posOrigY = playerRect.y;
@@ -606,7 +610,7 @@ void Player::move(forward_list<Wall> wallContainer) {
 
         // go through each wall, and if the player movement would cause a collision, undo the movement along x
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            if (wall->checkCollision(centreX, centreY, radius) == true
+            if ((*wall)->checkCollision(centreX, centreY, radius) == true
              || checkExitMap(centreX, centreY, radius)) {
                 playerRect.x = posOrigX;
                 velx = 0;
@@ -618,7 +622,7 @@ void Player::move(forward_list<Wall> wallContainer) {
         playerRect.y += vely;
         setPlayerCentre();
         for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-            if (wall->checkCollision(centreX, centreY, radius) == true
+            if ((*wall)->checkCollision(centreX, centreY, radius) == true
                  || checkExitMap(centreX, centreY, radius)) {
                 playerRect.y = posOrigY;
                 vely = 0;
@@ -981,7 +985,7 @@ void Wall::render(SDL_Renderer* renderer) {
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, wallColors.red, wallColors.green,
      wallColors.blue, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &wallLocation);
+    SDL_RenderDrawRect(renderer, &wallLocation);
 }
 
 void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
@@ -1169,7 +1173,7 @@ void Projectile::setProjectileCentre(void) {
     centreY = projectileRect.y+radius;
 }
 
-int Projectile::checkCollision(forward_list<Wall>* wallContainer,
+int Projectile::checkCollision(forward_list<Wall*>* wallContainer,
  forward_list<Player>* playerList) {
     int output = PROJECTILE_COLLISION_NONE; // default to no collision
     for (auto character = playerList->begin(); character != playerList->end(); character++) {
@@ -1183,7 +1187,7 @@ int Projectile::checkCollision(forward_list<Wall>* wallContainer,
     }
     if (output == PROJECTILE_COLLISION_NONE) { // make sure no other collision has been detected with a wall
         for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
-            if (wall->checkCollision(centreX, centreY, radius)) {
+            if ((*wall)->checkCollision(centreX, centreY, radius)) {
                 output = PROJECTILE_COLLISION_WALL;
             }
         }
@@ -1191,7 +1195,7 @@ int Projectile::checkCollision(forward_list<Wall>* wallContainer,
     return output;
 }
 
-bool Projectile::move(forward_list<Wall>* wallContainer, forward_list<Player>* playerList) {
+bool Projectile::move(forward_list<Wall*>* wallContainer, forward_list<Player>* playerList) {
     // moves the projectile,  returns true if the projectile collided and needs to be destroyed
     bool destroyed = false;
     int collision = PROJECTILE_COLLISION_NONE;
@@ -1271,6 +1275,58 @@ void BulletExplosion::render(SDL_Renderer* renderer) {
     SDL_RenderCopy(renderer, explosionImage, NULL, &explosionLocation);
 }
 
+MapBox::MapBox(int xin, int yin, int win, int hin, int iters) {
+    x = xin;
+    y = yin;
+    w = win;
+    h = hin;
+    iterations = iters;
+}
+
+MapBox::~MapBox(void) {
+
+}
+
+list<MapBox*> MapBox::divideBox(void) {
+    list<MapBox*> output;
+    int num = rand()%100;
+    if (num >= MAPBOX_DIVIDE_HORIZONTAL) {
+        output.push_front(new MapBox(x, y, w, h/2, iterations-1));
+        output.push_front(new MapBox(x, y+h/2, w, h/2, iterations-1));
+    } else {
+        output.push_front(new MapBox(x, y, w/2, h, iterations-1));
+        output.push_front(new MapBox(x+w/2, y, w/2, h, iterations-1));
+    }
+    return output;
+}
+
+Wall* MapBox::GenerateWall(void) {
+    return new Wall(x, y, w, h);
+}
+
+
+void GenerateMap(forward_list<Wall*>* wallContainer) {
+    list<MapBox*> mapBoxes = {new MapBox(GAMESPACE_MARGIN, GAMESPACE_MARGIN,
+     GAMESPACE_WIDTH-2*GAMESPACE_MARGIN, GAMESPACE_HEIGHT-2*GAMESPACE_MARGIN, MAPBOX_START_ITERATIONS)};
+    list<MapBox*> boxesFinal;
+    list<MapBox*> boxesSplit;
+    MapBox* currBox;
+    while (mapBoxes.size() > 0) {
+        currBox = mapBoxes.front();
+        mapBoxes.pop_front();
+        if (currBox->getIterations() == 0) {
+            boxesFinal.push_front(currBox);
+        } else {
+            boxesSplit = currBox->divideBox();
+            mapBoxes.push_back(boxesSplit.front());
+            mapBoxes.push_back(boxesSplit.back());
+            delete currBox;
+        }
+    }
+    for (auto box = boxesFinal.begin(); box != boxesFinal.end(); box++) {
+        wallContainer->push_front((*box)->GenerateWall());
+    }
+}
 
 
 CNetMessage::CNetMessage() {
