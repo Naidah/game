@@ -5,12 +5,14 @@
 /*
 MAJOR:
     --- Start artwork for objects and background
-    - Comment current work
-    - Begin to add networking
+    --- Add a struct to pass around all screen elements by refernce, to clean up code
+    -- Comment current work
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
-    - Get fullscreen working
-    - 
+    -- Get fullscreen working
+    - Fix map generation to avoid connected boxes
+    - Add invulnerability
+    --- Fix respawns to have the range limits
     --- NETCODE
 
 MINOR:
@@ -65,14 +67,24 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
-    forward_list<Player> playerList = { // list containing all players in the game
-        Player(renderer, 0, 0, CHARACTER_MAIN_ID, new Shotgun),
-        Player(renderer, 300, 300, 2, new AssaultRifle)
-    };
-
     forward_list<Wall*> wallContainer;
+    forward_list<coordSet> spawnPoints;
 
-    GenerateMap(&wallContainer);
+    generateMap(&wallContainer, &spawnPoints);
+
+
+    forward_list<Player> playerList;
+
+    coordSet initSpawn;
+    for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
+        initSpawn = getSpawnPoint(spawnPoints, playerList);
+        playerList.push_front(Player(renderer, initSpawn.x, initSpawn.y, i, new AssaultRifle));
+        if (initSpawn.x == 0) {
+            playerList.front().killPlayer();
+        }
+    }
+
+
 
     forward_list<Projectile> projectileList;
     forward_list<Projectile> newList;
@@ -92,7 +104,7 @@ int main(int argc, char const *argv[]) {
 
         // update the state of the controlled character
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->updateState(&eventHandler, &projectileList, renderer);   
+            character->updateState(&eventHandler, &projectileList, spawnPoints, playerList, renderer);   
         }
 
         explosionUpdated.clear();
@@ -129,7 +141,7 @@ int main(int argc, char const *argv[]) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE);
         SDL_RenderClear(renderer);
         renderGameSpace(renderer, wallContainer, playerList, projectileList, explosionList,
-             playerMainX, playerMainY);
+             spawnPoints, playerMainX, playerMainY);
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
                 renderGameUI(renderer, *character, hudInfoContainer);
@@ -227,7 +239,8 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallContainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-     forward_list<BulletExplosion> explosionList, int playerMainX, int playerMainY) {
+     forward_list<BulletExplosion> explosionList, forward_list<coordSet> spawnPoints,
+     int playerMainX, int playerMainY) {
     // reset the screen for the next frame
     SDL_Rect gamespaceViewport;
     gamespaceViewport.x = GAMESPACE_TOPLEFT_X;
@@ -261,6 +274,20 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallContainer,
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
         explosion->render(renderer);
     }
+
+    if (DEBUG_DRAW_SPAWN_POINTS == true) {
+            SDL_SetRenderDrawColor(renderer, 100, 100, 100, UI_COLOR_MAX_VALUE);
+            SDL_Rect debugRect;
+            debugRect.w = 3;
+            debugRect.h = 3;
+            for (auto point = spawnPoints.begin(); point != spawnPoints.end(); point++) {
+                if (validateSpawnPoint(*point, playerList) == true || DEBUG_DRAW_VALID_SPAWNS_ONLY == false) {
+                    debugRect.x = point->x;
+                    debugRect.y = point->y;
+                    SDL_RenderFillRect(renderer, &debugRect);
+                }
+            }
+        }
 
     if (DEBUG_DRAW_MOUSE_POINT == true) {
         double ratio;
@@ -426,6 +453,54 @@ bool checkExitMap(int x, int y, int r) {
      || x+r > SCREEN_HEIGHT_DEFAULT;
 }
 
+double generateRandDouble(double min, double max) {
+    double roll = (double)rand() / RAND_MAX;
+    roll = min + roll*(max-min);
+    return roll;
+}
+
+int generateRandInt(int min, int max) {
+    int roll = (rand()%(max-min))+min;
+    return roll;
+}
+
+coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> playerList) {
+    list<coordSet> validPoints;
+    coordSet output;
+    bool valid;
+    int chosenPoint;
+    int index;
+    for (auto point = spawnPoints.begin(); point != spawnPoints.end(); point++) {
+        valid = validateSpawnPoint(*point, playerList);
+        if (valid == true) {
+            validPoints.push_front(*point);
+        }
+    }
+    if (validPoints.size() > 0) {
+        chosenPoint = generateRandInt(0, validPoints.size());
+        index = 0;
+        for (auto point = validPoints.begin(); point != validPoints.end(); point++) {
+            if (index == chosenPoint) {
+                output = *point;
+            }
+            index++;
+        }
+    }
+    return output;
+}
+
+bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
+    bool valid = true;
+    for (auto player = playerList.begin(); player != playerList.end(); player++) {
+        if (distBetweenPoints(point.x, point.y, player->getX(),
+         player->getY()) < CHARACTER_MIN_RESPAWN_RANGE && player->isAlive() == true) {
+            valid = false;
+            /*cout << distBetweenPoints(point->x, point->y, player->getX(),
+         player->getY()) << " " << point->x << " " << CHARACTER_MIN_RESPAWN_RANGE << "\n";*/
+        }
+    }
+    return valid;
+}
 
 
 /* -------------------------- CLASSES --------------------------- */
@@ -437,8 +512,8 @@ bool checkExitMap(int x, int y, int r) {
 Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* gun) {
     // initialization function for the player class
     //set the players default coordinated
-    playerRect.x = startX;
-    playerRect.y = startY;
+    playerRect.x = startX-CHARACTER_WIDTH/2;
+    playerRect.y = startY-CHARACTER_HEIGHT/2;
 
     // set the size of the players sprite
     playerRect.w = CHARACTER_WIDTH;
@@ -490,7 +565,8 @@ void Player::setPlayerCentre(void) {
 }
 
 void Player::updateState(SDL_Event* eventHandler,
- forward_list<Projectile>* projectileList, SDL_Renderer* renderer) {
+ forward_list<Projectile>* projectileList, forward_list<coordSet> spawnPoints,
+ forward_list<Player> playerList, SDL_Renderer* renderer) {
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
     if (alive == true) {
         // get the keyboard state containing which keys are actively pressed
@@ -587,7 +663,7 @@ void Player::updateState(SDL_Event* eventHandler,
     } else {
         deathFrames -= 1;
         if (deathFrames <= 0) {
-            respawn();
+            respawn(spawnPoints, playerList);
         } else {
             deathMarker->updateState();
         }
@@ -660,15 +736,20 @@ void Player::setNewPosition(void) {
     setPlayerCentre();
 }
 
-void Player::respawn(void) {
-    alive = true;
-    deathFrames = 0;
-    setNewPosition();
-    health = CHARACTER_MAX_HP;
-    rollCooldown = 0;
-    weapon->resetGun();
-    delete deathMarker;
-    deathMarker = NULL;
+void Player::respawn(forward_list<coordSet> spawnPoints, forward_list<Player> playerList) {
+    coordSet newPosition = getSpawnPoint(spawnPoints, playerList);
+    if (newPosition.x != 0) {
+        playerRect.x = newPosition.x-CHARACTER_WIDTH/2;
+        playerRect.y = newPosition.y-CHARACTER_HEIGHT/2;
+        alive = true;
+        deathFrames = 0;
+        setNewPosition();
+        health = CHARACTER_MAX_HP;
+        rollCooldown = 0;
+        weapon->resetGun();
+        delete deathMarker;
+        deathMarker = NULL;
+    }
 }
 
 void Player::render(SDL_Renderer* renderer) {
@@ -985,7 +1066,7 @@ void Wall::render(SDL_Renderer* renderer) {
     // draws the wall to the screen using the supplied renderer
     SDL_SetRenderDrawColor(renderer, wallColors.red, wallColors.green,
      wallColors.blue, UI_COLOR_MAX_VALUE);
-    SDL_RenderDrawRect(renderer, &wallLocation);
+    SDL_RenderFillRect(renderer, &wallLocation);
 }
 
 void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
@@ -1275,56 +1356,150 @@ void BulletExplosion::render(SDL_Renderer* renderer) {
     SDL_RenderCopy(renderer, explosionImage, NULL, &explosionLocation);
 }
 
-MapBox::MapBox(int xin, int yin, int win, int hin, int iters) {
+MapBox::MapBox(int xin, int yin, int win, int hin, int iters, int divChance) {
     x = xin;
     y = yin;
     w = win;
     h = hin;
     iterations = iters;
+    divideChance = divChance;
 }
 
 MapBox::~MapBox(void) {
 
 }
 
+coordSet MapBox::getCentre(void) {
+    coordSet output;
+    output.x = x+w/2;
+    output.y = y+h/2;
+    return output;
+}
+
 list<MapBox*> MapBox::divideBox(void) {
     list<MapBox*> output;
-    int num = rand()%100;
-    if (num >= MAPBOX_DIVIDE_HORIZONTAL) {
-        output.push_front(new MapBox(x, y, w, h/2, iterations-1));
-        output.push_front(new MapBox(x, y+h/2, w, h/2, iterations-1));
+    int num = generateRandInt(0, MAPBOX_DIVIDE_ROLL_MAX);
+    bool invalid = false;
+    double roll;
+    if (num >= divideChance) {
+        if (h/2 >= MAPBOX_MINIMUM_HEIGHT) {
+            roll = generateRandDouble((double)MAPBOX_MINIMUM_HEIGHT/h,
+             1-(double)MAPBOX_MINIMUM_HEIGHT/h);
+            output.push_front(new MapBox(x, y, w, h*roll, iterations-1, divideChance+25));
+            output.push_front(new MapBox(x, y+h*roll, w, h*(1-roll), iterations-1, divideChance+15));
+        } else {
+            invalid = true;
+        }
     } else {
-        output.push_front(new MapBox(x, y, w/2, h, iterations-1));
-        output.push_front(new MapBox(x+w/2, y, w/2, h, iterations-1));
+        if (w/2 >= MAPBOX_MINIMUM_WIDTH) {
+            roll = generateRandDouble((double)MAPBOX_MINIMUM_WIDTH/w,
+             1-(double)MAPBOX_MINIMUM_WIDTH/w);
+            output.push_front(new MapBox(x, y, w*roll, h, iterations-1, divideChance-25));
+            output.push_front(new MapBox(x+w*roll, y, w*(1-roll), h, iterations-1, divideChance-15));
+        } else {
+            invalid = true;
+        }
+    }
+    if (invalid == true) {
+        output.push_front(new MapBox(x, y, w, h, 0, 0));
     }
     return output;
 }
 
-Wall* MapBox::GenerateWall(void) {
+Wall* MapBox::generateWall(void) {
     return new Wall(x, y, w, h);
 }
 
+bool MapBox::checkConnection(MapBox* box) {
+    bool connected = false;
+    int cx;
+    int cy;
+    for (int corner=0; corner<MAPBOX_NUM_CORNERS; corner++) {
+        cx = x+w*(corner%2);
+        cy = y+h*(corner/2);
+        if (box->getX()-MAPBOX_MINIMUM_GAP < cx
+         && cx < box->getX()+box->getWidth()+MAPBOX_MINIMUM_GAP) {
+            if (box->getY()-MAPBOX_MINIMUM_GAP < cy
+             && cy < box->getY()+box->getHeight()+MAPBOX_MINIMUM_GAP) {
+                connected = true;
+            }
+        }
+    }
+    return connected;
+}
 
-void GenerateMap(forward_list<Wall*>* wallContainer) {
-    list<MapBox*> mapBoxes = {new MapBox(GAMESPACE_MARGIN, GAMESPACE_MARGIN,
-     GAMESPACE_WIDTH-2*GAMESPACE_MARGIN, GAMESPACE_HEIGHT-2*GAMESPACE_MARGIN, MAPBOX_START_ITERATIONS)};
+bool MapBox::checkSameBox(MapBox* box) {
+    bool same = false;
+    if (box->getX() == x && box->getY() == y && box->getWidth() == w &&
+     box->getHeight() == h) {
+        same = true;
+    }
+    return same;
+}
+
+MapBox* MapBox::copyBox(void) {
+    return new MapBox(x, y, w, h, 0, 0);
+}
+
+
+void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints) {
+    int w;
+    int h;
+    int x;
+    int y;
+    list<MapBox*> mapBoxes;
+    list<MapBox*> boxesComplete;
     list<MapBox*> boxesFinal;
     list<MapBox*> boxesSplit;
+    for (int i=0; i<4; i++) {
+        w = (GAMESPACE_WIDTH-2*GAMESPACE_MARGIN)/2;
+        h = (GAMESPACE_HEIGHT-2*GAMESPACE_MARGIN)/2;
+        x = GAMESPACE_MARGIN+w*(i%2);
+        y = GAMESPACE_MARGIN+h*(i/2);
+        mapBoxes.push_front(new MapBox(x, y, w, h, MAPBOX_START_ITERATIONS,
+         MAPBOX_DIVIDE_ROLL_MAX/2));
+    }
     MapBox* currBox;
     while (mapBoxes.size() > 0) {
         currBox = mapBoxes.front();
         mapBoxes.pop_front();
         if (currBox->getIterations() == 0) {
-            boxesFinal.push_front(currBox);
+            boxesComplete.push_front(currBox);
         } else {
             boxesSplit = currBox->divideBox();
-            mapBoxes.push_back(boxesSplit.front());
-            mapBoxes.push_back(boxesSplit.back());
+            for (auto subBox = boxesSplit.begin(); subBox != boxesSplit.end(); subBox++) {
+                mapBoxes.push_back(*subBox);
+            }
             delete currBox;
         }
     }
+    MapBox* boxSelected;
+    list<MapBox*> mapBoxesTemp;
+    int boxSelection;
+    int index;
+    while (boxesComplete.size() > 0) {
+        mapBoxesTemp.clear();
+        boxSelection = generateRandInt(0, boxesComplete.size());
+        index = 0;
+        for (auto box = boxesComplete.begin(); box != boxesComplete.end(); box++) {
+            if (index == boxSelection) {
+                boxSelected = (*box)->copyBox();
+                boxesFinal.push_front(boxSelected);
+                box = boxesComplete.end();
+            }
+            index++;
+        }
+        for (auto box = boxesComplete.begin(); box != boxesComplete.end(); box++) {
+            if (boxSelected->checkConnection(*box) == false) {
+                mapBoxesTemp.push_front(*box);
+            } else if (boxSelected->checkSameBox(*box) == false) {
+                spawnPoints->push_front((*box)->getCentre());
+            }
+        }
+        boxesComplete = mapBoxesTemp;
+    }
     for (auto box = boxesFinal.begin(); box != boxesFinal.end(); box++) {
-        wallContainer->push_front((*box)->GenerateWall());
+        wallContainer->push_front((*box)->generateWall());
     }
 }
 

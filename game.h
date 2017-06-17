@@ -80,10 +80,11 @@ const int CHARACTER_RED = 255; // red hue of player
 const int CHARACTER_GREEN = 255; // green hue of player
 const int CHARACTER_BLUE = 255; // blue hue of player
 
-const int CHARACTER_MAIN_ID = 1; // ID number of the main character for the game instance
+const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
 const int CHARACTER_DEATH_DURATION = 150; // the number of frames the player remains dead for
+const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH*4;
 
 // codes for the different weapons player can use
 enum CHARACTER_WEAPONS {
@@ -208,8 +209,14 @@ const int GAMESPACE_MARGIN = 50;
 
 
 // Constants related to map generation
-const int MAPBOX_START_ITERATIONS = 4;
-const int MAPBOX_DIVIDE_HORIZONTAL = 50;
+const int MAPBOX_START_ITERATIONS = 5;
+const int MAPBOX_DIVIDE_ROLL_MAX = 100;
+const int MAPBOX_NUM_CORNERS = 4;
+
+const int MAPBOX_MINIMUM_WIDTH = CHARACTER_WIDTH*1.4;
+const int MAPBOX_MINIMUM_HEIGHT = CHARACTER_WIDTH*1.4;
+
+const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH*1.5;
 
 // HUD parameters
 const int HUD_WIDTH = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
@@ -292,6 +299,9 @@ const int CHARBUFF_LENGTH = 256;
 const bool DEBUG_HIDE_SHADOWS = true;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
+const bool DEBUG_DRAW_SPAWN_POINTS = true;
+const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = true;
+const int DEBUG_NUM_PLAYERS = 2;
 
 
 /*-------------------------- Typedefs ------------------------------*/
@@ -368,14 +378,15 @@ public:
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler,
-     forward_list<Projectile>* projectileList, SDL_Renderer* renderer);
+     forward_list<Projectile>* projectileList, forward_list<coordSet> spawnPoints,
+     forward_list<Player> playerList, SDL_Renderer* renderer);
     void move(forward_list<Wall*> wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
     void killPlayer(void); // kills the player
     void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
     void setNewPosition(void); // sets a new position for any time the player spawns in
-    void respawn(void); // respawn the player after death
+    void respawn(forward_list<coordSet> spawnPoints, forward_list<Player> playerList); // respawn the player after death
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer);
@@ -556,26 +567,31 @@ public:
 
 class MapBox {
 protected:
-    int x;
-    int y;
-    int w;
-    int h;
+    double x;
+    double y;
+    double w;
+    double h;
     int iterations;
+    int divideChance;
 public:
-    MapBox(int xinp, int yinp, int winp, int hinp, int iters);
+    MapBox(int xinp, int yinp, int winp, int hinp, int iters, int divChance);
     ~MapBox(void);
 
-    coordSet getCentre(void);
     int getIterations(void) {return iterations;}
+    int getX(void) {return x;}
+    int getY(void) {return y;}
+    int getWidth(void) {return w;}
+    int getHeight(void) {return h;}
+    coordSet getCentre(void);
 
     list<MapBox*> divideBox(void);
     bool checkConnection(MapBox* box);
-    Wall* GenerateWall(void);
+    bool checkSameBox(MapBox* box);
+    Wall* generateWall(void);
+    MapBox* copyBox(void);
 
     void render(SDL_Renderer* renderer);
 };
-
-
 
 // Classes related to networking aspect of the game
 
@@ -672,8 +688,12 @@ direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallcontainer,
      forward_list<Player> playerList, forward_list<Projectile> projectileList,
-      forward_list<BulletExplosion> explosionList, int playerMainX,
-       int playerMainY); // render the gameplay area of the screen
+     forward_list<BulletExplosion> explosionList, forward_list<coordSet> spawnPoints,
+     int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(SDL_Renderer* renderer, Player userCharacter,
  hudInfo hudInfoContainer); // render the HUD area of the screen
-void GenerateMap(forward_list<Wall*>* wallContainer);
+void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
+int generateRandInt(int min, int max);
+double generateRandDouble(double min, double max);
+bool validateSpawnPoint(coordSet point, forward_list<Player> playerList);
+coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> playerList);
