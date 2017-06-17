@@ -63,6 +63,7 @@ const direction MOVE_DOWN_RIGHT = {1,1};
 
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
+const string CHARACTER_ROLL_IMAGE = "images/dash.png";
 const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 
 const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
@@ -72,8 +73,8 @@ const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate p
 const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
 
-const int CHARACTER_ROLL_DURATION = 16;
-const int CHARACTER_ROLL_SPEED = 10;
+const int CHARACTER_ROLL_DURATION = 14;
+const int CHARACTER_ROLL_SPEED = 14;
 const int CHARACTER_ROLL_COOLDOWN = 180;
 
 const int CHARACTER_RED = 255; // red hue of player
@@ -85,6 +86,9 @@ const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game
 const int CHARACTER_MAX_HP = 3; // max health a player can have
 const int CHARACTER_DEATH_DURATION = 150; // the number of frames the player remains dead for
 const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH*4;
+
+const int CHARACTER_ROLL_OUTLINE_WIDTH = CHARACTER_WIDTH*1.5;
+const int CHARACTER_ROLL_OUTLINE_HEIGHT = CHARACTER_HEIGHT*1.5;
 
 // codes for the different weapons player can use
 enum CHARACTER_WEAPONS {
@@ -104,16 +108,16 @@ const double AR_PROJECTILE_SPEED = 18.0;
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
-const int PISTOL_MAX_BULLET_SPREAD = 40;
+const int PISTOL_MAX_BULLET_SPREAD = 50;
 const int PISTOL_RELOAD_FRAMES = 60;
-const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
+const int PISTOL_RECOIL_INCREASE_PER_SHOT = 25;
 const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
 const double PISTOL_PROJECTILE_SPEED = 16.0;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
-const int SHOTGUN_PROJECTILE_SPREAD = 7;
-const int SHOTGUN_SHOT_DELAY = 60;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
+const int SHOTGUN_PROJECTILE_SPREAD = 8;
+const int SHOTGUN_SHOT_DELAY = 50;
 const double SHOTGUN_PROJECTILE_SPEED = 12.0;
 
 
@@ -128,16 +132,16 @@ const double AR_PROJECTILE_SPEED = 18.0;
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
-const int PISTOL_MAX_BULLET_SPREAD = 40;
+const int PISTOL_MAX_BULLET_SPREAD = 50;
 const int PISTOL_RELOAD_FRAMES = 60;
-const int PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
+const int PISTOL_RECOIL_INCREASE_PER_SHOT = 25;
 const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
 const double PISTOL_PROJECTILE_SPEED = 16.0;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
-const int SHOTGUN_PROJECTILE_SPREAD = 7;
-const int SHOTGUN_SHOT_DELAY = 60;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
+const int SHOTGUN_PROJECTILE_SPREAD = 8;
+const int SHOTGUN_SHOT_DELAY = 50;
 const double SHOTGUN_PROJECTILE_SPEED = 12.0;
 */
 
@@ -209,7 +213,7 @@ const int GAMESPACE_MARGIN = 50;
 
 
 // Constants related to map generation
-const int MAPBOX_START_ITERATIONS = 5;
+const int MAPBOX_START_ITERATIONS = 4;
 const int MAPBOX_DIVIDE_ROLL_MAX = 100;
 const int MAPBOX_NUM_CORNERS = 4;
 
@@ -378,6 +382,7 @@ protected:
 
     // the sprite sheet for the player
     SDL_Texture* playerImage;
+    SDL_Texture* rollOutline;
     SDL_Renderer* playerRenderer;
 
     DeathObject* deathMarker;

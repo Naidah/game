@@ -13,6 +13,7 @@ MAJOR:
     --- NETCODE
 
 MINOR:
+    - Improve dash outline
     - Roll icon
     - Make projectile explosion object appear on surface of collision getLocation
     - Fix bullets travelling through corners
@@ -533,6 +534,7 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
 
     // load in the players spritesheet
     playerImage = loadImage(CHARACTER_IMAGE_LOCATION, renderer);
+    rollOutline = loadImage(CHARACTER_ROLL_IMAGE, renderer);
 
     // set the players default speed to 0
     velx = 0;
@@ -764,6 +766,17 @@ void Player::render(SDL_Renderer* renderer) {
          playerColors.green, playerColors.blue); // modulates the color based on the players settings
         SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
          angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
+        if (rolling == true) {
+            SDL_Rect outlineRect;
+            outlineRect.w = CHARACTER_ROLL_OUTLINE_WIDTH;
+            outlineRect.h = CHARACTER_ROLL_OUTLINE_HEIGHT;
+            outlineRect.x = playerRect.x - (outlineRect.w-playerRect.w)/2;
+            outlineRect.y = playerRect.y - (outlineRect.h-playerRect.h)/2;
+            SDL_SetTextureColorMod(playerImage, playerColors.red,
+             playerColors.green, playerColors.blue);
+            SDL_RenderCopyEx(renderer, rollOutline, NULL, &outlineRect,
+             atan2(-rollDirection.y, -rollDirection.x)*180/M_PI, NULL, SDL_FLIP_NONE);
+        }
     } else {
         deathMarker->render(renderer);
     }
@@ -828,9 +841,9 @@ AssaultRifle::~AssaultRifle(void) {
 }
 
 void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
-    if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
+    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
         mouseDown = true;
-    } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+    } else {
         mouseDown = false;
     }
     double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD/2);
@@ -893,7 +906,7 @@ void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     if (currRecoil > 0) {
          projectileAngle = player->getAngle()+((rand()%currRecoil)-currRecoil/2);
     }
-    if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
+    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
         if (mouseDown != true && reloadFramesLeft == 0) {
             if (currAmmo > 0) {
                 mouseDown = true;
@@ -903,7 +916,7 @@ void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
                  projectileAngle, PISTOL_PROJECTILE_SPEED, game->renderer(), player->getID()));
             }
         }
-    } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+    } else {
         mouseDown = false;
     }
     if (currAmmo == 0 && reloadFramesLeft == 0) {
@@ -957,7 +970,7 @@ Shotgun::~Shotgun(void) {
 
 void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     double projectileAngle;
-    if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
+    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
         if (mouseDown != true && shotDelay == 0) {
             mouseDown = true;
             for (int n = -SHOTGUN_PROJECTILES_PER_SHOT/2; n < SHOTGUN_PROJECTILES_PER_SHOT/2; n++) {
@@ -968,7 +981,7 @@ void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
-    } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
+    } else {
         mouseDown = false;
     }
 }
