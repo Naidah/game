@@ -5,14 +5,11 @@
 /*
 MAJOR:
     --- Start artwork for objects and background
-    --- Add a struct to pass around all screen elements by refernce, to clean up code
     -- Comment current work
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
     -- Get fullscreen working
-    - Fix map generation to avoid connected boxes
     - Add invulnerability
-    --- Fix respawns to have the range limits
     --- NETCODE
 
 MINOR:
@@ -53,8 +50,8 @@ using namespace std;
 
 
 int main(int argc, char const *argv[]) {
-    srand(time(NULL));
     // control/important variables for throughout the program
+    srand(time(NULL));
     bool gameRunning = true; // variable to control the game loop
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
@@ -62,7 +59,6 @@ int main(int argc, char const *argv[]) {
     int playerMainX;
     int playerMainY;
     hudInfo hudInfoContainer;
-
 
     init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
@@ -91,6 +87,8 @@ int main(int argc, char const *argv[]) {
     forward_list<BulletExplosion> explosionList;
     forward_list<BulletExplosion> explosionUpdated;
 
+    Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, renderer);
+
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
@@ -104,7 +102,7 @@ int main(int argc, char const *argv[]) {
 
         // update the state of the controlled character
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->updateState(&eventHandler, &projectileList, spawnPoints, playerList, renderer);   
+            character->updateState(&eventHandler, game);   
         }
 
         explosionUpdated.clear();
@@ -120,7 +118,7 @@ int main(int argc, char const *argv[]) {
 
         // move all players and projectiles
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->move(wallContainer);
+            character->move(game->walls());
             if (character->getID() == CHARACTER_MAIN_ID) {
                 playerMainX = character->getX();
                 playerMainY = character->getY();
@@ -129,7 +127,7 @@ int main(int argc, char const *argv[]) {
 
         newList.clear();
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if (bullet->move(&wallContainer, &playerList) != true) {
+            if (bullet->move(game) != true) {
                 newList.push_front(*bullet);
             } else {
                 explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
@@ -140,8 +138,7 @@ int main(int argc, char const *argv[]) {
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE);
         SDL_RenderClear(renderer);
-        renderGameSpace(renderer, wallContainer, playerList, projectileList, explosionList,
-             spawnPoints, playerMainX, playerMainY);
+        renderGameSpace(game, explosionList, playerMainX, playerMainY);
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
                 renderGameUI(renderer, *character, hudInfoContainer);
@@ -237,9 +234,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
     return output;
 }
 
-void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallContainer,
-     forward_list<Player> playerList, forward_list<Projectile> projectileList,
-     forward_list<BulletExplosion> explosionList, forward_list<coordSet> spawnPoints,
+void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
      int playerMainX, int playerMainY) {
     // reset the screen for the next frame
     SDL_Rect gamespaceViewport;
@@ -248,43 +243,43 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallContainer,
     gamespaceViewport.w = GAMESPACE_WIDTH;
     gamespaceViewport.h = GAMESPACE_HEIGHT;
 
-    SDL_RenderSetViewport(renderer, &gamespaceViewport);
-    SDL_SetRenderDrawColor(renderer, UI_BACKGROUND_COLOR_RED,
+    SDL_RenderSetViewport(game->renderer(), &gamespaceViewport);
+    SDL_SetRenderDrawColor(game->renderer(), UI_BACKGROUND_COLOR_RED,
      UI_BACKGROUND_COLOR_GREEN, UI_BACKGROUND_COLOR_BLUE, UI_BACKGROUND_COLOR_ALPHA);
 
     SDL_Rect background {0, 0, GAMESPACE_WIDTH, GAMESPACE_HEIGHT};
-    SDL_RenderFillRect(renderer, &background);
+    SDL_RenderFillRect(game->renderer(), &background);
 
     // render all objects to the screen
-    for (auto character = playerList.begin(); character != playerList.end(); character++) {
-        character->render(renderer);
+    for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
+        character->render(game->renderer());
     }
-    for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-        bullet->render(renderer);
+    for (auto bullet = game->projectiles()->begin(); bullet != game->projectiles()->end(); bullet++) {
+        bullet->render(game->renderer());
     }
     if (DEBUG_HIDE_SHADOWS != true) {
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
             (*wall)->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
-             UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, renderer);
+             UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, game->renderer());
         }
     }
-    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        (*wall)->render(renderer);
+    for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
+        (*wall)->render(game->renderer());
     }
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-        explosion->render(renderer);
+        explosion->render(game->renderer());
     }
 
     if (DEBUG_DRAW_SPAWN_POINTS == true) {
-            SDL_SetRenderDrawColor(renderer, 100, 100, 100, UI_COLOR_MAX_VALUE);
+            SDL_SetRenderDrawColor(game->renderer(), 100, 100, 100, UI_COLOR_MAX_VALUE);
             SDL_Rect debugRect;
             debugRect.w = 3;
             debugRect.h = 3;
-            for (auto point = spawnPoints.begin(); point != spawnPoints.end(); point++) {
-                if (validateSpawnPoint(*point, playerList) == true || DEBUG_DRAW_VALID_SPAWNS_ONLY == false) {
+            for (auto point = game->spawns()->begin(); point != game->spawns()->end(); point++) {
+                if (validateSpawnPoint(*point, *(game->players())) == true || DEBUG_DRAW_VALID_SPAWNS_ONLY == false) {
                     debugRect.x = point->x;
                     debugRect.y = point->y;
-                    SDL_RenderFillRect(renderer, &debugRect);
+                    SDL_RenderFillRect(game->renderer(), &debugRect);
                 }
             }
         }
@@ -303,9 +298,9 @@ void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallContainer,
         mouseX -= GAMESPACE_TOPLEFT_X*ratio;
         mouseX /= ratio;
         mouseY /= ratio;
-        SDL_SetRenderDrawColor(renderer, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE);
+        SDL_SetRenderDrawColor(game->renderer(), UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE);
         SDL_Rect debugRect = {mouseX, mouseY, 10, 10};
-        SDL_RenderFillRect(renderer, &debugRect);
+        SDL_RenderFillRect(game->renderer(), &debugRect);
     }
 
 }
@@ -508,6 +503,16 @@ bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
 
 // Function definitions for each class
 
+Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
+     forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
+     SDL_Renderer* renderer) {
+    playerList = playerSet;
+    wallContainer = wallSet;
+    spawnPoints = spawnSet;
+    projectileList = projSet;
+    gameRenderer = renderer;
+}
+
 // Functions related to the player class
 Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* gun) {
     // initialization function for the player class
@@ -564,9 +569,7 @@ void Player::setPlayerCentre(void) {
     centreY = playerRect.y + radius;
 }
 
-void Player::updateState(SDL_Event* eventHandler,
- forward_list<Projectile>* projectileList, forward_list<coordSet> spawnPoints,
- forward_list<Player> playerList, SDL_Renderer* renderer) {
+void Player::updateState(SDL_Event* eventHandler, Game* game) {
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
     if (alive == true) {
         // get the keyboard state containing which keys are actively pressed
@@ -579,7 +582,8 @@ void Player::updateState(SDL_Event* eventHandler,
 
         if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
-            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false && rollCooldown == 0 && direction != MOVE_NONE) {
+            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
+             && rollCooldown == 0 && direction != MOVE_NONE) {
                 rolling = true;
                 rollFrames = CHARACTER_ROLL_DURATION;
                 rollDirection = direction;
@@ -594,7 +598,8 @@ void Player::updateState(SDL_Event* eventHandler,
 
             if (rolling == true) {
                 rollFrames--;
-                if (direction == MOVE_UP || direction == MOVE_LEFT || direction == MOVE_DOWN || direction == MOVE_RIGHT) {
+                if (direction == MOVE_UP || direction == MOVE_LEFT ||
+                 direction == MOVE_DOWN || direction == MOVE_RIGHT) {
                     velx = rollDirection.x*CHARACTER_ROLL_SPEED;
                     vely = rollDirection.y*CHARACTER_ROLL_SPEED;
                 } else {
@@ -663,17 +668,17 @@ void Player::updateState(SDL_Event* eventHandler,
     } else {
         deathFrames -= 1;
         if (deathFrames <= 0) {
-            respawn(spawnPoints, playerList);
+            respawn(game->spawns(), game->players());
         } else {
             deathMarker->updateState();
         }
     }
     if (id == CHARACTER_MAIN_ID && alive == true) {
-        weapon->takeShot(projectileList, renderer, this, eventHandler); // have the player shoot a projectile
+        weapon->takeShot(game, this, eventHandler); // have the player shoot a projectile
     }
 }
 
-void Player::move(forward_list<Wall*> wallContainer) {
+void Player::move(forward_list<Wall*>* wallContainer) {
     // store the original location of the player
     int posOrigX = playerRect.x;
     int posOrigY = playerRect.y;
@@ -685,7 +690,7 @@ void Player::move(forward_list<Wall*> wallContainer) {
         setPlayerCentre();
 
         // go through each wall, and if the player movement would cause a collision, undo the movement along x
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
             if ((*wall)->checkCollision(centreX, centreY, radius) == true
              || checkExitMap(centreX, centreY, radius)) {
                 playerRect.x = posOrigX;
@@ -697,7 +702,7 @@ void Player::move(forward_list<Wall*> wallContainer) {
         //repeat the process for x with y
         playerRect.y += vely;
         setPlayerCentre();
-        for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+        for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
             if ((*wall)->checkCollision(centreX, centreY, radius) == true
                  || checkExitMap(centreX, centreY, radius)) {
                 playerRect.y = posOrigY;
@@ -736,8 +741,8 @@ void Player::setNewPosition(void) {
     setPlayerCentre();
 }
 
-void Player::respawn(forward_list<coordSet> spawnPoints, forward_list<Player> playerList) {
-    coordSet newPosition = getSpawnPoint(spawnPoints, playerList);
+void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
+    coordSet newPosition = getSpawnPoint(*spawnPoints, *playerList);
     if (newPosition.x != 0) {
         playerRect.x = newPosition.x-CHARACTER_WIDTH/2;
         playerRect.y = newPosition.y-CHARACTER_HEIGHT/2;
@@ -822,8 +827,7 @@ AssaultRifle::~AssaultRifle(void) {
 
 }
 
-void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
- SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
+void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
         mouseDown = true;
     } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
@@ -832,8 +836,8 @@ void AssaultRifle::takeShot(forward_list<Projectile>* projectileList,
     double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD/2);
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
-            projectileList->push_front(Projectile(player->getX(), player->getY(),
-             projectileAngle, AR_PROJECTILE_SPEED, renderer, player->getID()));
+            game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+             projectileAngle, AR_PROJECTILE_SPEED, game->renderer(), player->getID()));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         }
@@ -884,8 +888,7 @@ Pistol::~Pistol(void) {
 
 }
 
-void Pistol::takeShot(forward_list<Projectile>* projectileList,
- SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
+void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     double projectileAngle = player->getAngle();
     if (currRecoil > 0) {
          projectileAngle = player->getAngle()+((rand()%currRecoil)-currRecoil/2);
@@ -896,8 +899,8 @@ void Pistol::takeShot(forward_list<Projectile>* projectileList,
                 mouseDown = true;
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
-                projectileList->push_front(Projectile(player->getX(), player->getY(),
-                 projectileAngle, PISTOL_PROJECTILE_SPEED, renderer, player->getID()));
+                game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+                 projectileAngle, PISTOL_PROJECTILE_SPEED, game->renderer(), player->getID()));
             }
         }
     } else if (eventHandler->type == SDL_MOUSEBUTTONUP) {
@@ -952,8 +955,7 @@ Shotgun::~Shotgun(void) {
 
 }
 
-void Shotgun::takeShot(forward_list<Projectile>* projectileList,
- SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) {
+void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     double projectileAngle;
     if (eventHandler->type == SDL_MOUSEBUTTONDOWN) {
         if (mouseDown != true && shotDelay == 0) {
@@ -961,8 +963,8 @@ void Shotgun::takeShot(forward_list<Projectile>* projectileList,
             for (int n = -SHOTGUN_PROJECTILES_PER_SHOT/2; n < SHOTGUN_PROJECTILES_PER_SHOT/2; n++) {
                 projectileAngle = player->getAngle()+n*SHOTGUN_PROJECTILE_SPREAD; // set base angle of projectile
                 projectileAngle += (rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2;
-                projectileList->push_front(Projectile(player->getX(), player->getY(),
-                 projectileAngle, SHOTGUN_PROJECTILE_SPEED, renderer, player->getID()));
+                game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+                 projectileAngle, SHOTGUN_PROJECTILE_SPEED, game->renderer(), player->getID()));
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
@@ -1254,10 +1256,9 @@ void Projectile::setProjectileCentre(void) {
     centreY = projectileRect.y+radius;
 }
 
-int Projectile::checkCollision(forward_list<Wall*>* wallContainer,
- forward_list<Player>* playerList) {
+int Projectile::checkCollision(Game* game) {
     int output = PROJECTILE_COLLISION_NONE; // default to no collision
-    for (auto character = playerList->begin(); character != playerList->end(); character++) {
+    for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
         if (distBetweenPoints(centreX, centreY, character->getX(),
          character->getY()) < (radius + character->getRadius())) { // check whether the projectile is contacting the player
             if (character->getID() != ownerID && character->isAlive() == true) { // check the player hit is not the one who shot the projectile and is still alive
@@ -1267,7 +1268,7 @@ int Projectile::checkCollision(forward_list<Wall*>* wallContainer,
         }
     }
     if (output == PROJECTILE_COLLISION_NONE) { // make sure no other collision has been detected with a wall
-        for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
+        for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
             if ((*wall)->checkCollision(centreX, centreY, radius)) {
                 output = PROJECTILE_COLLISION_WALL;
             }
@@ -1276,7 +1277,7 @@ int Projectile::checkCollision(forward_list<Wall*>* wallContainer,
     return output;
 }
 
-bool Projectile::move(forward_list<Wall*>* wallContainer, forward_list<Player>* playerList) {
+bool Projectile::move(Game* game) {
     // moves the projectile,  returns true if the projectile collided and needs to be destroyed
     bool destroyed = false;
     int collision = PROJECTILE_COLLISION_NONE;
@@ -1291,7 +1292,7 @@ bool Projectile::move(forward_list<Wall*>* wallContainer, forward_list<Player>* 
     setProjectileCentre();
 
     // check if the projectile collided this frame
-    collision = checkCollision(wallContainer, playerList);
+    collision = checkCollision(game);
     if (collision != PROJECTILE_COLLISION_NONE) {
         destroyed = true;
     } else if (checkExitMap(projectileRect.x, projectileRect.y, radius) == true) {
@@ -1421,6 +1422,15 @@ bool MapBox::checkConnection(MapBox* box) {
          && cx < box->getX()+box->getWidth()+MAPBOX_MINIMUM_GAP) {
             if (box->getY()-MAPBOX_MINIMUM_GAP < cy
              && cy < box->getY()+box->getHeight()+MAPBOX_MINIMUM_GAP) {
+                connected = true;
+            }
+        }
+    }
+    for (int corner=0; corner<MAPBOX_NUM_CORNERS; corner++) {
+        cx = box->getX()+box->getWidth()*(corner%2);
+        cy = box->getY()+box->getHeight()*(corner/2);
+        if (x-MAPBOX_MINIMUM_GAP < cx && cx < x+w+MAPBOX_MINIMUM_GAP) {
+            if (y-MAPBOX_MINIMUM_GAP < cy && cy < y+box->h+MAPBOX_MINIMUM_GAP) {
                 connected = true;
             }
         }

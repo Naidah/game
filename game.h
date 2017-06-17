@@ -296,12 +296,12 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = true;
-const bool DEBUG_KILL_PLAYER = true;
+const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_KILL_PLAYER = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
-const bool DEBUG_DRAW_SPAWN_POINTS = true;
-const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = true;
-const int DEBUG_NUM_PLAYERS = 2;
+const bool DEBUG_DRAW_SPAWN_POINTS = false;
+const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
+const int DEBUG_NUM_PLAYERS = 4;
 
 
 /*-------------------------- Typedefs ------------------------------*/
@@ -313,6 +313,7 @@ typedef char charbuff[CHARBUFF_LENGTH];
 /*-------------------------- Class Definitions -------------------------*/
 
 // declarations of different classes
+class Game;
 class Player;
 class DeathObject;
 class Weapon;
@@ -322,6 +323,27 @@ class BulletExplosion;
 class MapBox;
 
 // Class definitions
+class Game {
+protected:
+    forward_list<Player>* playerList;
+    forward_list<Wall*>* wallContainer;
+    forward_list<coordSet>* spawnPoints;
+    forward_list<Projectile>* projectileList;
+
+    SDL_Renderer* gameRenderer;
+public:
+    Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
+     forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
+     SDL_Renderer* renderer);
+
+    forward_list<Player>* players(void) {return playerList;}
+    forward_list<Wall*>* walls(void) {return wallContainer;}
+    forward_list<coordSet>* spawns(void) {return spawnPoints;}
+    forward_list<Projectile>* projectiles(void) {return projectileList;}
+    SDL_Renderer* renderer(void) {return gameRenderer;}
+};
+
+
 // Class to represent all player controlled characters
 class Player {
 protected:
@@ -377,16 +399,14 @@ public:
     bool isAlive(void) {return alive;}
 
     // functions to update the players state
-    void updateState(SDL_Event* eventHandler,
-     forward_list<Projectile>* projectileList, forward_list<coordSet> spawnPoints,
-     forward_list<Player> playerList, SDL_Renderer* renderer);
-    void move(forward_list<Wall*> wallContainer); // moves the player based on their velocity
+    void updateState(SDL_Event* eventHandler, Game* game);
+    void move(forward_list<Wall*>* wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
     void killPlayer(void); // kills the player
     void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
     void setNewPosition(void); // sets a new position for any time the player spawns in
-    void respawn(forward_list<coordSet> spawnPoints, forward_list<Player> playerList); // respawn the player after death
+    void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList); // respawn the player after death
 
     //draws the player to the screen
     void render(SDL_Renderer* renderer);
@@ -418,8 +438,7 @@ public:
     virtual int getMaxReloadFrames(void) = 0;
     virtual bool isReloading(void) = 0;
 
-    virtual void takeShot(forward_list<Projectile>* projectileList,
-     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler) = 0;
+    virtual void takeShot(Game* game, Player* player, SDL_Event* eventHandler) = 0;
     virtual void beginReload(void) = 0;
     virtual void updateGun() = 0;
     virtual void resetGun() = 0;
@@ -441,8 +460,7 @@ public:
     int getMaxReloadFrames(void) {return AR_RELOAD_FRAMES;}
     bool isReloading(void) {return reloading;}
 
-    void takeShot(forward_list<Projectile>* projectileList,
-     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
@@ -462,8 +480,7 @@ public:
     int getMaxReloadFrames(void) {return PISTOL_RELOAD_FRAMES;}
     bool isReloading(void) {return reloading;}
 
-    void takeShot(forward_list<Projectile>* projectileList,
-     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
@@ -483,8 +500,7 @@ public:
     int getMaxReloadFrames(void) {return SHOTGUN_SHOT_DELAY;}
     bool isReloading(void) {return true;} // treat shot delay as reloading
 
-    void takeShot(forward_list<Projectile>* projectileList,
-     SDL_Renderer* renderer, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
@@ -545,8 +561,8 @@ public:
     SDL_Rect getLocation(void) {return projectileRect;}
     colorSet getColors(void) {return projectileColors;}
 
-    int checkCollision(forward_list<Wall*>* wallContainer, forward_list<Player>* playerList);
-    bool move(forward_list<Wall*>* wallContainer, forward_list<Player>* playerList);
+    int checkCollision(Game* game);
+    bool move(Game* game);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer);
     void deleteObject(void);
@@ -686,9 +702,7 @@ int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the 
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
 direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
-void renderGameSpace(SDL_Renderer* renderer, forward_list<Wall*> wallcontainer,
-     forward_list<Player> playerList, forward_list<Projectile> projectileList,
-     forward_list<BulletExplosion> explosionList, forward_list<coordSet> spawnPoints,
+void renderGameSpace(Game* game, forward_list<BulletExplosion> explosionList,
      int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(SDL_Renderer* renderer, Player userCharacter,
  hudInfo hudInfoContainer); // render the HUD area of the screen
