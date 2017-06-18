@@ -9,7 +9,6 @@ MAJOR:
     - Move code to be in different files to make editing easier
     - Update angle before taking shots
     -- Get fullscreen working
-    - Add invulnerability
     --- NETCODE
 
 MINOR:
@@ -20,7 +19,6 @@ MINOR:
 */
 
 /* Current balance considerations:
-- Shotguns to good at mid ranges
 - Pistols to good at all ranges (base scatter?)
 
 */
@@ -38,10 +36,13 @@ MINOR:
 
 #include <string> // tools for string manipulations
 #include <iostream> // contains cout output method
+#include <fstream>
+#include <regex>
 #include <math.h> // contains math functions (sqrt, pow, etc) for use
 #include <algorithm> // contains min/max functions used
 #include <forward_list> // container structure used to hold objects in game
 #include <list>
+#include <map>
 #include <ctime>
 
 #include "game.h" // contains program constants to avoid cluttering main file
@@ -61,16 +62,23 @@ int main(int argc, char const *argv[]) {
     int playerMainY;
     hudInfo hudInfoContainer;
 
-    init(&window, &renderer); // Initialize SDL and set the window and renderer for the game
-    hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
-
     forward_list<Wall*> wallContainer;
     forward_list<coordSet> spawnPoints;
-
+    forward_list<Player> playerList;
+    forward_list<Projectile> projectileList;
     generateMap(&wallContainer, &spawnPoints);
 
+    Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, &renderer);
 
-    forward_list<Player> playerList;
+    init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
+    hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
+
+    
+
+    
+
+
+    
 
     coordSet initSpawn;
     for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
@@ -83,12 +91,11 @@ int main(int argc, char const *argv[]) {
 
 
 
-    forward_list<Projectile> projectileList;
+    
     forward_list<Projectile> newList;
     forward_list<BulletExplosion> explosionList;
     forward_list<BulletExplosion> explosionUpdated;
 
-    Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, renderer);
 
     while (gameRunning == true) {
         while (SDL_PollEvent(&eventHandler) != 0) {
@@ -177,21 +184,25 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<
     SDL_Quit();
 }
 
-bool init(SDL_Window** window, SDL_Renderer** renderer) { // initialize important SDL functionalities
+bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initialize important SDL functionalities
     bool success = true; // flag to check whether program runs successfully
     if (SDL_Init(SDL_INIT_VIDEO) < 0) { // Make sure SDL can initialize properly, otherwise return error code
         cout << "Error Initializing SDL./n SDL_Error " << SDL_GetError() << "\n";
         success = false;
     } else {
         *window = SDL_CreateWindow(SCREEN_NAME, SDL_WINDOWPOS_UNDEFINED, //create the window
-            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
+            SDL_WINDOWPOS_UNDEFINED, game->screenWidth(), game->screenHeight(),
              SDL_WINDOW_SHOWN);
         if (window == NULL) { // check if cratewindow returned a valid pointer
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
             success = false;
         } else {
-            if (SCREEN_FULLSCREEN == true) { // If the game is set to be in fullscreen, set it to fullscreen
+            if (game->isFullscreen() == true) { // If the game is set to be in fullscreen, set it to fullscreen
                 SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                int w;
+                int h;
+                SDL_GetWindowSize(*window, &w, &h);
+                game->setSize(w, h);
             }
             *renderer = SDL_CreateRenderer(*window, -1,
              SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC); // create renderer object
@@ -289,11 +300,11 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
         double ratio;
         int mouseX = 0;
         int mouseY = 0;
-        if ((double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT <
-         (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT) {
-            ratio = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT;
+        if ((double)game->screenHeight()/(double)SCREEN_HEIGHT_DEFAULT <
+         (double)game->screenWidth()/(double)SCREEN_WIDTH_DEFAULT) {
+            ratio = (double)game->screenHeight()/(double)SCREEN_HEIGHT_DEFAULT;
         } else {
-            ratio = (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
+            ratio = (double)game->screenWidth()/(double)SCREEN_WIDTH_DEFAULT;
         }
         SDL_GetMouseState(&mouseX, &mouseY);
         mouseX -= GAMESPACE_TOPLEFT_X*ratio;
@@ -506,12 +517,45 @@ bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
 
 Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
      forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
-     SDL_Renderer* renderer) {
+     SDL_Renderer** renderer) {
     playerList = playerSet;
     wallContainer = wallSet;
     spawnPoints = spawnSet;
     projectileList = projSet;
     gameRenderer = renderer;
+
+    string line;
+    string item;
+    string value;
+    ifstream configFile ("config.ini", ifstream::in);
+
+    regex pattern("([a-z]+)=([0-9]+)");
+    smatch matches;
+    map<string, string> configElements;
+
+    if (configFile.is_open()) {
+        while (getline(configFile, line)) {
+            regex_search(line, matches, pattern);
+            configElements[matches[1]] = matches[2];
+        }
+    }
+    if (configElements["swidth"] != "") {
+        swidth = stoi(configElements["swidth"]);
+    } else {
+        swidth = SCREEN_WIDTH;
+    }
+    if (configElements["sheight"] != "") {
+        sheight = stoi(configElements["sheight"]);
+    } else {
+        sheight = SCREEN_HEIGHT;
+    }
+    if (configElements["fullscreen"] != "") {
+        fullscreen = stoi(configElements["fullscreen"]);
+    } else {
+        fullscreen = SCREEN_FULLSCREEN;
+    }
+
+    configFile.close();
 }
 
 // Functions related to the player class
@@ -535,6 +579,7 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     // load in the players spritesheet
     playerImage = loadImage(CHARACTER_IMAGE_LOCATION, renderer);
     rollOutline = loadImage(CHARACTER_ROLL_IMAGE, renderer);
+    invulnImage = loadImage(CHARACTER_INVULN_IMAGE, renderer);
 
     // set the players default speed to 0
     velx = 0;
@@ -653,19 +698,26 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
                 }
             }
             // rotate the player to look toward the mouse
-                // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
-                SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
-                if ((double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT <
-                 (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT) {
-                    ratio = (double)SCREEN_HEIGHT/(double)SCREEN_HEIGHT_DEFAULT;
-                } else {
-                    ratio = (double)SCREEN_WIDTH/(double)SCREEN_WIDTH_DEFAULT;
-                }
-                mouseX -= GAMESPACE_TOPLEFT_X*ratio;
-                mouseX /= ratio;
-                mouseY /= ratio;
-                angle = atan2((double)(centreY-mouseY),
-                 (double)(centreX-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
+            // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
+            SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
+            if ((double)game->screenHeight()/(double)SCREEN_HEIGHT_DEFAULT <
+             (double)game->screenWidth()/(double)SCREEN_WIDTH_DEFAULT) {
+                ratio = (double)game->screenHeight()/(double)SCREEN_HEIGHT_DEFAULT;
+            } else {
+                ratio = (double)game->screenWidth()/(double)SCREEN_WIDTH_DEFAULT;
+            }
+            mouseX -= GAMESPACE_TOPLEFT_X*ratio;
+            mouseX /= ratio;
+            mouseY /= ratio;
+            angle = atan2((double)(centreY-mouseY),
+             (double)(centreX-mouseX))*180.0/M_PI; // find the angle between the character and the mouse
+
+            weapon->takeShot(game, this, eventHandler); // have the player shoot a projectile
+        }
+        if (invulnFrames > 0) {
+            invulnFrames--;
+        } else {
+            invulnerable = false;
         }
     } else {
         deathFrames -= 1;
@@ -675,9 +727,7 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
             deathMarker->updateState();
         }
     }
-    if (id == CHARACTER_MAIN_ID && alive == true) {
-        weapon->takeShot(game, this, eventHandler); // have the player shoot a projectile
-    }
+    
 }
 
 void Player::move(forward_list<Wall*>* wallContainer) {
@@ -721,7 +771,9 @@ void Player::move(forward_list<Wall*>* wallContainer) {
 
 void Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
-    health -= 1;
+    if (invulnerable == false) {
+        health -= 1;
+    }
     if (health <= 0) { // check if the shot was a lethal blow
         killPlayer();
     }
@@ -746,6 +798,8 @@ void Player::setNewPosition(void) {
 void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
     coordSet newPosition = getSpawnPoint(*spawnPoints, *playerList);
     if (newPosition.x != 0) {
+        invulnerable = true;
+        invulnFrames = CHARACTER_INVULN_FRAMES;
         playerRect.x = newPosition.x-CHARACTER_WIDTH/2;
         playerRect.y = newPosition.y-CHARACTER_HEIGHT/2;
         alive = true;
@@ -762,17 +816,32 @@ void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* 
 void Player::render(SDL_Renderer* renderer) {
     // draws the player to the screen using the supplied renderer
     if (alive == true) {
+        if (invulnerable == true) {
+            SDL_Rect invulnRect;
+            invulnRect.w = CHARACTER_INVULN_IMAGE_WIDTH-
+             (CHARACTER_INVULN_IMAGE_WIDTH-playerRect.w)*
+             (1-((double)invulnFrames/CHARACTER_INVULN_FRAMES));
+            invulnRect.h = CHARACTER_INVULN_IMAGE_HEIGHT-
+             (CHARACTER_INVULN_IMAGE_HEIGHT-playerRect.h)*
+             (1-((double)invulnFrames/CHARACTER_INVULN_FRAMES));
+            invulnRect.x = playerRect.x - (invulnRect.w-playerRect.w)/2;
+            invulnRect.y = playerRect.y - (invulnRect.h-playerRect.h)/2;
+            SDL_SetTextureColorMod(invulnImage, playerColors.red,
+             playerColors.green, playerColors.blue);
+            SDL_RenderCopy(renderer, invulnImage, NULL, &invulnRect);
+        }
         SDL_SetTextureColorMod(playerImage, playerColors.red,
          playerColors.green, playerColors.blue); // modulates the color based on the players settings
         SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
          angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
+        
         if (rolling == true) {
             SDL_Rect outlineRect;
             outlineRect.w = CHARACTER_ROLL_OUTLINE_WIDTH;
             outlineRect.h = CHARACTER_ROLL_OUTLINE_HEIGHT;
             outlineRect.x = playerRect.x - (outlineRect.w-playerRect.w)/2;
             outlineRect.y = playerRect.y - (outlineRect.h-playerRect.h)/2;
-            SDL_SetTextureColorMod(playerImage, playerColors.red,
+            SDL_SetTextureColorMod(rollOutline, playerColors.red,
              playerColors.green, playerColors.blue);
             SDL_RenderCopyEx(renderer, rollOutline, NULL, &outlineRect,
              atan2(-rollDirection.y, -rollDirection.x)*180/M_PI, NULL, SDL_FLIP_NONE);

@@ -1,9 +1,12 @@
 // Created by Aidan Hunt 24/1/17, last edited 14/2/17
 // Contains constants for game
 
-#include <string>
-#include <forward_list>
-#include <list>
+/*
+Constants for the config file:
+    - Screen sizes
+    - Colors
+    - Fullscreen
+*/
 
 using namespace std;
 
@@ -65,6 +68,7 @@ const direction MOVE_DOWN_RIGHT = {1,1};
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
 const string CHARACTER_ROLL_IMAGE = "images/dash.png";
 const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
+const string CHARACTER_INVULN_IMAGE = "images/invuln.png";
 
 const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
 const double CHARACTER_ACCEL_PER_FRAME = 0.6; // Acceleration speed of the plater
@@ -78,17 +82,21 @@ const int CHARACTER_ROLL_SPEED = 14;
 const int CHARACTER_ROLL_COOLDOWN = 180;
 
 const int CHARACTER_RED = 255; // red hue of player
-const int CHARACTER_GREEN = 255; // green hue of player
-const int CHARACTER_BLUE = 255; // blue hue of player
+const int CHARACTER_GREEN = 100; // green hue of player
+const int CHARACTER_BLUE = 100; // blue hue of player
 
 const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
 const int CHARACTER_DEATH_DURATION = 150; // the number of frames the player remains dead for
 const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH*4;
+const int CHARACTER_INVULN_FRAMES = 100;
 
 const int CHARACTER_ROLL_OUTLINE_WIDTH = CHARACTER_WIDTH*1.5;
 const int CHARACTER_ROLL_OUTLINE_HEIGHT = CHARACTER_HEIGHT*1.5;
+
+const int CHARACTER_INVULN_IMAGE_WIDTH = CHARACTER_WIDTH*1.7;
+const int CHARACTER_INVULN_IMAGE_HEIGHT = CHARACTER_HEIGHT*1.7;
 
 // codes for the different weapons player can use
 enum CHARACTER_WEAPONS {
@@ -181,7 +189,7 @@ const int WALL_SHADOW_GREEN = 200; // green component of walls shadow
 const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
-const int SCREEN_FULLSCREEN = false; // whether the screen should be fullscreen
+const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
 
 const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
@@ -300,9 +308,9 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = false;
-const bool DEBUG_KILL_PLAYER = false;
-const bool DEBUG_DRAW_MOUSE_POINT = false;
+const bool DEBUG_HIDE_SHADOWS = true;
+const bool DEBUG_KILL_PLAYER = true;
+const bool DEBUG_DRAW_MOUSE_POINT = true;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
 const int DEBUG_NUM_PLAYERS = 4;
@@ -333,18 +341,26 @@ protected:
     forward_list<Wall*>* wallContainer;
     forward_list<coordSet>* spawnPoints;
     forward_list<Projectile>* projectileList;
+    SDL_Renderer** gameRenderer;
 
-    SDL_Renderer* gameRenderer;
+    int swidth;
+    int sheight;
+    bool fullscreen;
 public:
     Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
      forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
-     SDL_Renderer* renderer);
+     SDL_Renderer** renderer);
 
     forward_list<Player>* players(void) {return playerList;}
     forward_list<Wall*>* walls(void) {return wallContainer;}
     forward_list<coordSet>* spawns(void) {return spawnPoints;}
     forward_list<Projectile>* projectiles(void) {return projectileList;}
-    SDL_Renderer* renderer(void) {return gameRenderer;}
+    SDL_Renderer* renderer(void) {return *gameRenderer;}
+    int screenWidth(void) {return swidth;}
+    int screenHeight(void) {return sheight;}
+    int isFullscreen(void) {return fullscreen;}
+
+    void setSize(int w, int h) {swidth = w; sheight = h;}
 };
 
 
@@ -368,6 +384,10 @@ protected:
     int rollFrames;
     int rollCooldown;
 
+    bool invulnerable;
+    int invulnFrames;
+
+
     // color of the players sprite
     colorSet playerColors;
 
@@ -383,6 +403,7 @@ protected:
     // the sprite sheet for the player
     SDL_Texture* playerImage;
     SDL_Texture* rollOutline;
+    SDL_Texture* invulnImage;
     SDL_Renderer* playerRenderer;
 
     DeathObject* deathMarker;
@@ -700,7 +721,7 @@ public:
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
      forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
-bool init(SDL_Window** window, SDL_Renderer** renderer); // initializes the same (including SDL)
+bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
