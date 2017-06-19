@@ -88,9 +88,9 @@ const int CHARACTER_BLUE = 100; // blue hue of player
 const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
-const int CHARACTER_DEATH_DURATION = 150; // the number of frames the player remains dead for
+const int CHARACTER_DEATH_DURATION = 300; // the number of frames the player remains dead for
 const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH*4;
-const int CHARACTER_INVULN_FRAMES = 100;
+const int CHARACTER_INVULN_FRAMES = 150;
 
 const int CHARACTER_ROLL_OUTLINE_WIDTH = CHARACTER_WIDTH*1.5;
 const int CHARACTER_ROLL_OUTLINE_HEIGHT = CHARACTER_HEIGHT*1.5;
@@ -126,7 +126,7 @@ const double PISTOL_PROJECTILE_SPEED = 16.0;
 const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
 const int SHOTGUN_PROJECTILE_SPREAD = 8;
 const int SHOTGUN_SHOT_DELAY = 50;
-const double SHOTGUN_PROJECTILE_SPEED = 12.0;
+const double SHOTGUN_PROJECTILE_SPEED = 10.0;
 
 
 /* Defaults
@@ -228,7 +228,18 @@ const int MAPBOX_NUM_CORNERS = 4;
 const int MAPBOX_MINIMUM_WIDTH = CHARACTER_WIDTH*1.4;
 const int MAPBOX_MINIMUM_HEIGHT = CHARACTER_WIDTH*1.4;
 
-const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH*1.5;
+const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH*3;
+
+/* Default generation settings
+const int MAPBOX_START_ITERATIONS = 4;
+const int MAPBOX_DIVIDE_ROLL_MAX = 100;
+const int MAPBOX_NUM_CORNERS = 4;
+
+const int MAPBOX_MINIMUM_WIDTH = CHARACTER_WIDTH*1.4;
+const int MAPBOX_MINIMUM_HEIGHT = CHARACTER_WIDTH*1.4;
+
+const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH*3;
+*/
 
 // HUD parameters
 const int HUD_WIDTH = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
@@ -308,9 +319,9 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = true;
+const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = true;
-const bool DEBUG_DRAW_MOUSE_POINT = true;
+const bool DEBUG_DRAW_MOUSE_POINT = false;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
 const int DEBUG_NUM_PLAYERS = 4;
@@ -544,13 +555,13 @@ private:
 
 
 public:
+    ~Wall(void); // frees any memory associated with the wall
     Wall(int x, int y, int w, int h); // initializer function
     SDL_Rect getLocation(void) {return wallLocation;} // returns the SDL_Rect describing the wall
     bool checkCollision(int x, int y, int radius); // checks if the object at (x, y) with radius r is in contact with the wall
     void render(SDL_Renderer* renderer); // draw the wall to the screen
     void renderShadow(int x, int y, int r, int g, int b,
      SDL_Renderer* renderer); // draw the LOS shadow by the wall to the screen
-    void deleteObject(void); // frees any memory associated with the wall
 };
 
 

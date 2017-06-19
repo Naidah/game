@@ -10,6 +10,7 @@ MAJOR:
     - Update angle before taking shots
     -- Get fullscreen working
     --- NETCODE
+    - Make a HUD class
 
 MINOR:
     - Improve dash outline
@@ -73,17 +74,12 @@ int main(int argc, char const *argv[]) {
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
-    
 
-    
-
-
-    
 
     coordSet initSpawn;
     for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList);
-        playerList.push_front(Player(renderer, initSpawn.x, initSpawn.y, i, new AssaultRifle));
+        playerList.push_front(Player(renderer, initSpawn.x, initSpawn.y, i, new Shotgun));
         if (initSpawn.x == 0) {
             playerList.front().killPlayer();
         }
@@ -179,7 +175,7 @@ void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<
         bullet->deleteObject();
     }
     for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
-        (*wall)->deleteObject();
+        delete *wall;
     }
     SDL_Quit();
 }
@@ -1086,6 +1082,10 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
     wallColors.blue = WALL_BLUE;
 }
 
+Wall::~Wall(void) {
+
+}
+
 bool Wall::checkCollision(int x, int y, int radius) {
     // checks to see whether an object has collided with the wall
     bool collision = false; // whether a collision has been detected
@@ -1292,10 +1292,6 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
     }
 
     filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, UI_COLOR_MAX_VALUE); // draws the shadow using the renderer
-}
-
-void Wall::deleteObject(void) {
-    // No variables to clear, kept in case some added later
 }
 
 
