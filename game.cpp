@@ -42,9 +42,9 @@ MINOR:
 #include <math.h> // contains math functions (sqrt, pow, etc) for use
 #include <algorithm> // contains min/max functions used
 #include <forward_list> // container structure used to hold objects in game
-#include <list>
-#include <map>
-#include <ctime>
+#include <list> // stores objects during map creation
+#include <map> // used to store settings during config reading
+#include <ctime> // used to randomise the seed
 
 #include "game.h" // contains program constants to avoid cluttering main file
 
@@ -53,34 +53,39 @@ using namespace std;
 
 
 int main(int argc, char const *argv[]) {
+    srand(time(NULL)); // initialize the seed
+
     // control/important variables for throughout the program
-    srand(time(NULL));
     bool gameRunning = true; // variable to control the game loop
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
     int playerMainX;
     int playerMainY;
-    hudInfo hudInfoContainer;
+    hudInfo hudInfoContainer; // stores elements needed for drawing the hud
 
-    forward_list<Wall*> wallContainer;
-    forward_list<coordSet> spawnPoints;
-    forward_list<Player> playerList;
-    forward_list<Projectile> projectileList;
-    generateMap(&wallContainer, &spawnPoints);
+    forward_list<Wall*> wallContainer; // stores the game walls
+    forward_list<coordSet> spawnPoints; // stores spawn point locations
+    forward_list<Player> playerList; // stores the players
+    forward_list<Projectile> projectileList; // stores the current set of projectiles
+    generateMap(&wallContainer, &spawnPoints); // generate a random set of walls and spawn points for the game
 
+    // initialize a game object to store game elements and data to pass around the program
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, &renderer);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
+
+    // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
 
 
 
-    coordSet initSpawn;
+    coordSet initSpawn; // temporarily stores spawn points for each player
     for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
-        initSpawn = getSpawnPoint(spawnPoints, playerList);
+        initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
         playerList.push_front(Player(renderer, initSpawn.x, initSpawn.y, i, new Shotgun));
         if (initSpawn.x == 0) {
+            // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList.front().killPlayer();
         }
     }
@@ -88,13 +93,13 @@ int main(int argc, char const *argv[]) {
 
 
     
-    forward_list<Projectile> newList;
-    forward_list<BulletExplosion> explosionList;
-    forward_list<BulletExplosion> explosionUpdated;
+    forward_list<Projectile> newList; // temporarily store projectiles that have not collided
+    forward_list<BulletExplosion> explosionList; // stores explosions created by projectile collisions
+    forward_list<BulletExplosion> explosionUpdated; // temporary store for active projectiles
 
 
-    while (gameRunning == true) {
-        while (SDL_PollEvent(&eventHandler) != 0) {
+    while (gameRunning == true) { // begin game loop
+        while (SDL_PollEvent(&eventHandler) != 0) { // check each event instance to ensure the game is not quit
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
                 gameRunning = false;
             } else if (eventHandler.type == SDL_KEYDOWN) {
