@@ -1531,7 +1531,7 @@ bool MapBox::checkSameBox(MapBox* box) {
 }
 
 MapBox* MapBox::copyBox(void) {
-    return new MapBox(x, y, w, h, 0, 0);
+    return new MapBox(x, y, w, h, iterations, divideChance);
 }
 
 
@@ -1557,16 +1557,17 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
         currBox = mapBoxes.front();
         mapBoxes.pop_front();
         if (currBox->getIterations() == 0) {
-            boxesComplete.push_front(currBox);
+            boxesComplete.push_front(currBox->copyBox());
         } else {
             boxesSplit = currBox->divideBox();
             for (auto subBox = boxesSplit.begin(); subBox != boxesSplit.end(); subBox++) {
                 mapBoxes.push_back(*subBox);
             }
-            delete currBox;
         }
+        delete currBox;
     }
     MapBox* boxSelected;
+    //MapBox* boxCompare;
     list<MapBox*> mapBoxesTemp;
     int boxSelection;
     int index;
@@ -1587,12 +1588,17 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
                 mapBoxesTemp.push_front(*box);
             } else if (boxSelected->checkSameBox(*box) == false) {
                 spawnPoints->push_front((*box)->getCentre());
+                delete *box;
+            } else {
+                delete *box;
             }
         }
+        boxesComplete.clear();
         boxesComplete = mapBoxesTemp;
     }
     for (auto box = boxesFinal.begin(); box != boxesFinal.end(); box++) {
         wallContainer->push_front((*box)->generateWall());
+        delete *box;
     }
 }
 
