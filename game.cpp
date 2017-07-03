@@ -11,6 +11,7 @@ MAJOR:
     - Make a HUD class
 
     -- rework quit game to work off the Game object
+    -- redo shotgun spread to be based off spliting within a total, no on a between shot basis
     -- redo characters, projectiles, etc to be called by reference
     -- setup time in seconds rather than frames
 
@@ -92,7 +93,7 @@ int main(int argc, char const *argv[]) {
     coordSet initSpawn; // temporarily stores spawn points for each player
     for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList.push_front(Player(renderer, initSpawn.x, initSpawn.y, i, new Shotgun));
+        playerList.push_front(Player(game, initSpawn.x, initSpawn.y, i, new Shotgun));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList.front().killPlayer();
@@ -173,7 +174,6 @@ int main(int argc, char const *argv[]) {
         if (frameEnd - frameStart < SCREEN_TICKRATE) {
             SDL_Delay(SCREEN_TICKRATE - (frameEnd - frameStart));
         }
-        cout << SDL_GetTicks() - frameStart << "\n";
     }
 
     quitGame(window, playerList, wallContainer, projectileList); // quit the game when the session finishes
@@ -283,8 +283,11 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
     SDL_RenderSetViewport(game->renderer(), &gamespaceViewport); // set the game viewport
 
     // fill the gamespace background in with the colour set
-    SDL_SetRenderDrawColor(game->renderer(), UI_BACKGROUND_COLOR_RED,
-     UI_BACKGROUND_COLOR_GREEN, UI_BACKGROUND_COLOR_BLUE, UI_BACKGROUND_COLOR_ALPHA);
+    SDL_SetRenderDrawColor(game->renderer(),
+     game->primaryColors().red*UI_BACKGROUND_MULTIPLIER+UI_BACKGROUND_ADDITION,
+     game->primaryColors().green*UI_BACKGROUND_MULTIPLIER+UI_BACKGROUND_ADDITION,
+     game->primaryColors().blue*UI_BACKGROUND_MULTIPLIER+UI_BACKGROUND_ADDITION,
+     UI_COLOR_MAX_VALUE);
     SDL_Rect background {0, 0, GAMESPACE_WIDTH, GAMESPACE_HEIGHT};
     SDL_RenderFillRect(game->renderer(), &background);
 
@@ -299,17 +302,16 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
 
     if (DEBUG_HIDE_SHADOWS != true) { // draws shadows by default unless debug settings are enabled
         for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
-            (*wall)->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
-             UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, game->renderer());
+            (*wall)->renderShadow(playerMainX, playerMainY, game);
         }
     }
 
     for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
-        (*wall)->render(game->renderer());
+        (*wall)->render(game);
     }
 
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-        //explosion->render(game->renderer());
+        explosion->render(game->renderer());
     }
 
     if (DEBUG_DRAW_SPAWN_POINTS == true) { // if enabled in debug settings, draw points indicating spawpoints
@@ -589,7 +591,7 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     string value;
     ifstream configFile (CONFIG_FILE_LOCATION, ifstream::in); // open the config file
 
-    regex pattern("([a-z]+)=([0-9]+)"); // create a regex used to extract data from each line
+    regex pattern("([a-zA-Z]+)=([a-zA-Z0-9]+)"); // create a regex used to extract data from each line
     smatch matches; // datatype to store the regex matches
     map<string, string> configElements; // map used to store the value of each data item
 
@@ -620,11 +622,109 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
         fullscreen = SCREEN_FULLSCREEN;
     }
 
+    string primColor = configElements["primaryColor"];
+    if (primColor != "") {
+        if (primColor == "red") {
+            primaryColor.red = COLOR_RED_RED;
+            primaryColor.blue = COLOR_RED_BLUE;
+            primaryColor.green = COLOR_RED_GREEN;
+        } else if (primColor == "green") {
+            primaryColor.red = COLOR_GREEN_RED;
+            primaryColor.blue = COLOR_GREEN_BLUE;
+            primaryColor.green = COLOR_GREEN_GREEN;
+        } else if (primColor == "blue") {
+            primaryColor.red = COLOR_BLUE_RED;
+            primaryColor.blue = COLOR_BLUE_BLUE;
+            primaryColor.green = COLOR_BLUE_GREEN;
+        } else if (primColor == "purple") {
+            primaryColor.red = COLOR_PURPLE_RED;
+            primaryColor.blue = COLOR_PURPLE_BLUE;
+            primaryColor.green = COLOR_PURPLE_GREEN;
+        } else if (primColor == "yellow") {
+            primaryColor.red = COLOR_YELLOW_RED;
+            primaryColor.blue = COLOR_YELLOW_BLUE;
+            primaryColor.green = COLOR_YELLOW_GREEN;
+        } else if (primColor == "cyan") {
+            primaryColor.red = COLOR_CYAN_RED;
+            primaryColor.blue = COLOR_CYAN_BLUE;
+            primaryColor.green = COLOR_CYAN_GREEN;
+        } else if (primColor == "pink") {
+            primaryColor.red = COLOR_PINK_RED;
+            primaryColor.blue = COLOR_PINK_BLUE;
+            primaryColor.green = COLOR_PINK_GREEN;
+        } else if (primColor == "orange") {
+            primaryColor.red = COLOR_ORANGE_RED;
+            primaryColor.blue = COLOR_ORANGE_BLUE;
+            primaryColor.green = COLOR_ORANGE_GREEN;
+        } else if (primColor == "white") {
+            primaryColor.red = COLOR_WHITE_RED;
+            primaryColor.blue = COLOR_WHITE_BLUE;
+            primaryColor.green = COLOR_WHITE_GREEN;
+        } else {
+            primaryColor.red = COLOR_BLUE_RED;
+            primaryColor.blue = COLOR_BLUE_BLUE;
+            primaryColor.green = COLOR_BLUE_GREEN;
+        }
+    } else {
+        primaryColor.red = COLOR_BLUE_RED;
+        primaryColor.blue = COLOR_BLUE_BLUE;
+        primaryColor.green = COLOR_BLUE_GREEN;
+    }
+
+    string secColor = configElements["secondaryColor"];
+    if (secColor != "") {
+        if (secColor == "red") {
+            secondaryColor.red = COLOR_RED_RED;
+            secondaryColor.blue = COLOR_RED_BLUE;
+            secondaryColor.green = COLOR_RED_GREEN;
+        } else if (secColor == "green") {
+            secondaryColor.red = COLOR_GREEN_RED;
+            secondaryColor.blue = COLOR_GREEN_BLUE;
+            secondaryColor.green = COLOR_GREEN_GREEN;
+        } else if (secColor == "blue") {
+            secondaryColor.red = COLOR_BLUE_RED;
+            secondaryColor.blue = COLOR_BLUE_BLUE;
+            secondaryColor.green = COLOR_BLUE_GREEN;
+        } else if (secColor == "purple") {
+            secondaryColor.red = COLOR_PURPLE_RED;
+            secondaryColor.blue = COLOR_PURPLE_BLUE;
+            secondaryColor.green = COLOR_PURPLE_GREEN;
+        } else if (secColor == "yellow") {
+            secondaryColor.red = COLOR_YELLOW_RED;
+            secondaryColor.blue = COLOR_YELLOW_BLUE;
+            secondaryColor.green = COLOR_YELLOW_GREEN;
+        } else if (secColor == "cyan") {
+            secondaryColor.red = COLOR_CYAN_RED;
+            secondaryColor.blue = COLOR_CYAN_BLUE;
+            secondaryColor.green = COLOR_CYAN_GREEN;
+        } else if (secColor == "pink") {
+            secondaryColor.red = COLOR_PINK_RED;
+            secondaryColor.blue = COLOR_PINK_BLUE;
+            secondaryColor.green = COLOR_PINK_GREEN;
+        } else if (secColor == "orange") {
+            secondaryColor.red = COLOR_ORANGE_RED;
+            secondaryColor.blue = COLOR_ORANGE_BLUE;
+            secondaryColor.green = COLOR_ORANGE_GREEN;
+        } else if (primColor == "white") {
+            primaryColor.red = COLOR_WHITE_RED;
+            primaryColor.blue = COLOR_WHITE_BLUE;
+            primaryColor.green = COLOR_WHITE_GREEN;
+        } else {
+            secondaryColor.red = COLOR_BLUE_RED;
+            secondaryColor.blue = COLOR_BLUE_BLUE;
+            secondaryColor.green = COLOR_BLUE_GREEN;
+        }
+    } else {
+        secondaryColor.red = COLOR_BLUE_RED;
+        secondaryColor.blue = COLOR_BLUE_BLUE;
+        secondaryColor.green = COLOR_BLUE_GREEN;
+    }
+
     configFile.close();
 }
 
 // Functions related to the player class
-Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* gun) {
+Player::Player(Game* game, int startX, int startY, int idNum, Weapon* gun) {
     // initialization function for the player class
     //set the players default coordinated
     playerRect.x = startX-CHARACTER_WIDTH/2;
@@ -642,9 +742,9 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     angle = 0.0;
 
     // load in the players spritesheet
-    playerImage = loadImage(CHARACTER_IMAGE_LOCATION, renderer);
-    rollOutline = loadImage(CHARACTER_ROLL_IMAGE, renderer);
-    invulnImage = loadImage(CHARACTER_INVULN_IMAGE, renderer);
+    playerImage = loadImage(CHARACTER_IMAGE_LOCATION, game->renderer());
+    rollOutline = loadImage(CHARACTER_ROLL_IMAGE, game->renderer());
+    invulnImage = loadImage(CHARACTER_INVULN_IMAGE, game->renderer());
 
     // set the players default speed to 0
     velx = 0;
@@ -670,12 +770,18 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     id = idNum; // set the ID number to the one provided
 
     // set the players color scheme
-    playerColors.red = CHARACTER_RED;
-    playerColors.green = CHARACTER_GREEN;
-    playerColors.blue = CHARACTER_BLUE;
+    if (id == CHARACTER_MAIN_ID) {
+        playerColors.red = game->primaryColors().red;
+        playerColors.green = game->primaryColors().green;
+        playerColors.blue = game->primaryColors().blue;
+    } else {
+        playerColors.red = game->secondaryColors().red;
+        playerColors.green = game->secondaryColors().green;
+        playerColors.blue = game->secondaryColors().blue;
+    }
     playerColors.alpha = UI_COLOR_MAX_VALUE;
 
-    playerRenderer = renderer;
+    playerRenderer = game->renderer();
     deathMarker = NULL;
 }
 
@@ -1001,7 +1107,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler)
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
             game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
-             projectileAngle, AR_PROJECTILE_SPEED, game->renderer(), player->getID()));
+             projectileAngle, AR_PROJECTILE_SPEED, game, player->getID()));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         }
@@ -1064,7 +1170,7 @@ void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
                 game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
-                 projectileAngle, PISTOL_PROJECTILE_SPEED, game->renderer(), player->getID()));
+                 projectileAngle, PISTOL_PROJECTILE_SPEED, game, player->getID()));
             }
         }
     } else {
@@ -1128,7 +1234,7 @@ void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
                 projectileAngle = player->getAngle()+n*SHOTGUN_PROJECTILE_SPREAD; // set base angle of projectile
                 projectileAngle += (rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2;
                 game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
-                 projectileAngle, SHOTGUN_PROJECTILE_SPEED, game->renderer(), player->getID()));
+                 projectileAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
@@ -1161,11 +1267,6 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
     wallLocation.y = y;
     wallLocation.w = w;
     wallLocation.h = h;
-
-    // set the walls color
-    wallColors.red = WALL_RED;
-    wallColors.green = WALL_GREEN;
-    wallColors.blue = WALL_BLUE;
 }
 
 Wall::~Wall(void) {
@@ -1232,14 +1333,15 @@ bool Wall::checkCollision(int x, int y, int radius) {
 }
 
 
-void Wall::render(SDL_Renderer* renderer) {
+void Wall::render(Game* game) {
     // draws the wall to the screen using the supplied renderer
-    SDL_SetRenderDrawColor(renderer, wallColors.red, wallColors.green,
-     wallColors.blue, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &wallLocation);
+    SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red*WALL_COLOR_SCALE,
+     game->primaryColors().green*WALL_COLOR_SCALE, game->primaryColors().blue*WALL_COLOR_SCALE,
+     UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &wallLocation);
 }
 
-void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* renderer) {
+void Wall::renderShadow(int x, int y, Game* game) {
     // arrays containing the coords of the corner
     Sint16 coordsX[5];
     Sint16 coordsY[5];
@@ -1376,14 +1478,17 @@ void Wall::renderShadow(int x, int y, int r, int g, int b, SDL_Renderer* rendere
             }
         }
     }
+    int r = game->primaryColors().red*SHADOW_COLOR_SCALE;
+    int g = game->primaryColors().green*SHADOW_COLOR_SCALE;
+    int b = game->primaryColors().blue*SHADOW_COLOR_SCALE;
 
-    filledPolygonRGBA(renderer, coordsX, coordsY, n, r, g, b, UI_COLOR_MAX_VALUE); // draws the shadow using the renderer
+    filledPolygonRGBA(game->renderer(), coordsX, coordsY, n, r, g, b, UI_COLOR_MAX_VALUE); // draws the shadow using the renderer
 }
 
 
 
 // Functions related to the projectile class
-Projectile::Projectile(int x, int y, double a, const double speed, SDL_Renderer* renderer, int id) {
+Projectile::Projectile(int x, int y, double a, const double speed, Game* game, int id) {
     // set the location of the projectile
     currPosX = x;
     currPosY = y;
@@ -1405,14 +1510,21 @@ Projectile::Projectile(int x, int y, double a, const double speed, SDL_Renderer*
     velx = -speed * cos(angle*M_PI/180);
     vely = -speed * sin(angle*M_PI/180);
 
-    projectileColors.red = PROJECTILE_RED;
-    projectileColors.blue = PROJECTILE_BLUE;
-    projectileColors.green = PROJECTILE_GREEN;
+    if (id == CHARACTER_MAIN_ID) {
+        projectileColors.red = game->primaryColors().red;
+        projectileColors.blue = game->primaryColors().blue;
+        projectileColors.green = game->primaryColors().green;
+    } else {
+        projectileColors.red = game->secondaryColors().red;
+        projectileColors.blue = game->secondaryColors().blue;
+        projectileColors.green = game->secondaryColors().green;
+    }
+    
 
     ownerID = id;
 
     // load the spritesheet to memory
-    projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, renderer);
+    projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
  }
 
 void Projectile::setProjectileCentre(void) {
@@ -1829,6 +1941,4 @@ void testDistBetweenPoints() {
     assert(distBetweenPoints(10, 10, -1, 1) == sqrt(202));
     assert(distBetweenPoints(2, 2, 2, 2) == sqrt(0));
     assert(distBetweenPoints(16, 17, 17, 16) == sqrt(2));
-
-    cout << "distBetweenPoints passed all test\n";
 }

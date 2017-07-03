@@ -48,7 +48,54 @@ typedef struct _coordSet {
 
 // General Parameters
 
-// RGB color of backgroun on images to allow tranparency
+// values of the different colour schemes that can be used
+// red
+const int COLOR_RED_RED = 255;
+const int COLOR_RED_GREEN = 0;
+const int COLOR_RED_BLUE = 0;
+
+// green
+const int COLOR_GREEN_RED = 0;
+const int COLOR_GREEN_GREEN = 255;
+const int COLOR_GREEN_BLUE = 0;
+
+// blue
+const int COLOR_BLUE_RED = 0;
+const int COLOR_BLUE_GREEN = 0;
+const int COLOR_BLUE_BLUE = 255;
+
+// purple
+const int COLOR_PURPLE_RED = 200;
+const int COLOR_PURPLE_GREEN = 0;
+const int COLOR_PURPLE_BLUE = 200;
+
+// yellow
+const int COLOR_YELLOW_RED = 255;
+const int COLOR_YELLOW_GREEN = 255;
+const int COLOR_YELLOW_BLUE = 0;
+
+// cyan
+const int COLOR_CYAN_RED = 0;
+const int COLOR_CYAN_GREEN = 255;
+const int COLOR_CYAN_BLUE = 255;
+
+// pink
+const int COLOR_PINK_RED = 255;
+const int COLOR_PINK_GREEN = 20;
+const int COLOR_PINK_BLUE = 147;
+
+// orange
+const int COLOR_ORANGE_RED = 255;
+const int COLOR_ORANGE_GREEN = 160;
+const int COLOR_ORANGE_BLUE = 0;
+
+// white
+const int COLOR_WHITE_RED = 255;
+const int COLOR_WHITE_GREEN = 255;
+const int COLOR_WHITE_BLUE = 255;
+
+
+// RGB color of background on images to allow tranparency
 const int COLOR_KEY_RED = 255;
 const int COLOR_KEY_GREEN = 255;
 const int COLOR_KEY_BLUE = 255;
@@ -68,7 +115,7 @@ const direction MOVE_DOWN_RIGHT = {1,1};
 const string CONFIG_FILE_LOCATION = "config.gabisbad";
 
 // Character related constants
-const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
+const string CHARACTER_IMAGE_LOCATION = "images/invuln.png"; // path to the character spritesheet
 const string CHARACTER_ROLL_IMAGE = "images/dash.png";
 const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 const string CHARACTER_INVULN_IMAGE = "images/invuln.png";
@@ -83,10 +130,6 @@ const int CHARACTER_HEIGHT = 32; // height of the player in the default screen s
 const int CHARACTER_ROLL_DURATION = 14;
 const int CHARACTER_ROLL_SPEED = 14;
 const int CHARACTER_ROLL_COOLDOWN = 180;
-
-const int CHARACTER_RED = 255; // red hue of player
-const int CHARACTER_GREEN = 100; // green hue of player
-const int CHARACTER_BLUE = 100; // blue hue of player
 
 const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
@@ -166,10 +209,6 @@ const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png"; // location of t
 const int PROJECTILE_WIDTH = 8; // width of projectile image on default screen size
 const int PROJECTILE_HEIGHT = 8; // height of projectile image on default screen size
 
-const int PROJECTILE_RED = 0; // red hue of projectile
-const int PROJECTILE_GREEN = 100; // green hue of projectile
-const int PROJECTILE_BLUE = 0; // blue hue of projectile
-
 // identifiers for which object type an object collides with
 enum PROJECTILE_COLLISION_IDENTIFIERS {
     PROJECTILE_COLLISION_NONE,
@@ -183,13 +222,8 @@ const int PROJECTILE_EXPLOSION_DURATION = 10;
 const string PROJECTILE_EXPLOSION_IMAGE = "images/deathCircle.png";
 
 // Wall related constats
-const int WALL_RED = 0; // red hue of wall
-const int WALL_GREEN = 0; // green hue of wall
-const int WALL_BLUE = 200; // blue hue of wall
-
-const int WALL_SHADOW_RED = 200; // red component of walls shadow
-const int WALL_SHADOW_GREEN = 200; // green component of walls shadow
-const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
+const double WALL_COLOR_SCALE = 0.65;
+const double SHADOW_COLOR_SCALE = 0.3;
 
 // Screen Parameters
 const int SCREEN_FPS = 60; // desired framerate of the screen
@@ -201,17 +235,19 @@ const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT*1; // size of screen
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*1;
+const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen when no value is in the config file
+const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 
 // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
 
+const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
+// multiplier on the primary color used in determining background color
+const double UI_BACKGROUND_MULTIPLIER = 1-(double)UI_BACKGROUND_ADDITION/UI_COLOR_MAX_VALUE;
 const int UI_BACKGROUND_COLOR_RED = 100;
 const int UI_BACKGROUND_COLOR_GREEN =160;
 const int UI_BACKGROUND_COLOR_BLUE = 255;
-const int UI_BACKGROUND_COLOR_ALPHA = 255;
 
 const int UI_SHADOW_COLOR_RED = 10;
 const int UI_SHADOW_COLOR_GREEN = 10;
@@ -337,7 +373,7 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = true;
+const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
@@ -372,6 +408,9 @@ protected:
     forward_list<Projectile>* projectileList;
     SDL_Renderer** gameRenderer;
 
+    colorSet primaryColor;
+    colorSet secondaryColor;
+
     int swidth;
     int sheight;
     bool fullscreen;
@@ -388,6 +427,8 @@ public:
     int screenWidth(void) {return swidth;}
     int screenHeight(void) {return sheight;}
     int isFullscreen(void) {return fullscreen;}
+    colorSet primaryColors(void) {return primaryColor;}
+    colorSet secondaryColors(void) {return secondaryColor;}
 
     void setSize(int w, int h) {swidth = w; sheight = h;}
 };
@@ -439,7 +480,7 @@ protected:
 
 public:
     // initializer function for the class
-    Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon* weapon);
+    Player(Game* game, int startX, int startY, int idNum, Weapon* weapon);
 
     //getters for the private variables
     Weapon* getWeapon(void) {return weapon;}
@@ -567,8 +608,6 @@ class Wall {
 private:
     // Rect object to hold info on the wall location
     SDL_Rect wallLocation;
-    // color of the wall
-    colorSet wallColors;
 
 
 public:
@@ -576,9 +615,8 @@ public:
     Wall(int x, int y, int w, int h); // initializer function
     SDL_Rect getLocation(void) {return wallLocation;} // returns the SDL_Rect describing the wall
     bool checkCollision(int x, int y, int radius); // checks if the object at (x, y) with radius r is in contact with the wall
-    void render(SDL_Renderer* renderer); // draw the wall to the screen
-    void renderShadow(int x, int y, int r, int g, int b,
-     SDL_Renderer* renderer); // draw the LOS shadow by the wall to the screen
+    void render(Game* game); // draw the wall to the screen
+    void renderShadow(int x, int y, Game* game); // draw the LOS shadow by the wall to the screen
 };
 
 
@@ -610,7 +648,7 @@ private:
     // spritesheet of the projectile
     SDL_Texture* projectileImage;
 public:
-    Projectile(int x, int y, double a, const double speed, SDL_Renderer* renderer, int id);
+    Projectile(int x, int y, double a, const double speed, Game* game, int id);
 
     SDL_Rect getLocation(void) {return projectileRect;}
     colorSet getColors(void) {return projectileColors;}
