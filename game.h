@@ -64,6 +64,9 @@ const direction MOVE_UP_RIGHT = {1,-1};
 const direction MOVE_DOWN_LEFT = {-1,1};
 const direction MOVE_DOWN_RIGHT = {1,1};
 
+// location of the config file
+const string CONFIG_FILE_LOCATION = "config.gabisbad";
+
 // Character related constants
 const string CHARACTER_IMAGE_LOCATION = "images/circleMarked.png"; // path to the character spritesheet
 const string CHARACTER_ROLL_IMAGE = "images/dash.png";
@@ -189,6 +192,9 @@ const int WALL_SHADOW_GREEN = 200; // green component of walls shadow
 const int WALL_SHADOW_BLUE = 255; // blue component of walls shadow
 
 // Screen Parameters
+const int SCREEN_FPS = 60; // desired framerate of the screen
+const double SCREEN_TICKRATE = 1000.0 / SCREEN_FPS; // duration of each frame on the screen
+
 const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
 
 const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
@@ -202,9 +208,9 @@ const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT*1;
 // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
 
-const int UI_BACKGROUND_COLOR_RED = 255;
-const int UI_BACKGROUND_COLOR_GREEN = 255;
-const int UI_BACKGROUND_COLOR_BLUE = 0;
+const int UI_BACKGROUND_COLOR_RED = 100;
+const int UI_BACKGROUND_COLOR_GREEN =160;
+const int UI_BACKGROUND_COLOR_BLUE = 255;
 const int UI_BACKGROUND_COLOR_ALPHA = 255;
 
 const int UI_SHADOW_COLOR_RED = 10;
@@ -217,7 +223,7 @@ const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
 
-const int GAMESPACE_MARGIN = 50;
+const int GAMESPACE_MARGIN = 50; // margin within the gamespace where no walls can appear
 
 
 // Constants related to map generation
@@ -276,10 +282,17 @@ const int HUD_AMMO_ICON_BLUE = 200;
 const int HUD_AMMO_ICON_ALPHA = 155;
 
 // rool cooldown display parameters
+const string HUD_COOLDOWN_ICON_LOCATION = "images/ammoIcon.png";
+
 const int HUD_COOLDOWN_WIDTH = HUD_WIDTH/2;
 const int HUD_COOLDOWN_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_COOLDOWN_TOPLEFT_X = 0;
 const int HUD_COOLDOWN_TOPLEFT_Y = HUD_HEIGHT - HUD_COOLDOWN_HEIGHT;
+
+const int HUD_COOLDOWN_ICON_WIDTH = HUD_COOLDOWN_WIDTH*0.6;
+const int HUD_COOLDOWN_ICON_HEIGHT = HUD_COOLDOWN_HEIGHT*0.6;
+const int HUD_COOLDOWN_ICON_TOPLEFT_X = HUD_COOLDOWN_TOPLEFT_X+(HUD_COOLDOWN_WIDTH - HUD_COOLDOWN_ICON_WIDTH)/2;
+const int HUD_COOLDOWN_ICON_TOPLEFT_Y = HUD_COOLDOWN_TOPLEFT_Y+(HUD_COOLDOWN_HEIGHT - HUD_COOLDOWN_ICON_HEIGHT)/2;
 
 const int HUD_COOLDOWN_BOX_RED = 0;
 const int HUD_COOLDOWN_BOX_BLUE = 0;
@@ -288,6 +301,11 @@ const int HUD_COOLDOWN_BOX_GREEN = 0;
 const int HUD_COOLDOWN_BAR_RED = 50;
 const int HUD_COOLDOWN_BAR_BLUE = 150;
 const int HUD_COOLDOWN_BAR_GREEN = 100;
+
+const int HUD_COOLDOWN_ICON_RED = 0;
+const int HUD_COOLDOWN_ICON_GREEN = 200;
+const int HUD_COOLDOWN_ICON_BLUE = 200;
+const int HUD_COOLDOWN_ICON_ALPHA = 155;
 
 // health bar parameters
 const int HUD_HEALTH_WIDTH = HUD_WIDTH;
@@ -319,7 +337,7 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_HIDE_SHADOWS = true;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
@@ -442,7 +460,6 @@ public:
     void successfulShot(void); // called when the player is hit by a bullet
     void killPlayer(void); // kills the player
     void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
-    void setNewPosition(void); // sets a new position for any time the player spawns in
     void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList); // respawn the player after death
 
     //draws the player to the screen
@@ -748,3 +765,6 @@ int generateRandInt(int min, int max);
 double generateRandDouble(double min, double max);
 bool validateSpawnPoint(coordSet point, forward_list<Player> playerList);
 coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> playerList);
+
+//drivers
+void testDistBetweenPoints(void);

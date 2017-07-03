@@ -7,10 +7,12 @@ MAJOR:
     --- Start artwork for objects and background
     -- Comment current work
     - Move code to be in different files to make editing easier
-    - Update angle before taking shots
-    -- Get fullscreen working
     --- NETCODE
     - Make a HUD class
+
+    -- rework quit game to work off the Game object
+    -- redo characters, projectiles, etc to be called by reference
+    -- setup time in seconds rather than frames
 
 MINOR:
     - Improve dash outline
@@ -45,6 +47,7 @@ MINOR:
 #include <list> // stores objects during map creation
 #include <map> // used to store settings during config reading
 #include <ctime> // used to randomise the seed
+#include <cassert>
 
 #include "game.h" // contains program constants to avoid cluttering main file
 
@@ -53,6 +56,7 @@ using namespace std;
 
 
 int main(int argc, char const *argv[]) {
+    testDistBetweenPoints();
     srand(time(NULL)); // initialize the seed
 
     // control/important variables for throughout the program
@@ -63,6 +67,10 @@ int main(int argc, char const *argv[]) {
     int playerMainX;
     int playerMainY;
     hudInfo hudInfoContainer; // stores elements needed for drawing the hud
+
+    // store the start and end times of the frame
+    int frameStart = 0;
+    int frameEnd = 0;
 
     forward_list<Wall*> wallContainer; // stores the game walls
     forward_list<coordSet> spawnPoints; // stores spawn point locations
@@ -77,6 +85,7 @@ int main(int argc, char const *argv[]) {
 
     // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
+    hudInfoContainer.cooldownIcon = loadImage(HUD_COOLDOWN_ICON_LOCATION, renderer);
 
 
 
@@ -99,6 +108,7 @@ int main(int argc, char const *argv[]) {
 
 
     while (gameRunning == true) { // begin game loop
+        frameStart = SDL_GetTicks();
         while (SDL_PollEvent(&eventHandler) != 0) { // check each event instance to ensure the game is not quit
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
                 gameRunning = false;
@@ -114,15 +124,16 @@ int main(int argc, char const *argv[]) {
             character->updateState(&eventHandler, game);   
         }
 
+        // update the explosion effects from bullets
         explosionUpdated.clear();
         for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-            if (explosion->updateState() == true) {
+            if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
                 explosion->deleteObject();
             } else {
                 explosionUpdated.push_front(*explosion);
             }
         }
-        explosionList = explosionUpdated;
+        explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
 
         // move all players and projectiles
@@ -134,31 +145,38 @@ int main(int argc, char const *argv[]) {
             }
         }
 
+        // update all projectiles
         newList.clear();
         for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if (bullet->move(game) != true) {
+            if (bullet->move(game) != true) { // store bullets still in flight
                 newList.push_front(*bullet);
-            } else {
+            } else { // delete and replace with explosions those that have collided
                 explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
                 bullet->deleteObject();
             }
         }
-        projectileList = newList; // create a new list of projectiles to store all that remain on screen
+        projectileList = newList; // store remaining projectiles
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE);
-        SDL_RenderClear(renderer);
-        renderGameSpace(game, explosionList, playerMainX, playerMainY);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
+        SDL_RenderClear(renderer); // clear the previous frame
+        renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
-                renderGameUI(renderer, *character, hudInfoContainer);
+                renderGameUI(renderer, *character, hudInfoContainer); // draw the HUD
             }
         }
 
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
+
+        frameEnd = SDL_GetTicks();
+        if (frameEnd - frameStart < SCREEN_TICKRATE) {
+            SDL_Delay(SCREEN_TICKRATE - (frameEnd - frameStart));
+        }
+        cout << SDL_GetTicks() - frameStart << "\n";
     }
 
-    quitGame(window, playerList, wallContainer, projectileList);
+    quitGame(window, playerList, wallContainer, projectileList); // quit the game when the session finishes
 
     return EXIT_SUCCESS; // return success if the program terminates correctly
 }
@@ -172,7 +190,8 @@ int main(int argc, char const *argv[]) {
 /* -------------------------- FUNCTIONS ------------------------- */
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList) {
-    SDL_DestroyWindow(window);
+    SDL_DestroyWindow(window); // destroy the window
+    // go through all game objects, clearing any memory used and destroying them
     for (auto character = playerList.begin(); character != playerList.end(); character++) {
         character->deleteObject();
     }
@@ -198,7 +217,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
             cout << "Error Creating Window./n SDL_Error " << SDL_GetError() << "\n";
             success = false;
         } else {
-            if (game->isFullscreen() == true) { // If the game is set to be in fullscreen, set it to fullscreen
+            if (game->isFullscreen() == true) { // set the game to fullscreen if required   
                 SDL_SetWindowFullscreen(*window, SDL_WINDOW_FULLSCREEN_DESKTOP);
                 int w;
                 int h;
@@ -206,7 +225,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
                 game->setSize(w, h);
             }
             *renderer = SDL_CreateRenderer(*window, -1,
-             SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC); // create renderer object
+             SDL_RENDERER_ACCELERATED); // create renderer object
             if (renderer == NULL) { // if the renderer failed to initialize, return an error
                 cout << "Renderer failed to initialize. SDL_Error" << SDL_GetError();
                 success = false;
@@ -214,14 +233,16 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
                 SDL_SetRenderDrawColor(*renderer, UI_COLOR_MAX_VALUE,
                  UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE); // Give the renderer a default white state
                 SDL_RenderSetLogicalSize(*renderer, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT);
+                // set the logical render size, which automatically rescales anything in the given size to that of the window
 
                 int imgFlags = IMG_INIT_PNG;
                 if (!(IMG_Init(imgFlags) & imgFlags)) { // initialize SDL_image, returning an error if it fails
                     cout << "SDL_Image failed to initialize. Image Error" << IMG_GetError();
                     success = false;
                 } else {
-                    if (SDLNet_Init() < 0) {
+                    if (SDLNet_Init() < 0) { // initialize SDL_net, returning an error on failure
                         cout << "Error initializing SDLNet: " << SDLNet_GetError() << "\n";
+                        success = false;
                     }
                 }
             }
@@ -231,6 +252,7 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
 }
 
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
+    // loads an image at the given filepath and returns its address in memory
     SDL_Texture* output = NULL;
     SDL_Surface* surfaceAtPath = IMG_Load(path.c_str()); // load the spritesheet as a surface
     if (surfaceAtPath == NULL) { //ensure the image loaded correctly
@@ -249,6 +271,8 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 
 void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
      int playerMainX, int playerMainY) {
+    // renders the main area of the game
+
     // reset the screen for the next frame
     SDL_Rect gamespaceViewport;
     gamespaceViewport.x = GAMESPACE_TOPLEFT_X;
@@ -256,39 +280,44 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
     gamespaceViewport.w = GAMESPACE_WIDTH;
     gamespaceViewport.h = GAMESPACE_HEIGHT;
 
-    SDL_RenderSetViewport(game->renderer(), &gamespaceViewport);
+    SDL_RenderSetViewport(game->renderer(), &gamespaceViewport); // set the game viewport
+
+    // fill the gamespace background in with the colour set
     SDL_SetRenderDrawColor(game->renderer(), UI_BACKGROUND_COLOR_RED,
      UI_BACKGROUND_COLOR_GREEN, UI_BACKGROUND_COLOR_BLUE, UI_BACKGROUND_COLOR_ALPHA);
-
     SDL_Rect background {0, 0, GAMESPACE_WIDTH, GAMESPACE_HEIGHT};
     SDL_RenderFillRect(game->renderer(), &background);
 
     // render all objects to the screen
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
-        character->render(game->renderer());
+            character->render(game->renderer());
     }
+
     for (auto bullet = game->projectiles()->begin(); bullet != game->projectiles()->end(); bullet++) {
         bullet->render(game->renderer());
     }
-    if (DEBUG_HIDE_SHADOWS != true) {
+
+    if (DEBUG_HIDE_SHADOWS != true) { // draws shadows by default unless debug settings are enabled
         for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
             (*wall)->renderShadow(playerMainX, playerMainY, UI_SHADOW_COLOR_RED,
              UI_SHADOW_COLOR_GREEN, UI_SHADOW_COLOR_BLUE, game->renderer());
         }
     }
+
     for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
         (*wall)->render(game->renderer());
     }
+
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-        explosion->render(game->renderer());
+        //explosion->render(game->renderer());
     }
 
-    if (DEBUG_DRAW_SPAWN_POINTS == true) {
+    if (DEBUG_DRAW_SPAWN_POINTS == true) { // if enabled in debug settings, draw points indicating spawpoints
             SDL_SetRenderDrawColor(game->renderer(), 100, 100, 100, UI_COLOR_MAX_VALUE);
             SDL_Rect debugRect;
             debugRect.w = 3;
             debugRect.h = 3;
-            for (auto point = game->spawns()->begin(); point != game->spawns()->end(); point++) {
+            for (auto point = game->spawns()->begin(); point != game->spawns()->end(); point++) { // only draws active spawnpoints if enabled
                 if (validateSpawnPoint(*point, *(game->players())) == true || DEBUG_DRAW_VALID_SPAWNS_ONLY == false) {
                     debugRect.x = point->x;
                     debugRect.y = point->y;
@@ -297,7 +326,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
             }
         }
 
-    if (DEBUG_DRAW_MOUSE_POINT == true) {
+    if (DEBUG_DRAW_MOUSE_POINT == true) { // draw the mouse location to the screen if enabled in debug
         double ratio;
         int mouseX = 0;
         int mouseY = 0;
@@ -319,9 +348,8 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
 }
 
 void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoContainer) {
+    // draw the game HUD to the screen
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
-
-    Weapon* userWeapon = userCharacter.getWeapon();
 
     SDL_Rect hudViewport;
     hudViewport.x = 0;
@@ -338,18 +366,22 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.x = HUD_AMMO_TOPLEFT_X;
     elementRect.y = HUD_AMMO_TOPLEFT_Y;
 
+    // draw the main box
     SDL_SetRenderDrawColor(renderer, HUD_AMMO_BOX_RED, HUD_AMMO_BOX_BLUE, HUD_AMMO_BOX_GREEN, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &elementRect);
 
+    Weapon* userWeapon = userCharacter.getWeapon(); // store the users weapon used in referencing ammo
+
     // create a second bar over the first to show percent of ammo remaining
     SDL_SetRenderDrawColor(renderer, HUD_AMMO_BAR_RED, HUD_AMMO_BAR_BLUE, HUD_AMMO_BAR_GREEN, UI_COLOR_MAX_VALUE);
-    if (userWeapon->isReloading() == false) {
+    if (userWeapon->isReloading() == false) { // if not reloading, show the amount of ammo left relative to the maximum
         elementRect.w *= (double)userWeapon->getCurrAmmo()/(double)userWeapon->getMaxAmmo();
-    } else { // of the player is reloading, show how much time left before reload is finished
+    } else { // if the player is reloading, show how much time left before reload is finished
         elementRect.w *= 1 - (double)userWeapon->getReloadFrames()/(double)userWeapon->getMaxReloadFrames();
     }
     SDL_RenderFillRect(renderer, &elementRect);
 
+    // draw the reload icon on top of the HUD element to indicate its use
     elementRect.w = HUD_AMMO_ICON_WIDTH;
     elementRect.h = HUD_AMMO_ICON_HEIGHT;
     elementRect.x = HUD_AMMO_ICON_TOPLEFT_X;
@@ -373,9 +405,20 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.w *= 1-userCharacter.getRollCooldown()/(double)CHARACTER_ROLL_COOLDOWN;
     SDL_RenderFillRect(renderer, &elementRect);
 
+    // draw the cooldown icon on top of the HUD element to indicate its use
+    elementRect.w = HUD_COOLDOWN_ICON_WIDTH;
+    elementRect.h = HUD_COOLDOWN_ICON_HEIGHT;
+    elementRect.x = HUD_COOLDOWN_ICON_TOPLEFT_X;
+    elementRect.y = HUD_COOLDOWN_ICON_TOPLEFT_Y;
+    SDL_SetTextureAlphaMod(hudInfoContainer.cooldownIcon, HUD_COOLDOWN_ICON_ALPHA);
+    SDL_SetTextureColorMod(hudInfoContainer.cooldownIcon, HUD_COOLDOWN_ICON_RED, HUD_COOLDOWN_ICON_GREEN, HUD_COOLDOWN_ICON_BLUE);
+    SDL_RenderCopy(renderer, hudInfoContainer.cooldownIcon, NULL, &elementRect);
+
 
 
     // draw the health bar
+
+    // draw the background box
     elementRect.w = HUD_HEALTH_WIDTH;
     elementRect.h = HUD_HEALTH_HEIGHT;
     elementRect.x = HUD_HEALTH_TOPLEFT_X;
@@ -384,21 +427,23 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BOX_RED, HUD_HEALTH_BOX_BLUE, HUD_HEALTH_BOX_GREEN, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &elementRect);
 
+    // draw a scaled bar over the top to present hp left or respawn time remaining
     if (userCharacter.isAlive()) {
-        elementRect.w *= (double)userCharacter.getHealth()/(double)CHARACTER_MAX_HP;
+        elementRect.w *= (double)userCharacter.getHealth()/CHARACTER_MAX_HP;
     } else {
-        elementRect.w *= 1 - (double)userCharacter.getDeathFrames()/(double)CHARACTER_DEATH_DURATION;
+        elementRect.w *= 1 - (double)userCharacter.getDeathFrames()/CHARACTER_DEATH_DURATION;
     }
     SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BAR_RED, HUD_HEALTH_BAR_GREEN, HUD_HEALTH_BAR_BLUE, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(renderer, &elementRect);
 
+    // draw divides that show the hp points of the player on the bar
     elementRect.w = HUD_HEALTH_DIVIDE_WIDTH;
     elementRect.h = HUD_HEALTH_DIVIDE_HEIGHT;
     elementRect.y = HUD_HEALTH_DIVIDE_TOPLEFT_Y;
     SDL_SetRenderDrawColor(renderer, HUD_HEALTH_DIVIDE_RED,
      HUD_HEALTH_DIVIDE_BLUE, HUD_HEALTH_DIVIDE_GREEN, UI_COLOR_MAX_VALUE);
     for (int i=1;i<CHARACTER_MAX_HP;i++) {
-        elementRect.x = ((double)HUD_HEALTH_WIDTH/(double)CHARACTER_MAX_HP)*i-((double)elementRect.w/2.0);
+        elementRect.x = ((double)HUD_HEALTH_WIDTH/CHARACTER_MAX_HP)*i-((double)elementRect.w/2.0);
         SDL_RenderFillRect(renderer, &elementRect);
     }
 }
@@ -441,20 +486,23 @@ direction getDirections(void) {
 }
 
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY) {
+    // get the x intercept of a coordinate to a line between two points, given the points y position
     int output = 0;
-    double m = (double)(y1-y2)/(double)(x1-x2); // find the gradient of the line
+    double m = (double)(y1-y2)/(x1-x2); // find the gradient of the line
     output = (double)(interceptY-y1)/m + x1; // calculate the x-value
     return output;
 }
 
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
+    // get the y intercept of a coordinate to a line between two points, given its x position
     int output = 0;
-    double m = (double)(x1-x2)/(double)(y1-y2); // find the gradient
+    double m = (double)(x1-x2)/(y1-y2); // find the gradient
     output = (double)(interceptX-x1)/m + y1; // caluculate the y-value
     return output;
 }
 
 bool checkExitMap(int x, int y, int r) {
+    // check if a point is located inside the game space
     return y-r < 0
      || x-r < 0
      || y+r > SCREEN_HEIGHT_DEFAULT
@@ -462,31 +510,39 @@ bool checkExitMap(int x, int y, int r) {
 }
 
 double generateRandDouble(double min, double max) {
+    // generate a random double between min and max
     double roll = (double)rand() / RAND_MAX;
     roll = min + roll*(max-min);
     return roll;
 }
 
 int generateRandInt(int min, int max) {
+    // generate a random int between min and max
     int roll = (rand()%(max-min))+min;
     return roll;
 }
 
 coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> playerList) {
+    // selects a spawn point from all valid spawn points (not within a certain range of a player)
+    // returns 0,0 if no points are valid, meaning the player will wait until a point becomes available
     list<coordSet> validPoints;
-    coordSet output;
+    coordSet output = {0, 0};
     bool valid;
     int chosenPoint;
     int index;
+
+    // go through each spawn point, adding it to the list of valid spawn points if it is found to be usable
     for (auto point = spawnPoints.begin(); point != spawnPoints.end(); point++) {
         valid = validateSpawnPoint(*point, playerList);
         if (valid == true) {
             validPoints.push_front(*point);
         }
     }
-    if (validPoints.size() > 0) {
+
+    if (validPoints.size() > 0) { // check at least 1 spawn point is available
         chosenPoint = generateRandInt(0, validPoints.size());
         index = 0;
+        // loop through the spawn points until the point at the chosen index is reached
         for (auto point = validPoints.begin(); point != validPoints.end(); point++) {
             if (index == chosenPoint) {
                 output = *point;
@@ -498,13 +554,12 @@ coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> 
 }
 
 bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
+    // check if a spawn point is valid (not within CHARACTER_MIN_RESPAWN_RANGE of a player)
     bool valid = true;
     for (auto player = playerList.begin(); player != playerList.end(); player++) {
         if (distBetweenPoints(point.x, point.y, player->getX(),
          player->getY()) < CHARACTER_MIN_RESPAWN_RANGE && player->isAlive() == true) {
             valid = false;
-            /*cout << distBetweenPoints(point->x, point->y, player->getX(),
-         player->getY()) << " " << point->x << " " << CHARACTER_MIN_RESPAWN_RANGE << "\n";*/
         }
     }
     return valid;
@@ -518,38 +573,47 @@ bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
 
 Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
      forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
-     SDL_Renderer** renderer) {
+     SDL_Renderer** renderer) { 
+    // initializes the Game object
+
+    // set all the parameters to their required values from input
     playerList = playerSet;
     wallContainer = wallSet;
     spawnPoints = spawnSet;
     projectileList = projSet;
     gameRenderer = renderer;
 
+    // initialize variables used to read the config file
     string line;
     string item;
     string value;
-    ifstream configFile ("config.ini", ifstream::in);
+    ifstream configFile (CONFIG_FILE_LOCATION, ifstream::in); // open the config file
 
-    regex pattern("([a-z]+)=([0-9]+)");
-    smatch matches;
-    map<string, string> configElements;
+    regex pattern("([a-z]+)=([0-9]+)"); // create a regex used to extract data from each line
+    smatch matches; // datatype to store the regex matches
+    map<string, string> configElements; // map used to store the value of each data item
 
-    if (configFile.is_open()) {
-        while (getline(configFile, line)) {
+    if (configFile.is_open()) { // check the config file opened correctly
+        while (getline(configFile, line)) { // for each line in the config file, store the data item and its value in the map
             regex_search(line, matches, pattern);
             configElements[matches[1]] = matches[2];
         }
     }
+
+    // for each setting needed from the config file, set its value to that found. If none was found, set it to the default
+    // value in the constants file
     if (configElements["swidth"] != "") {
         swidth = stoi(configElements["swidth"]);
     } else {
         swidth = SCREEN_WIDTH;
     }
+
     if (configElements["sheight"] != "") {
         sheight = stoi(configElements["sheight"]);
     } else {
         sheight = SCREEN_HEIGHT;
     }
+
     if (configElements["fullscreen"] != "") {
         fullscreen = stoi(configElements["fullscreen"]);
     } else {
@@ -599,6 +663,10 @@ Player::Player(SDL_Renderer* renderer, int startX, int startY, int idNum, Weapon
     alive = true;
     deathFrames = 0;
 
+    // initialize the player to be invulnerable
+    invulnerable = true;
+    invulnFrames = CHARACTER_INVULN_FRAMES;
+
     id = idNum; // set the ID number to the one provided
 
     // set the players color scheme
@@ -631,20 +699,21 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
         if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
             if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
-             && rollCooldown == 0 && direction != MOVE_NONE) {
+             && rollCooldown == 0 && direction != MOVE_NONE) { // if the player presses the roll key while they can start rolling
                 rolling = true;
                 rollFrames = CHARACTER_ROLL_DURATION;
                 rollDirection = direction;
             }
-            if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) {
+            if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) { // reload when r is pressed
                 weapon->beginReload();
             }
 
-            if (keyboardState[SDL_SCANCODE_K] && DEBUG_KILL_PLAYER == true) {
+            if (keyboardState[SDL_SCANCODE_K] && DEBUG_KILL_PLAYER == true) { // if enabled in debug settings, kill the player on command
                 killPlayer();
             }
 
             if (rolling == true) {
+                // while rolling, move the player in the initial direction of the roll, and remove the state if they finish
                 rollFrames--;
                 if (direction == MOVE_UP || direction == MOVE_LEFT ||
                  direction == MOVE_DOWN || direction == MOVE_RIGHT) {
@@ -659,7 +728,7 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
                     rollDirection = MOVE_NONE;
                     rollCooldown = CHARACTER_ROLL_COOLDOWN;
                 }
-            } else {
+            } else { // if not rolling, resort to standard movement
                 // directional movement
                 // increment the velocity in each direction according to the movement direction
                 velx += direction.x*CHARACTER_ACCEL_PER_FRAME;
@@ -694,13 +763,15 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
                     velx *= CHARACTER_VEL_MAX/currSpeed;
                 }
 
-                if (rollCooldown > 0) {
+                if (rollCooldown > 0) { // if roll is on cooldown, reduce the time remaining
                     rollCooldown--;
                 }
             }
             // rotate the player to look toward the mouse
             // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
             SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
+
+            // scale the mouse coordinates to those of the viewport
             if ((double)game->screenHeight()/(double)SCREEN_HEIGHT_DEFAULT <
              (double)game->screenWidth()/(double)SCREEN_WIDTH_DEFAULT) {
                 ratio = (double)game->screenHeight()/(double)SCREEN_HEIGHT_DEFAULT;
@@ -715,13 +786,13 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
 
             weapon->takeShot(game, this, eventHandler); // have the player shoot a projectile
         }
-        if (invulnFrames > 0) {
+        if (invulnFrames > 0) { // if invulnerable, take a frame off the counter
             invulnFrames--;
-        } else {
+        } else { // otherwise remove invulnerability
             invulnerable = false;
         }
-    } else {
-        deathFrames -= 1;
+    } else { // if the player is dead, remove a frame and check if they should respawn
+        deathFrames --;
         if (deathFrames <= 0) {
             respawn(game->spawns(), game->players());
         } else {
@@ -780,7 +851,7 @@ void Player::successfulShot(void) {
     }
 }
 
-void Player::killPlayer(void) {
+void Player::killPlayer(void) { // kill the player, and create a object to show their death location
     alive = false;
     deathFrames = CHARACTER_DEATH_DURATION;
     velx = 0;
@@ -790,25 +861,27 @@ void Player::killPlayer(void) {
     deathMarker = new DeathObject(playerRenderer, playerRect, playerColors);
 }
 
-void Player::setNewPosition(void) {
-    playerRect.x = playerRect.x; // placeholder code
-    playerRect.y = playerRect.y;
-    setPlayerCentre();
-}
-
 void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
-    coordSet newPosition = getSpawnPoint(*spawnPoints, *playerList);
-    if (newPosition.x != 0) {
+    // respawns the player to a new position if their respawn timer expires
+    coordSet newPosition = getSpawnPoint(*spawnPoints, *playerList); // get a location to spawn to
+    if (newPosition.x != 0) { // if the player has a position they are able to spawn at, do so, otherwise respawn will call again next frame
+        // reset the players state
+        alive = true;
         invulnerable = true;
-        invulnFrames = CHARACTER_INVULN_FRAMES;
+
+        // reset the players position
         playerRect.x = newPosition.x-CHARACTER_WIDTH/2;
         playerRect.y = newPosition.y-CHARACTER_HEIGHT/2;
-        alive = true;
+        setPlayerCentre();
+
         deathFrames = 0;
-        setNewPosition();
+        invulnFrames = CHARACTER_INVULN_FRAMES;
         health = CHARACTER_MAX_HP;
+
         rollCooldown = 0;
         weapon->resetGun();
+
+        // delete the death marker object now it is no longer needed
         delete deathMarker;
         deathMarker = NULL;
     }
@@ -817,16 +890,22 @@ void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* 
 void Player::render(SDL_Renderer* renderer) {
     // draws the player to the screen using the supplied renderer
     if (alive == true) {
-        if (invulnerable == true) {
+        if (invulnerable == true) { // if the player is in an invulnerable state, draw the icon below them
             SDL_Rect invulnRect;
+            // set the width and height to scale depending on time remaining, getting smaller as it less time is left
+            // smallest size is that of the player, and largest is that of the default size
             invulnRect.w = CHARACTER_INVULN_IMAGE_WIDTH-
              (CHARACTER_INVULN_IMAGE_WIDTH-playerRect.w)*
              (1-((double)invulnFrames/CHARACTER_INVULN_FRAMES));
             invulnRect.h = CHARACTER_INVULN_IMAGE_HEIGHT-
              (CHARACTER_INVULN_IMAGE_HEIGHT-playerRect.h)*
              (1-((double)invulnFrames/CHARACTER_INVULN_FRAMES));
+
+            // set the upper left corner so that the centre of the player and image are the same
             invulnRect.x = playerRect.x - (invulnRect.w-playerRect.w)/2;
             invulnRect.y = playerRect.y - (invulnRect.h-playerRect.h)/2;
+
+            // set the color to that of the player and render
             SDL_SetTextureColorMod(invulnImage, playerColors.red,
              playerColors.green, playerColors.blue);
             SDL_RenderCopy(renderer, invulnImage, NULL, &invulnRect);
@@ -836,7 +915,7 @@ void Player::render(SDL_Renderer* renderer) {
         SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
          angle, NULL, SDL_FLIP_NONE); // draw the player to the screen
         
-        if (rolling == true) {
+        if (rolling == true) { // draw an outline image around the player if they are rolling
             SDL_Rect outlineRect;
             outlineRect.w = CHARACTER_ROLL_OUTLINE_WIDTH;
             outlineRect.h = CHARACTER_ROLL_OUTLINE_HEIGHT;
@@ -865,6 +944,7 @@ void Player::deleteObject(void) {
 
 DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
  colorSet playerColors) {
+    // initialize the death marker of a player
     circleImage = loadImage(CHARACTER_DEATH_IMAGE, renderer);
     circleRect.x = playerCoordinates.x;
     circleRect.y = playerCoordinates.y;
@@ -877,17 +957,18 @@ DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
 }
 
 void DeathObject::updateState(void) {
-    circleColors.alpha -= (double)UI_COLOR_MAX_VALUE/(double)CHARACTER_DEATH_DURATION;
+    // update the objects alpha each frame
+    circleColors.alpha -= (double)UI_COLOR_MAX_VALUE/CHARACTER_DEATH_DURATION;
 }
 
-void DeathObject::render(SDL_Renderer* renderer) {
+void DeathObject::render(SDL_Renderer* renderer) { // draw the marker to its starting position
     SDL_SetTextureColorMod(circleImage, circleColors.red,
      circleColors.green, circleColors.blue);
     SDL_SetTextureAlphaMod(circleImage, circleColors.alpha);
     SDL_RenderCopy(renderer, circleImage, NULL, &circleRect);
 }
 
-DeathObject::~DeathObject(void) {
+DeathObject::~DeathObject(void) { // delete the marker when it expires
     SDL_DestroyTexture(circleImage);
 }
 
@@ -1735,3 +1816,19 @@ void CTcpSocket::OnReady() {
 /*CHostSocket::CHostSocket (CIpAddress& ipAddress) {
     
 }*/
+
+void testDistBetweenPoints() {
+    assert(distBetweenPoints(0, 0, 1, 1) == sqrt(2));
+    assert(distBetweenPoints(0, 0, 0, 0) == sqrt(0));
+    assert(distBetweenPoints(1, 0, 1, 1) == 1);
+    assert(distBetweenPoints(1, 0, 0, 1) == sqrt(2));
+    assert(distBetweenPoints(0, 0, 3, 4) == 5);
+
+    assert(distBetweenPoints(0, 0, 10, 1) == sqrt(101));
+    assert(distBetweenPoints(3, 4, 5, 6) == sqrt(8));
+    assert(distBetweenPoints(10, 10, -1, 1) == sqrt(202));
+    assert(distBetweenPoints(2, 2, 2, 2) == sqrt(0));
+    assert(distBetweenPoints(16, 17, 17, 16) == sqrt(2));
+
+    cout << "distBetweenPoints passed all test\n";
+}
