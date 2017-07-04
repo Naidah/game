@@ -35,22 +35,22 @@ MINOR:
 
 #include <SDL.h> // sdl library for graphics features
 #include <SDL_image.h> // sdl library for using PNGs and other image formats
-#include <SDL_net.h>
+#include <SDL_net.h> // sdl library used for multi computer networking
 #include <SDL2_gfxPrimitives.h> // contains library for drawing arbitrary polygons
 
 #include <string> // tools for string manipulations
 #include <iostream> // contains cout output method
-#include <fstream>
-#include <regex>
+#include <fstream> // used to read in the config file
+#include <regex> // used to interpret the config file
 #include <math.h> // contains math functions (sqrt, pow, etc) for use
 #include <algorithm> // contains min/max functions used
 #include <forward_list> // container structure used to hold objects in game
 #include <list> // stores objects during map creation
 #include <map> // used to store settings during config reading
 #include <ctime> // used to randomise the seed
-#include <cassert>
+#include <cassert> // used in drivers to test functions
 
-#include "game.h" // contains program constants to avoid cluttering main file
+#include "game.h" // contains program constants and definitions to avoid cluttering main file
 
 using namespace std;
 
@@ -84,6 +84,7 @@ int main(int argc, char const *argv[]) {
     forward_list<coordSet> spawnPoints; // stores spawn point locations
     forward_list<Player> playerList; // stores the players
     forward_list<Projectile> projectileList; // stores the current set of projectiles
+
     generateMap(&wallContainer, &spawnPoints); // generate a random set of walls and spawn points for the game
 
     // initialize a game object to store game elements and data to pass around the program
@@ -91,16 +92,18 @@ int main(int argc, char const *argv[]) {
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
 
+    
     // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
     hudInfoContainer.cooldownIcon = loadImage(HUD_COOLDOWN_ICON_LOCATION, renderer);
+    SDL_Texture* gameCursor = loadImage(UI_GAME_CURSOR_LOCATION, renderer);
 
 
 
     coordSet initSpawn; // temporarily stores spawn points for each player
     for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList.push_front(Player(game, initSpawn.x, initSpawn.y, i, new Shotgun));
+        playerList.push_front(Player(game, initSpawn.x, initSpawn.y, i, CHARACTER_WEAPON_ASSAULT_RIFLE));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList.front().killPlayer();
@@ -143,7 +146,6 @@ int main(int argc, char const *argv[]) {
         }
         explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
-
         // move all players and projectiles
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             character->move(game->walls());
@@ -173,6 +175,25 @@ int main(int argc, char const *argv[]) {
                 renderGameUI(game, *character, hudInfoContainer); // draw the HUD
             }
         }
+
+        // draw the cursor to the screen
+        SDL_Rect screen = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
+        SDL_RenderSetViewport(game->renderer(), &screen);
+        double ratio;
+        if ((double)game->screenHeight()/SCREEN_HEIGHT_DEFAULT <
+         (double)game->screenWidth()/SCREEN_WIDTH_DEFAULT) {
+            ratio = (double)game->screenHeight()/SCREEN_HEIGHT_DEFAULT;
+        } else {
+            ratio = (double)game->screenWidth()/SCREEN_WIDTH_DEFAULT;
+        }
+        int x, y;
+        SDL_GetMouseState(&x, &y);
+        x /= ratio;
+        y /= ratio;
+        SDL_Rect cursorRect = {x-UI_CURSOR_WIDTH/2, y-UI_CURSOR_HEIGHT/2, UI_CURSOR_WIDTH, UI_CURSOR_HEIGHT};
+        SDL_SetTextureColorMod(gameCursor, game->secondaryColors().red,
+         game->secondaryColors().green, game->secondaryColors().blue);
+        SDL_RenderCopy(renderer, gameCursor, NULL, &cursorRect);
 
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
@@ -237,6 +258,9 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
                 cout << "Renderer failed to initialize. SDL_Error" << SDL_GetError();
                 success = false;
             } else {
+                if (DEBUG_SHOW_CURSOR == false) {
+                    SDL_ShowCursor(SDL_DISABLE);
+                }
                 SDL_SetRenderDrawColor(*renderer, UI_COLOR_MAX_VALUE,
                  UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE); // Give the renderer a default white state
                 SDL_RenderSetLogicalSize(*renderer, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT);
@@ -535,7 +559,8 @@ int getInterceptY(int x1, int y1, int x2, int y2, int interceptX) {
 }
 
 bool checkExitMap(int x, int y, int r) {
-    // check if a point is located inside the game space
+    // check if a circle is contained inside the game space (relative to screen width)
+    // returns true if the circle is outside
     return y-r < 0
      || x-r < 0
      || y+r > SCREEN_HEIGHT_DEFAULT
@@ -742,10 +767,10 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
             secondaryColor.red = COLOR_ORANGE_RED;
             secondaryColor.blue = COLOR_ORANGE_BLUE;
             secondaryColor.green = COLOR_ORANGE_GREEN;
-        } else if (primColor == "white") {
-            primaryColor.red = COLOR_WHITE_RED;
-            primaryColor.blue = COLOR_WHITE_BLUE;
-            primaryColor.green = COLOR_WHITE_GREEN;
+        } else if (secColor == "white") {
+            secondaryColor.red = COLOR_WHITE_RED;
+            secondaryColor.blue = COLOR_WHITE_BLUE;
+            secondaryColor.green = COLOR_WHITE_GREEN;
         } else {
             secondaryColor.red = COLOR_BLUE_RED;
             secondaryColor.blue = COLOR_BLUE_BLUE;
@@ -761,7 +786,7 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
 }
 
 // Functions related to the player class
-Player::Player(Game* game, int startX, int startY, int idNum, Weapon* gun) {
+Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
     // initialization function for the player class
     //set the players default coordinated
     playerRect.x = startX-CHARACTER_WIDTH/2;
@@ -779,9 +804,18 @@ Player::Player(Game* game, int startX, int startY, int idNum, Weapon* gun) {
     angle = 0.0;
 
     // load in the players spritesheet
-    playerImage = loadImage(CHARACTER_IMAGE_LOCATION, game->renderer());
     rollOutline = loadImage(CHARACTER_ROLL_IMAGE, game->renderer());
     invulnImage = loadImage(CHARACTER_INVULN_IMAGE, game->renderer());
+    if (weaponID == CHARACTER_WEAPON_ASSAULT_RIFLE) {
+        playerImage = loadImage(CHARACTER_IMAGE_AR_LOCATION, game->renderer());
+        weapon = new AssaultRifle;
+    } else if (weaponID == CHARACTER_WEAPON_SHOTGUN) {
+        playerImage = loadImage(CHARACTER_IMAGE_SHOTGUN_LOCATION, game->renderer());
+        weapon = new Shotgun;
+    } else {
+        playerImage = loadImage(CHARACTER_IMAGE_PISTOL_LOCATION, game->renderer());
+        weapon = new Pistol;
+    }
 
     // set the players default speed to 0
     velx = 0;
@@ -791,9 +825,6 @@ Player::Player(Game* game, int startX, int startY, int idNum, Weapon* gun) {
     rollDirection = MOVE_NONE;
     rollFrames = 0;
     rollCooldown = 0;
-
-    // assign the weapon pointer to a variable
-    weapon = gun;
 
     // start the player on max health
     health = CHARACTER_MAX_HP;
@@ -1066,6 +1097,7 @@ void Player::render(SDL_Renderer* renderer) {
             outlineRect.y = playerRect.y - (outlineRect.h-playerRect.h)/2;
             SDL_SetTextureColorMod(rollOutline, playerColors.red,
              playerColors.green, playerColors.blue);
+            SDL_SetTextureAlphaMod(rollOutline, CHARACTER_ROLL_ALPHA);
             SDL_RenderCopyEx(renderer, rollOutline, NULL, &outlineRect,
              atan2(-rollDirection.y, -rollDirection.x)*180/M_PI, NULL, SDL_FLIP_NONE);
         }
@@ -1124,10 +1156,11 @@ Weapon::~Weapon(void) {
 }
 
 AssaultRifle::AssaultRifle(void): Weapon() {
-    mouseDown = false;
+    mouseDown = true;
     reloading = false;
     currAmmo = AR_CLIP_SIZE;
     reloadFramesLeft = 0;
+    shotDelay = 0;
 }
 
 AssaultRifle::~AssaultRifle(void) {
@@ -1990,8 +2023,20 @@ void testGetInterceptY(void) {
 
 }
 
-void testCheckExitMap(void){
+void testCheckExitMap(void) {
+    assert(checkExitMap(0, 0, 10) == true);
+    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT, SCREEN_HEIGHT_DEFAULT, 10) == true);
+    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, 10) == false);
+    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT-10, SCREEN_HEIGHT_DEFAULT/2, 10) == false);
+    assert(checkExitMap(SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT-10, 5) == false);
 
+    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT-5, SCREEN_HEIGHT_DEFAULT/2, 10) == true);
+    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, SCREEN_WIDTH_DEFAULT) == true);
+    assert(checkExitMap(10, 10, 10) == false);
+    assert(checkExitMap(9, 9, 10) == true);
+    assert(checkExitMap(0, 0, 0) == false);
+
+    cout << "checkExitMap passed all tests\n";
 }
 
 void testGenerateRandInt(void) {
@@ -2028,5 +2073,34 @@ void testGenerateRandInt(void) {
 }
 
 void testGenerateRandDouble(void) {
+    // for testing number generation, test a set of ranges a large number
+    // of times and make sure results always lie in a range
+    double test;
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandDouble(0.0, 100.0);
+        assert(0.0 <= test && test <= 100.0);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandDouble(2.5, 10.89);
+        assert(2.5 <= test && test <= 10.89);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandDouble(-10.55, 10.55);
+        assert(-10.55 <= test && test <= 10.55);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandDouble(-245.678, -12.21);
+        assert(-245.678 <= test && test <= -12.21);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandDouble(1.111, 111111001.1101); // 12 to 12
+        assert(1.111 <= test && test <= 111111001.1101);
+    }
 
+    // test single possibility edge cases
+    assert(generateRandDouble(0.0,0.0) == 0.0);
+    assert(generateRandDouble(12.12,12.12) == 12.12);
+    assert(generateRandDouble(-5.67,-5.67) == -5.67);
+
+    cout << "generateRandDouble passed all tests\n";
 }

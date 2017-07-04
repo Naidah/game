@@ -4,9 +4,6 @@
 using namespace std;
 
 
-
-
-
 typedef struct _direction {
     double x;
     double y;
@@ -108,7 +105,9 @@ const direction MOVE_DOWN_RIGHT = {1,1};
 const string CONFIG_FILE_LOCATION = "config.gabisbad";
 
 // Character related constants
-const string CHARACTER_IMAGE_LOCATION = "images/invuln.png"; // path to the character spritesheet
+const string CHARACTER_IMAGE_AR_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
+const string CHARACTER_IMAGE_SHOTGUN_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
+const string CHARACTER_IMAGE_PISTOL_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
 const string CHARACTER_ROLL_IMAGE = "images/dash.png";
 const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 const string CHARACTER_INVULN_IMAGE = "images/invuln.png";
@@ -123,6 +122,7 @@ const int CHARACTER_HEIGHT = 32; // height of the player in the default screen s
 const int CHARACTER_ROLL_DURATION = 14;
 const int CHARACTER_ROLL_SPEED = 14;
 const int CHARACTER_ROLL_COOLDOWN = 180;
+const int CHARACTER_ROLL_ALPHA = 100;
 
 const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
@@ -151,7 +151,7 @@ const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
 const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
 const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
 const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
-const double AR_PROJECTILE_SPEED = 18.0;
+const double AR_PROJECTILE_SPEED = 18.0; // speed of an AR projectile
 
 // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
@@ -234,6 +234,10 @@ const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
+const string UI_GAME_CURSOR_LOCATION = "images/gameCursor.png";
+
+const int UI_CURSOR_WIDTH = 16;
+const int UI_CURSOR_HEIGHT = 16;
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
 // multiplier on the primary color used in determining background color
@@ -300,15 +304,15 @@ const double HUD_AMMO_BAR_COLOR_SCALE = 0.75;
 const int HUD_AMMO_ICON_ALPHA = 155;
 
 // rool cooldown display parameters
-const string HUD_COOLDOWN_ICON_LOCATION = "images/ammoIcon.png";
+const string HUD_COOLDOWN_ICON_LOCATION = "images/rollIcon.png";
 
 const int HUD_COOLDOWN_WIDTH = HUD_WIDTH/2;
 const int HUD_COOLDOWN_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_COOLDOWN_TOPLEFT_X = 0;
 const int HUD_COOLDOWN_TOPLEFT_Y = HUD_HEIGHT - HUD_COOLDOWN_HEIGHT;
 
-const int HUD_COOLDOWN_ICON_WIDTH = HUD_COOLDOWN_WIDTH*0.6;
-const int HUD_COOLDOWN_ICON_HEIGHT = HUD_COOLDOWN_HEIGHT*0.6;
+const int HUD_COOLDOWN_ICON_HEIGHT = HUD_COOLDOWN_HEIGHT*0.75;
+const int HUD_COOLDOWN_ICON_WIDTH = HUD_COOLDOWN_ICON_HEIGHT;
 const int HUD_COOLDOWN_ICON_TOPLEFT_X = HUD_COOLDOWN_TOPLEFT_X+(HUD_COOLDOWN_WIDTH - HUD_COOLDOWN_ICON_WIDTH)/2;
 const int HUD_COOLDOWN_ICON_TOPLEFT_Y = HUD_COOLDOWN_TOPLEFT_Y+(HUD_COOLDOWN_HEIGHT - HUD_COOLDOWN_ICON_HEIGHT)/2;
 
@@ -349,6 +353,7 @@ const int CHARBUFF_LENGTH = 256;
 const bool DEBUG_ENABLE_DRIVERS = true;
 const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = true;
+const bool DEBUG_SHOW_CURSOR = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
@@ -454,7 +459,7 @@ protected:
 
 public:
     // initializer function for the class
-    Player(Game* game, int startX, int startY, int idNum, Weapon* weapon);
+    Player(Game* game, int startX, int startY, int idNum, int weaponID);
 
     //getters for the private variables
     Weapon* getWeapon(void) {return weapon;}
