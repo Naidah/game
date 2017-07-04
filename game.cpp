@@ -57,7 +57,14 @@ using namespace std;
 
 
 int main(int argc, char const *argv[]) {
-    testDistBetweenPoints();
+    if (DEBUG_ENABLE_DRIVERS == true) {
+        testDistBetweenPoints();
+        testGetInterceptX();
+        testGetInterceptY();
+        testCheckExitMap();
+        testGenerateRandInt();
+        testGenerateRandDouble();
+    }
     srand(time(NULL)); // initialize the seed
 
     // control/important variables for throughout the program
@@ -163,7 +170,7 @@ int main(int argc, char const *argv[]) {
         renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
         for (auto character = playerList.begin(); character != playerList.end(); character++) {
             if (character->getID() == CHARACTER_MAIN_ID) {
-                renderGameUI(renderer, *character, hudInfoContainer); // draw the HUD
+                renderGameUI(game, *character, hudInfoContainer); // draw the HUD
             }
         }
 
@@ -349,7 +356,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
 
 }
 
-void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoContainer) {
+void renderGameUI(Game* game, Player userCharacter, hudInfo hudInfoContainer) {
     // draw the game HUD to the screen
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
 
@@ -358,9 +365,13 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     hudViewport.y = 0;
     hudViewport.w = HUD_WIDTH;
     hudViewport.h = HUD_HEIGHT;
-    SDL_RenderSetViewport(renderer, &hudViewport);
-    SDL_SetRenderDrawColor(renderer, HUD_RED, HUD_GREEN, HUD_BLUE, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &hudViewport);
+    SDL_RenderSetViewport(game->renderer(), &hudViewport);
+    SDL_SetRenderDrawColor(game->renderer(),
+     game->primaryColors().red*HUD_COLOR_SCALE,
+     game->primaryColors().green*HUD_COLOR_SCALE,
+     game->primaryColors().blue*HUD_COLOR_SCALE,
+     UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &hudViewport);
 
     // draw ammo counter
     elementRect.w = HUD_AMMO_WIDTH;
@@ -369,19 +380,28 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.y = HUD_AMMO_TOPLEFT_Y;
 
     // draw the main box
-    SDL_SetRenderDrawColor(renderer, HUD_AMMO_BOX_RED, HUD_AMMO_BOX_BLUE, HUD_AMMO_BOX_GREEN, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &elementRect);
+    SDL_SetRenderDrawColor(game->renderer(),
+     game->primaryColors().red*HUD_AMMO_BOX_COLOR_SCALE,
+     game->primaryColors().green*HUD_AMMO_BOX_COLOR_SCALE,
+     game->primaryColors().blue*HUD_AMMO_BOX_COLOR_SCALE,
+     UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &elementRect);
 
     Weapon* userWeapon = userCharacter.getWeapon(); // store the users weapon used in referencing ammo
 
     // create a second bar over the first to show percent of ammo remaining
-    SDL_SetRenderDrawColor(renderer, HUD_AMMO_BAR_RED, HUD_AMMO_BAR_BLUE, HUD_AMMO_BAR_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_SetRenderDrawColor(game->renderer(),
+     game->primaryColors().red*HUD_AMMO_BAR_COLOR_SCALE,
+     game->primaryColors().green*HUD_AMMO_BAR_COLOR_SCALE, 
+     game->primaryColors().blue*HUD_AMMO_BAR_COLOR_SCALE,
+     UI_COLOR_MAX_VALUE);
+
     if (userWeapon->isReloading() == false) { // if not reloading, show the amount of ammo left relative to the maximum
-        elementRect.w *= (double)userWeapon->getCurrAmmo()/(double)userWeapon->getMaxAmmo();
+        elementRect.w *= (double)userWeapon->getCurrAmmo()/userWeapon->getMaxAmmo();
     } else { // if the player is reloading, show how much time left before reload is finished
-        elementRect.w *= 1 - (double)userWeapon->getReloadFrames()/(double)userWeapon->getMaxReloadFrames();
+        elementRect.w *= 1 - (double)userWeapon->getReloadFrames()/userWeapon->getMaxReloadFrames();
     }
-    SDL_RenderFillRect(renderer, &elementRect);
+    SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // draw the reload icon on top of the HUD element to indicate its use
     elementRect.w = HUD_AMMO_ICON_WIDTH;
@@ -389,8 +409,9 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.x = HUD_AMMO_ICON_TOPLEFT_X;
     elementRect.y = HUD_AMMO_ICON_TOPLEFT_Y;
     SDL_SetTextureAlphaMod(hudInfoContainer.ammoIcon, HUD_AMMO_ICON_ALPHA);
-    SDL_SetTextureColorMod(hudInfoContainer.ammoIcon, HUD_AMMO_ICON_RED, HUD_AMMO_ICON_GREEN, HUD_AMMO_ICON_BLUE);
-    SDL_RenderCopy(renderer, hudInfoContainer.ammoIcon, NULL, &elementRect);
+    SDL_SetTextureColorMod(hudInfoContainer.ammoIcon, game->primaryColors().red,
+     game->primaryColors().green, game->primaryColors().blue);
+    SDL_RenderCopy(game->renderer(), hudInfoContainer.ammoIcon, NULL, &elementRect);
 
 
     // draw roll cooldown bar
@@ -399,13 +420,22 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.x = HUD_COOLDOWN_TOPLEFT_X;
     elementRect.y = HUD_COOLDOWN_TOPLEFT_Y;
 
-    SDL_SetRenderDrawColor(renderer, HUD_COOLDOWN_BOX_RED, HUD_COOLDOWN_BOX_BLUE, HUD_COOLDOWN_BOX_GREEN, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &elementRect);
+    SDL_SetRenderDrawColor(game->renderer(),
+     game->secondaryColors().red*HUD_COOLDOWN_BOX_COLOR_SCALE,
+     game->secondaryColors().green*HUD_COOLDOWN_BOX_COLOR_SCALE,
+     game->secondaryColors().blue*HUD_COOLDOWN_BOX_COLOR_SCALE,
+     UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // create a second bar over the first to show amount of cooldown remaining
-    SDL_SetRenderDrawColor(renderer, HUD_COOLDOWN_BAR_RED, HUD_COOLDOWN_BAR_BLUE, HUD_COOLDOWN_BAR_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_SetRenderDrawColor(game->renderer(),
+     game->secondaryColors().red*HUD_COOLDOWN_BAR_COLOR_SCALE,
+     game->secondaryColors().green*HUD_COOLDOWN_BAR_COLOR_SCALE,
+     game->secondaryColors().blue*HUD_COOLDOWN_BAR_COLOR_SCALE,
+     UI_COLOR_MAX_VALUE);
+
     elementRect.w *= 1-userCharacter.getRollCooldown()/(double)CHARACTER_ROLL_COOLDOWN;
-    SDL_RenderFillRect(renderer, &elementRect);
+    SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // draw the cooldown icon on top of the HUD element to indicate its use
     elementRect.w = HUD_COOLDOWN_ICON_WIDTH;
@@ -413,8 +443,9 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.x = HUD_COOLDOWN_ICON_TOPLEFT_X;
     elementRect.y = HUD_COOLDOWN_ICON_TOPLEFT_Y;
     SDL_SetTextureAlphaMod(hudInfoContainer.cooldownIcon, HUD_COOLDOWN_ICON_ALPHA);
-    SDL_SetTextureColorMod(hudInfoContainer.cooldownIcon, HUD_COOLDOWN_ICON_RED, HUD_COOLDOWN_ICON_GREEN, HUD_COOLDOWN_ICON_BLUE);
-    SDL_RenderCopy(renderer, hudInfoContainer.cooldownIcon, NULL, &elementRect);
+    SDL_SetTextureColorMod(hudInfoContainer.cooldownIcon, game->secondaryColors().red,
+     game->secondaryColors().green, game->secondaryColors().blue);
+    SDL_RenderCopy(game->renderer(), hudInfoContainer.cooldownIcon, NULL, &elementRect);
 
 
 
@@ -426,8 +457,8 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     elementRect.x = HUD_HEALTH_TOPLEFT_X;
     elementRect.y = HUD_HEALTH_TOPLEFT_Y;
 
-    SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BOX_RED, HUD_HEALTH_BOX_BLUE, HUD_HEALTH_BOX_GREEN, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &elementRect);
+    SDL_SetRenderDrawColor(game->renderer(), HUD_HEALTH_BOX_RED, HUD_HEALTH_BOX_BLUE, HUD_HEALTH_BOX_GREEN, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // draw a scaled bar over the top to present hp left or respawn time remaining
     if (userCharacter.isAlive()) {
@@ -435,18 +466,18 @@ void renderGameUI(SDL_Renderer* renderer, Player userCharacter, hudInfo hudInfoC
     } else {
         elementRect.w *= 1 - (double)userCharacter.getDeathFrames()/CHARACTER_DEATH_DURATION;
     }
-    SDL_SetRenderDrawColor(renderer, HUD_HEALTH_BAR_RED, HUD_HEALTH_BAR_GREEN, HUD_HEALTH_BAR_BLUE, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(renderer, &elementRect);
+    SDL_SetRenderDrawColor(game->renderer(), HUD_HEALTH_BAR_RED, HUD_HEALTH_BAR_GREEN, HUD_HEALTH_BAR_BLUE, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // draw divides that show the hp points of the player on the bar
     elementRect.w = HUD_HEALTH_DIVIDE_WIDTH;
     elementRect.h = HUD_HEALTH_DIVIDE_HEIGHT;
     elementRect.y = HUD_HEALTH_DIVIDE_TOPLEFT_Y;
-    SDL_SetRenderDrawColor(renderer, HUD_HEALTH_DIVIDE_RED,
+    SDL_SetRenderDrawColor(game->renderer(), HUD_HEALTH_DIVIDE_RED,
      HUD_HEALTH_DIVIDE_BLUE, HUD_HEALTH_DIVIDE_GREEN, UI_COLOR_MAX_VALUE);
     for (int i=1;i<CHARACTER_MAX_HP;i++) {
         elementRect.x = ((double)HUD_HEALTH_WIDTH/CHARACTER_MAX_HP)*i-((double)elementRect.w/2.0);
-        SDL_RenderFillRect(renderer, &elementRect);
+        SDL_RenderFillRect(game->renderer(), &elementRect);
     }
 }
 
@@ -520,7 +551,13 @@ double generateRandDouble(double min, double max) {
 
 int generateRandInt(int min, int max) {
     // generate a random int between min and max
-    int roll = (rand()%(max-min))+min;
+    int roll;
+    if (min != max) {
+        roll = (rand()%(max-min))+min;
+    } else {
+        roll = min;
+    }
+    
     return roll;
 }
 
@@ -1941,4 +1978,55 @@ void testDistBetweenPoints() {
     assert(distBetweenPoints(10, 10, -1, 1) == sqrt(202));
     assert(distBetweenPoints(2, 2, 2, 2) == sqrt(0));
     assert(distBetweenPoints(16, 17, 17, 16) == sqrt(2));
+
+    cout << "distBetweenPoints passed all tests\n";
+}
+
+void testGetInterceptX(void) {
+
+}
+
+void testGetInterceptY(void) {
+
+}
+
+void testCheckExitMap(void){
+
+}
+
+void testGenerateRandInt(void) {
+    // for testing number generation, test a set of ranges a large number
+    // of times and make sure results always lie in a range
+    int test;
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandInt(0, 100);
+        assert(0 <= test && test <= 100);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandInt(2, 10);
+        assert(2 <= test && test <= 10);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandInt(-10, 10);
+        assert(-10 <= test && test <= 10);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandInt(-20, -10);
+        assert(-20 <= test && test <= -10);
+    }
+    for (int i = 0; i < 1000; i++) {
+        test = generateRandInt(12, 1100); // 12 to 12
+        assert(12 <= test && test <= 1100);
+    }
+
+    // test single possibility edge cases
+    assert(generateRandInt(0,0) == 0);
+    assert(generateRandInt(12,12) == 12);
+    assert(generateRandInt(-5,-5) == -5);
+
+    cout << "generateRandInt passed all tests\n";
+}
+
+void testGenerateRandDouble(void) {
+
 }

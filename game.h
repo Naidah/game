@@ -1,13 +1,6 @@
 // Created by Aidan Hunt 24/1/17, last edited 14/2/17
 // Contains constants for game
 
-/*
-Constants for the config file:
-    - Screen sizes
-    - Colors
-    - Fullscreen
-*/
-
 using namespace std;
 
 
@@ -287,9 +280,7 @@ const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH*3;
 const int HUD_WIDTH = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int HUD_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
-const int HUD_RED = 50;
-const int HUD_GREEN = 50;
-const int HUD_BLUE = 255;
+const double HUD_COLOR_SCALE = 0.8;
 
 // ammo box parameters
 const string HUD_AMMO_ICON_LOCATION = "images/ammoIcon.png";
@@ -304,17 +295,8 @@ const int HUD_AMMO_ICON_HEIGHT = HUD_AMMO_HEIGHT*0.6;
 const int HUD_AMMO_ICON_TOPLEFT_X = HUD_AMMO_TOPLEFT_X+(HUD_AMMO_WIDTH - HUD_AMMO_ICON_WIDTH)/2;
 const int HUD_AMMO_ICON_TOPLEFT_Y = HUD_AMMO_TOPLEFT_Y+(HUD_AMMO_HEIGHT - HUD_AMMO_ICON_HEIGHT)/2;
 
-const int HUD_AMMO_BOX_RED = 255;
-const int HUD_AMMO_BOX_BLUE = 255;
-const int HUD_AMMO_BOX_GREEN = 255;
-
-const int HUD_AMMO_BAR_RED = 100;
-const int HUD_AMMO_BAR_BLUE = 100;
-const int HUD_AMMO_BAR_GREEN = 100;
-
-const int HUD_AMMO_ICON_RED = 0;
-const int HUD_AMMO_ICON_GREEN = 200;
-const int HUD_AMMO_ICON_BLUE = 200;
+const double HUD_AMMO_BOX_COLOR_SCALE = 0.55;
+const double HUD_AMMO_BAR_COLOR_SCALE = 0.75;
 const int HUD_AMMO_ICON_ALPHA = 155;
 
 // rool cooldown display parameters
@@ -330,17 +312,8 @@ const int HUD_COOLDOWN_ICON_HEIGHT = HUD_COOLDOWN_HEIGHT*0.6;
 const int HUD_COOLDOWN_ICON_TOPLEFT_X = HUD_COOLDOWN_TOPLEFT_X+(HUD_COOLDOWN_WIDTH - HUD_COOLDOWN_ICON_WIDTH)/2;
 const int HUD_COOLDOWN_ICON_TOPLEFT_Y = HUD_COOLDOWN_TOPLEFT_Y+(HUD_COOLDOWN_HEIGHT - HUD_COOLDOWN_ICON_HEIGHT)/2;
 
-const int HUD_COOLDOWN_BOX_RED = 0;
-const int HUD_COOLDOWN_BOX_BLUE = 0;
-const int HUD_COOLDOWN_BOX_GREEN = 0;
-
-const int HUD_COOLDOWN_BAR_RED = 50;
-const int HUD_COOLDOWN_BAR_BLUE = 150;
-const int HUD_COOLDOWN_BAR_GREEN = 100;
-
-const int HUD_COOLDOWN_ICON_RED = 0;
-const int HUD_COOLDOWN_ICON_GREEN = 200;
-const int HUD_COOLDOWN_ICON_BLUE = 200;
+const double HUD_COOLDOWN_BOX_COLOR_SCALE = 0.55;
+const double HUD_COOLDOWN_BAR_COLOR_SCALE = 0.75;
 const int HUD_COOLDOWN_ICON_ALPHA = 155;
 
 // health bar parameters
@@ -373,6 +346,7 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
+const bool DEBUG_ENABLE_DRIVERS = true;
 const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
@@ -796,7 +770,7 @@ direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(Game* game, forward_list<BulletExplosion> explosionList,
      int playerMainX, int playerMainY); // render the gameplay area of the screen
-void renderGameUI(SDL_Renderer* renderer, Player userCharacter,
+void renderGameUI(Game* game, Player userCharacter,
  hudInfo hudInfoContainer); // render the HUD area of the screen
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
 int generateRandInt(int min, int max);
@@ -806,3 +780,8 @@ coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> 
 
 //drivers
 void testDistBetweenPoints(void);
+void testGetInterceptX(void);
+void testGetInterceptY(void);
+void testCheckExitMap(void);
+void testGenerateRandInt(void);
+void testGenerateRandDouble(void);
