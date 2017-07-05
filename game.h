@@ -106,8 +106,8 @@ const string CONFIG_FILE_LOCATION = "config.gabisbad";
 
 // Character related constants
 const string CHARACTER_IMAGE_AR_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
-const string CHARACTER_IMAGE_SHOTGUN_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
-const string CHARACTER_IMAGE_PISTOL_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
+const string CHARACTER_IMAGE_SHOTGUN_LOCATION = "images/characterShotgun.png"; // path to the character spritesheet
+const string CHARACTER_IMAGE_PISTOL_LOCATION = "images/characterPistol.png"; // path to the character spritesheet
 const string CHARACTER_ROLL_IMAGE = "images/dash.png";
 const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 const string CHARACTER_INVULN_IMAGE = "images/invuln.png";
@@ -148,9 +148,9 @@ enum CHARACTER_WEAPONS {
 // Weapon Related Constants
 // ASSAULT RIFLE
 const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
+const int AR_MAX_BULLET_SPREAD = 13; // max angle bullets can deflect by
 const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
-const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
+const int AR_SHOT_DELAY = 11; //number of frames between each projectile firing
 const double AR_PROJECTILE_SPEED = 18.0; // speed of an AR projectile
 
 // PISTOL
@@ -165,7 +165,7 @@ const double PISTOL_PROJECTILE_SPEED = 16.0;
 const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
 const int SHOTGUN_PROJECTILE_SPREAD = 8;
 const int SHOTGUN_SHOT_DELAY = 50;
-const double SHOTGUN_PROJECTILE_SPEED = 10.0;
+const double SHOTGUN_PROJECTILE_SPEED = 9.5;
 
 
 /* Defaults
@@ -198,7 +198,7 @@ const double SHOTGUN_PROJECTILE_SPEED = 12.0;
 
 
 // Projectile related constants
-const string PROJECTILE_IMAGE_LOCATION = "images/colorMod.png"; // location of the bulet sprite
+const string PROJECTILE_IMAGE_LOCATION = "images/invuln.png"; // location of the bulet sprite
 const int PROJECTILE_WIDTH = 8; // width of projectile image on default screen size
 const int PROJECTILE_HEIGHT = 8; // height of projectile image on default screen size
 

@@ -84,14 +84,11 @@ int main(int argc, char const *argv[]) {
     forward_list<coordSet> spawnPoints; // stores spawn point locations
     forward_list<Player> playerList; // stores the players
     forward_list<Projectile> projectileList; // stores the current set of projectiles
-
     generateMap(&wallContainer, &spawnPoints); // generate a random set of walls and spawn points for the game
-
     // initialize a game object to store game elements and data to pass around the program
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, &renderer);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
-
     
     // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
@@ -99,11 +96,10 @@ int main(int argc, char const *argv[]) {
     SDL_Texture* gameCursor = loadImage(UI_GAME_CURSOR_LOCATION, renderer);
 
 
-
     coordSet initSpawn; // temporarily stores spawn points for each player
     for (int i=0; i<DEBUG_NUM_PLAYERS; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList.push_front(Player(game, initSpawn.x, initSpawn.y, i, CHARACTER_WEAPON_ASSAULT_RIFLE));
+        playerList.push_front(Player(game, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList.front().killPlayer();
@@ -569,7 +565,7 @@ bool checkExitMap(int x, int y, int r) {
 
 double generateRandDouble(double min, double max) {
     // generate a random double between min and max
-    double roll = (double)rand() / RAND_MAX;
+    double roll = (double)rand()/RAND_MAX;
     roll = min + roll*(max-min);
     return roll;
 }
@@ -577,12 +573,7 @@ double generateRandDouble(double min, double max) {
 int generateRandInt(int min, int max) {
     // generate a random int between min and max
     int roll;
-    if (min != max) {
-        roll = (rand()%(max-min))+min;
-    } else {
-        roll = min;
-    }
-    
+    roll = (rand()%(max-min+1))+min;    
     return roll;
 }
 
@@ -604,7 +595,7 @@ coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> 
     }
 
     if (validPoints.size() > 0) { // check at least 1 spawn point is available
-        chosenPoint = generateRandInt(0, validPoints.size());
+        chosenPoint = generateRandInt(0, validPoints.size()-1);
         index = 0;
         // loop through the spawn points until the point at the chosen index is reached
         for (auto point = validPoints.begin(); point != validPoints.end(); point++) {
@@ -1807,6 +1798,7 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
     list<MapBox*> boxesComplete;
     list<MapBox*> boxesFinal;
     list<MapBox*> boxesSplit;
+
     for (int i=0; i<4; i++) {
         w = (GAMESPACE_WIDTH-2*GAMESPACE_MARGIN)/2;
         h = (GAMESPACE_HEIGHT-2*GAMESPACE_MARGIN)/2;
@@ -1829,14 +1821,14 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
         }
         delete currBox;
     }
+
     MapBox* boxSelected;
-    //MapBox* boxCompare;
     list<MapBox*> mapBoxesTemp;
     int boxSelection;
     int index;
     while (boxesComplete.size() > 0) {
         mapBoxesTemp.clear();
-        boxSelection = generateRandInt(0, boxesComplete.size());
+        boxSelection = generateRandInt(0, boxesComplete.size()-1);
         index = 0;
         for (auto box = boxesComplete.begin(); box != boxesComplete.end(); box++) {
             if (index == boxSelection) {
