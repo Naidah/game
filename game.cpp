@@ -1,4 +1,4 @@
-// By Aidan Hunt, first created 24/1/17, last edited 9/5/17
+// By Aidan Hunt, first created 24/1/17
 // [Project description here]
 
 // TODO
@@ -90,6 +90,8 @@ int main(int argc, char const *argv[]) {
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
     
+    game->setPatterns();
+
     // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
     hudInfoContainer.cooldownIcon = loadImage(HUD_COOLDOWN_ICON_LOCATION, renderer);
@@ -300,6 +302,16 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
      int playerMainX, int playerMainY) {
     // renders the main area of the game
 
+    /*
+    Current render order:
+    - Pattern
+    - Character
+    - Projectile
+    - Shadow
+    - Wall
+    - Explosion
+    */
+
     // reset the screen for the next frame
     SDL_Rect gamespaceViewport;
     gamespaceViewport.x = GAMESPACE_TOPLEFT_X;
@@ -317,6 +329,19 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
      UI_COLOR_MAX_VALUE);
     SDL_Rect background {0, 0, GAMESPACE_WIDTH, GAMESPACE_HEIGHT};
     SDL_RenderFillRect(game->renderer(), &background);
+
+    // Draw the background pattern
+    SDL_SetRenderDrawColor(game->renderer(), 0, 0, 0, UI_COLOR_MAX_VALUE);
+    SDL_Rect patternRect;
+    patternRect.w = UI_BACKGROUND_PATTERN_WIDTH;
+    patternRect.h = UI_BACKGROUND_PATTERN_HEIGHT;
+    for (int w = 0; w < UI_BACKGROUND_PATTERN_ROW; w++) {
+        for (int h = 0; h < UI_BACKGROUND_PATTERN_COL; h++) {
+            patternRect.x = w*UI_BACKGROUND_PATTERN_WIDTH;
+            patternRect.y = h*UI_BACKGROUND_PATTERN_HEIGHT;
+            SDL_RenderCopy(game->renderer(), game->pattern(w, h), NULL, &patternRect);
+        }
+    }
 
     // render all objects to the screen
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
@@ -638,6 +663,14 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     projectileList = projSet;
     gameRenderer = renderer;
 
+    // generate the pattern board
+    for (int x = 0; x < UI_BACKGROUND_PATTERN_ROW; x++) {
+        for (int y = 0; y < UI_BACKGROUND_PATTERN_COL; y++) {
+            patternBoard[x][y] = generateRandInt(0, UI_BACKGROUND_PATTERN_COUNT-1);
+        }
+    }
+
+
     // initialize variables used to read the config file
     string line;
     string item;
@@ -774,6 +807,19 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     }
 
     configFile.close();
+}
+
+void Game::setPatterns(void) {
+    // load the patterns
+    stringstream patternLocation;
+    for (int i = 0; i < UI_BACKGROUND_PATTERN_COUNT; i++) {
+        patternLocation.str("");
+        patternLocation << UI_BACKGROUND_PATTERN_PREFIX << to_string(i) << UI_BACKGROUND_PATTERN_TYPE;
+        patterns[i] = loadImage(patternLocation.str(), *gameRenderer);
+        if (!patterns[i]) {
+            cout << IMG_GetError() << "\n";
+        }
+    }
 }
 
 // Functions related to the player class

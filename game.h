@@ -1,4 +1,4 @@
-// Created by Aidan Hunt 24/1/17, last edited 14/2/17
+// Created by Aidan Hunt 24/1/17
 // Contains constants for game
 
 using namespace std;
@@ -232,6 +232,15 @@ const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen when no value i
 const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 
+// Gamespace parameters
+const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT; // the gameplay space takes a square on the far right
+const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
+const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
+const int GAMESPACE_TOPLEFT_Y = 0;
+
+const int GAMESPACE_MARGIN = 50; // margin within the gamespace where no walls can appear
+
+
 // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
 const string UI_GAME_CURSOR_LOCATION = "images/gameCursor.png";
@@ -246,18 +255,17 @@ const int UI_BACKGROUND_COLOR_RED = 100;
 const int UI_BACKGROUND_COLOR_GREEN =160;
 const int UI_BACKGROUND_COLOR_BLUE = 255;
 
+const int UI_BACKGROUND_PATTERN_WIDTH = 50;
+const int UI_BACKGROUND_PATTERN_HEIGHT = 50;
+const int UI_BACKGROUND_PATTERN_ROW = ceil((double)GAMESPACE_WIDTH/UI_BACKGROUND_PATTERN_WIDTH);
+const int UI_BACKGROUND_PATTERN_COL = ceil((double)GAMESPACE_HEIGHT/UI_BACKGROUND_PATTERN_HEIGHT);
+const int UI_BACKGROUND_PATTERN_COUNT = 3;
+const string UI_BACKGROUND_PATTERN_PREFIX = "images/pattern";
+const string UI_BACKGROUND_PATTERN_TYPE = ".png";
+
 const int UI_SHADOW_COLOR_RED = 10;
 const int UI_SHADOW_COLOR_GREEN = 10;
 const int UI_SHADOW_COLOR_BLUE = 50;
-
-// Gamespace parameters
-const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT; // the gameplay space takes a square on the far right
-const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
-const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
-const int GAMESPACE_TOPLEFT_Y = 0;
-
-const int GAMESPACE_MARGIN = 50; // margin within the gamespace where no walls can appear
-
 
 // Constants related to map generation
 const int MAPBOX_START_ITERATIONS = 4;
@@ -390,6 +398,9 @@ protected:
     colorSet primaryColor;
     colorSet secondaryColor;
 
+    SDL_Texture* patterns[UI_BACKGROUND_PATTERN_COUNT];
+    int patternBoard[UI_BACKGROUND_PATTERN_ROW][UI_BACKGROUND_PATTERN_COL];
+
     int swidth;
     int sheight;
     bool fullscreen;
@@ -398,11 +409,14 @@ public:
      forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
      SDL_Renderer** renderer);
 
+    void setPatterns(void);
+
     forward_list<Player>* players(void) {return playerList;}
     forward_list<Wall*>* walls(void) {return wallContainer;}
     forward_list<coordSet>* spawns(void) {return spawnPoints;}
     forward_list<Projectile>* projectiles(void) {return projectileList;}
     SDL_Renderer* renderer(void) {return *gameRenderer;}
+    SDL_Texture* pattern(int x, int y) {return patterns[patternBoard[x][y]];}
     int screenWidth(void) {return swidth;}
     int screenHeight(void) {return sheight;}
     int isFullscreen(void) {return fullscreen;}
