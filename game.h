@@ -37,52 +37,68 @@ typedef struct _coordSet {
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
+const int SCREEN_FPS = 60; // desired framerate of the screen
 
 // values of the different colour schemes that can be used
 // red
+const string COLOR_RED_NAME = "red";
 const int COLOR_RED_RED = 255;
 const int COLOR_RED_GREEN = 0;
 const int COLOR_RED_BLUE = 0;
 
 // green
+const string COLOR_GREEN_NAME = "green";
 const int COLOR_GREEN_RED = 0;
 const int COLOR_GREEN_GREEN = 255;
 const int COLOR_GREEN_BLUE = 0;
 
 // blue
+const string COLOR_BLUE_NAME = "blue";
 const int COLOR_BLUE_RED = 0;
 const int COLOR_BLUE_GREEN = 0;
 const int COLOR_BLUE_BLUE = 255;
 
 // purple
+const string COLOR_PURPLE_NAME = "purple";
 const int COLOR_PURPLE_RED = 200;
 const int COLOR_PURPLE_GREEN = 0;
 const int COLOR_PURPLE_BLUE = 200;
 
 // yellow
+const string COLOR_YELLOW_NAME = "yellow";
 const int COLOR_YELLOW_RED = 255;
 const int COLOR_YELLOW_GREEN = 255;
 const int COLOR_YELLOW_BLUE = 0;
 
 // cyan
+const string COLOR_CYAN_NAME = "cyan";
 const int COLOR_CYAN_RED = 0;
 const int COLOR_CYAN_GREEN = 255;
 const int COLOR_CYAN_BLUE = 255;
 
 // pink
+const string COLOR_PINK_NAME = "pink";
 const int COLOR_PINK_RED = 255;
 const int COLOR_PINK_GREEN = 20;
 const int COLOR_PINK_BLUE = 147;
 
 // orange
+const string COLOR_ORANGE_NAME = "orange";
 const int COLOR_ORANGE_RED = 255;
 const int COLOR_ORANGE_GREEN = 160;
 const int COLOR_ORANGE_BLUE = 0;
 
 // white
+const string COLOR_WHITE_NAME = "white";
 const int COLOR_WHITE_RED = 255;
 const int COLOR_WHITE_GREEN = 255;
 const int COLOR_WHITE_BLUE = 255;
+
+// grey
+const string COLOR_GREY_NAME = "grey";
+const int COLOR_GREY_RED = 155;
+const int COLOR_GREY_GREEN = 155;
+const int COLOR_GREY_BLUE = 155;
 
 
 // RGB color of background on images to allow tranparency
@@ -112,30 +128,39 @@ const string CHARACTER_ROLL_IMAGE = "images/dash.png";
 const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 const string CHARACTER_INVULN_IMAGE = "images/invuln.png";
 
-const int CHARACTER_VEL_MAX = 5; // Max movementspeed of the player in any direction
-const double CHARACTER_ACCEL_PER_FRAME = 0.6; // Acceleration speed of the plater
-const double CHARACTER_DECEL_PER_FRAME = 0.4; // Multiplier used to decelerate player when not giving input movement
+const double CHARACTER_VEL_MAX_PS = 300;
+const double CHARACTER_VEL_MAX = CHARACTER_VEL_MAX_PS/SCREEN_FPS; // Max movementspeed of the player in any direction
+const double CHARACTER_ACCEL_PS = 36;
+const double CHARACTER_ACCEL_PER_FRAME = CHARACTER_ACCEL_PS/SCREEN_FPS; // Acceleration speed of the plater
+const double CHARACTER_DECCEL_PS = 24;
+const double CHARACTER_DECEL_PER_FRAME = CHARACTER_DECCEL_PS/SCREEN_FPS; // Multiplier used to decelerate player when not giving input movement
 
-const int CHARACTER_WIDTH = 32; // width of the player on the default screen size
-const int CHARACTER_HEIGHT = 32; // height of the player in the default screen size
+const int CHARACTER_WIDTH = 40; // width of the player on the default screen size
+const int CHARACTER_HEIGHT = 40; // height of the player in the default screen size
 
-const int CHARACTER_ROLL_DURATION = 14;
-const int CHARACTER_ROLL_SPEED = 14;
-const int CHARACTER_ROLL_COOLDOWN = 180;
+const double CHARACTER_ROLL_DURATION_SEC = 0.25;
+const double CHARACTER_ROLL_DURATION = CHARACTER_ROLL_DURATION_SEC*SCREEN_FPS;
+const double CHARACTER_ROLL_SPEED_PS = 850;
+const double CHARACTER_ROLL_SPEED = CHARACTER_ROLL_SPEED_PS/SCREEN_FPS;
+const double CHARACTER_ROLL_COOLDOWN_SEC = 3;
+const double CHARACTER_ROLL_COOLDOWN = CHARACTER_ROLL_COOLDOWN_SEC*SCREEN_FPS;
 const int CHARACTER_ROLL_ALPHA = 100;
 
 const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
-const int CHARACTER_DEATH_DURATION = 300; // the number of frames the player remains dead for
+const double CHARACTER_DEATH_DURATION_SEC = 5;
+const double CHARACTER_DEATH_DURATION = CHARACTER_DEATH_DURATION_SEC*SCREEN_FPS; // the number of frames the player remains dead for
 const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH*4;
-const int CHARACTER_INVULN_FRAMES = 150;
+const double CHARACTER_INVULN_SEC = 2.5;
+const double CHARACTER_INVULN_FRAMES = CHARACTER_INVULN_SEC*SCREEN_FPS;
 
 const int CHARACTER_ROLL_OUTLINE_WIDTH = CHARACTER_WIDTH*1.5;
 const int CHARACTER_ROLL_OUTLINE_HEIGHT = CHARACTER_HEIGHT*1.5;
 
 const int CHARACTER_INVULN_IMAGE_WIDTH = CHARACTER_WIDTH*1.7;
 const int CHARACTER_INVULN_IMAGE_HEIGHT = CHARACTER_HEIGHT*1.7;
+const int CHARACTER_INVULN_ALPHA = 150;
 
 // codes for the different weapons player can use
 enum CHARACTER_WEAPONS {
@@ -148,24 +173,34 @@ enum CHARACTER_WEAPONS {
 // Weapon Related Constants
 // ASSAULT RIFLE
 const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 13; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
-const int AR_SHOT_DELAY = 11; //number of frames between each projectile firing
-const double AR_PROJECTILE_SPEED = 18.0; // speed of an AR projectile
+const double AR_MAX_BULLET_SPREAD = 13; // max angle bullets can deflect by
+const double AR_RELOAD_SEC = 1.8;
+const double AR_RELOAD_FRAMES = AR_RELOAD_SEC*SCREEN_FPS; // number of frames in reload animation
+const double AR_SHOT_DELAY_SEC = 0.23;
+const double AR_SHOT_DELAY = AR_SHOT_DELAY_SEC*SCREEN_FPS; //number of frames between each projectile firing
+const double AR_PROJECTILE_SPEED_PS = 1000;
+const double AR_PROJECTILE_SPEED = AR_PROJECTILE_SPEED_PS/SCREEN_FPS; // speed of an AR projectile
 
 // PISTOL
-const int PISTOL_CLIP_SIZE = 8;
-const int PISTOL_MAX_BULLET_SPREAD = 50;
-const int PISTOL_RELOAD_FRAMES = 60;
-const int PISTOL_RECOIL_INCREASE_PER_SHOT = 25;
-const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
-const double PISTOL_PROJECTILE_SPEED = 16.0;
+const int PISTOL_CLIP_SIZE = 6;
+const int PISTOL_MIN_BULLET_SPREAD = 5;
+const int PISTOL_MAX_BULLET_SPREAD = 40;
+const double PISTOL_RELOAD_SEC = 0.9;
+const double PISTOL_RELOAD_FRAMES = PISTOL_RELOAD_SEC*SCREEN_FPS;
+const double PISTOL_RECOIL_INCREASE_PER_SHOT = 30;
+const double PISTOL_RECOIL_RECOVERY_PS = 90;
+const double PISTOL_RECOIL_RECOVERY_PER_FRAME = PISTOL_RECOIL_RECOVERY_PS/SCREEN_FPS;
+const double PISTOL_PROJECTILE_SPEED_PS = 900;
+const double PISTOL_PROJECTILE_SPEED = PISTOL_PROJECTILE_SPEED_PS/SCREEN_FPS;
 
 // SHOTGUN
 const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
-const int SHOTGUN_PROJECTILE_SPREAD = 8;
-const int SHOTGUN_SHOT_DELAY = 50;
-const double SHOTGUN_PROJECTILE_SPEED = 9.5;
+const double SHOTGUN_SPREAD_RANGE = 40;
+const double SHOTGUN_PROJECTILE_SPREAD = SHOTGUN_SPREAD_RANGE/SHOTGUN_PROJECTILES_PER_SHOT;
+const double SHOTGUN_SHOT_DELAY_SEC = 0.8;
+const double SHOTGUN_SHOT_DELAY = SHOTGUN_SHOT_DELAY_SEC*SCREEN_FPS;
+const double SHOTGUN_PROJECTILE_SPEED_PS = 600;
+const double SHOTGUN_PROJECTILE_SPEED = SHOTGUN_PROJECTILE_SPEED_PS/SCREEN_FPS;
 
 
 /* Defaults
@@ -211,7 +246,8 @@ enum PROJECTILE_COLLISION_IDENTIFIERS {
 
 const int PROJECTILE_EXPLOSION_START_RADIUS = 8;
 const int PROJECTILE_EXPLOSION_END_RADIUS = 12;
-const int PROJECTILE_EXPLOSION_DURATION = 10;
+const double PROJECTILE_EXPLOSION_DURATION_SEC = 0.3;   
+const int PROJECTILE_EXPLOSION_DURATION = PROJECTILE_EXPLOSION_DURATION_SEC*SCREEN_FPS;
 const string PROJECTILE_EXPLOSION_IMAGE = "images/deathCircle.png";
 
 // Wall related constats
@@ -219,12 +255,11 @@ const double WALL_COLOR_SCALE = 0.65;
 const double SHADOW_COLOR_SCALE = 0.3;
 
 // Screen Parameters
-const int SCREEN_FPS = 60; // desired framerate of the screen
 const double SCREEN_TICKRATE = 1000.0 / SCREEN_FPS; // duration of each frame on the screen
 
 const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
 
-const int SCREEN_WIDTH_DEFAULT = 1000; // width of screen to scale against
+const int SCREEN_WIDTH_DEFAULT = 1300; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
@@ -233,7 +268,7 @@ const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 
 // Gamespace parameters
-const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT; // the gameplay space takes a square on the far right
+const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT*1.5; // the gameplay space takes a square on the far right
 const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
@@ -259,9 +294,10 @@ const int UI_BACKGROUND_PATTERN_WIDTH = 50;
 const int UI_BACKGROUND_PATTERN_HEIGHT = 50;
 const int UI_BACKGROUND_PATTERN_ROW = ceil((double)GAMESPACE_WIDTH/UI_BACKGROUND_PATTERN_WIDTH);
 const int UI_BACKGROUND_PATTERN_COL = ceil((double)GAMESPACE_HEIGHT/UI_BACKGROUND_PATTERN_HEIGHT);
-const int UI_BACKGROUND_PATTERN_COUNT = 3;
+const int UI_BACKGROUND_PATTERN_COUNT = 6;
 const string UI_BACKGROUND_PATTERN_PREFIX = "images/pattern";
 const string UI_BACKGROUND_PATTERN_TYPE = ".png";
+const int UI_BACKGROUND_PATTERN_ALPHA = 20;
 
 const int UI_SHADOW_COLOR_RED = 10;
 const int UI_SHADOW_COLOR_GREEN = 10;
@@ -359,12 +395,14 @@ const int CHARBUFF_LENGTH = 256;
 
 // constants used in debugging
 const bool DEBUG_ENABLE_DRIVERS = true;
-const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_HIDE_SHADOWS = true;
 const bool DEBUG_KILL_PLAYER = true;
 const bool DEBUG_SHOW_CURSOR = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
+const bool DEBUG_DRAW_WEAPONARC = true;
+const int DEBUG_WEAPONARC_RADIUS = 500;
 const int DEBUG_NUM_PLAYERS = 4;
 
 
@@ -497,7 +535,7 @@ public:
     void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList); // respawn the player after death
 
     //draws the player to the screen
-    void render(SDL_Renderer* renderer);
+    void render(Game* game);
 };
 
 class DeathObject {
@@ -530,6 +568,7 @@ public:
     virtual void beginReload(void) = 0;
     virtual void updateGun() = 0;
     virtual void resetGun() = 0;
+    virtual void debugRender(Game* game, int x, int y, double a) = 0;
 };
 
 // Weapon Derived classes
@@ -552,11 +591,12 @@ public:
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
+    void debugRender(Game* game, int x, int y, double a);
 };
 
 class Pistol: public Weapon {
 private:
-    int currRecoil;
+    double currRecoil;
     bool mouseDown;
 public:
     Pistol(void);
@@ -572,6 +612,7 @@ public:
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
+    void debugRender(Game* game, int x, int y, double a);
 };
 
 class Shotgun: public Weapon {
@@ -592,6 +633,7 @@ public:
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
+    void debugRender(Game* game, int x, int y, double a);
 };
 
 

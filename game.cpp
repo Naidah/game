@@ -345,7 +345,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
 
     // render all objects to the screen
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
-            character->render(game->renderer());
+        character->render(game);
     }
 
     for (auto bullet = game->projectiles()->begin(); bullet != game->projectiles()->end(); bullet++) {
@@ -584,8 +584,8 @@ bool checkExitMap(int x, int y, int r) {
     // returns true if the circle is outside
     return y-r < 0
      || x-r < 0
-     || y+r > SCREEN_HEIGHT_DEFAULT
-     || x+r > SCREEN_HEIGHT_DEFAULT;
+     || y+r > GAMESPACE_HEIGHT
+     || x+r > GAMESPACE_WIDTH;
 }
 
 double generateRandDouble(double min, double max) {
@@ -746,6 +746,10 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
             primaryColor.red = COLOR_WHITE_RED;
             primaryColor.blue = COLOR_WHITE_BLUE;
             primaryColor.green = COLOR_WHITE_GREEN;
+        } else if (primColor == "grey") {
+            primaryColor.red = COLOR_GREY_RED;
+            primaryColor.blue = COLOR_GREY_BLUE;
+            primaryColor.green = COLOR_GREY_GREEN;
         } else {
             primaryColor.red = COLOR_BLUE_RED;
             primaryColor.blue = COLOR_BLUE_BLUE;
@@ -759,42 +763,46 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
 
     string secColor = configElements["secondaryColor"];
     if (secColor != "") {
-        if (secColor == "red") {
+        if (secColor == COLOR_RED_NAME) {
             secondaryColor.red = COLOR_RED_RED;
             secondaryColor.blue = COLOR_RED_BLUE;
             secondaryColor.green = COLOR_RED_GREEN;
-        } else if (secColor == "green") {
+        } else if (secColor == COLOR_GREEN_NAME) {
             secondaryColor.red = COLOR_GREEN_RED;
             secondaryColor.blue = COLOR_GREEN_BLUE;
             secondaryColor.green = COLOR_GREEN_GREEN;
-        } else if (secColor == "blue") {
+        } else if (secColor == COLOR_BLUE_NAME) {
             secondaryColor.red = COLOR_BLUE_RED;
             secondaryColor.blue = COLOR_BLUE_BLUE;
             secondaryColor.green = COLOR_BLUE_GREEN;
-        } else if (secColor == "purple") {
+        } else if (secColor == COLOR_PURPLE_NAME) {
             secondaryColor.red = COLOR_PURPLE_RED;
             secondaryColor.blue = COLOR_PURPLE_BLUE;
             secondaryColor.green = COLOR_PURPLE_GREEN;
-        } else if (secColor == "yellow") {
+        } else if (secColor == COLOR_YELLOW_NAME) {
             secondaryColor.red = COLOR_YELLOW_RED;
             secondaryColor.blue = COLOR_YELLOW_BLUE;
             secondaryColor.green = COLOR_YELLOW_GREEN;
-        } else if (secColor == "cyan") {
+        } else if (secColor == COLOR_CYAN_NAME) {
             secondaryColor.red = COLOR_CYAN_RED;
             secondaryColor.blue = COLOR_CYAN_BLUE;
             secondaryColor.green = COLOR_CYAN_GREEN;
-        } else if (secColor == "pink") {
+        } else if (secColor == COLOR_PINK_NAME) {
             secondaryColor.red = COLOR_PINK_RED;
             secondaryColor.blue = COLOR_PINK_BLUE;
             secondaryColor.green = COLOR_PINK_GREEN;
-        } else if (secColor == "orange") {
+        } else if (secColor == COLOR_ORANGE_NAME) {
             secondaryColor.red = COLOR_ORANGE_RED;
             secondaryColor.blue = COLOR_ORANGE_BLUE;
             secondaryColor.green = COLOR_ORANGE_GREEN;
-        } else if (secColor == "white") {
+        } else if (secColor == COLOR_BLUE_NAME) {
             secondaryColor.red = COLOR_WHITE_RED;
             secondaryColor.blue = COLOR_WHITE_BLUE;
             secondaryColor.green = COLOR_WHITE_GREEN;
+        } else if (secColor == COLOR_GREY_NAME) {
+            secondaryColor.red = COLOR_GREY_RED;
+            secondaryColor.blue = COLOR_GREY_BLUE;
+            secondaryColor.green = COLOR_GREY_GREEN;
         } else {
             secondaryColor.red = COLOR_BLUE_RED;
             secondaryColor.blue = COLOR_BLUE_BLUE;
@@ -816,8 +824,13 @@ void Game::setPatterns(void) {
         patternLocation.str("");
         patternLocation << UI_BACKGROUND_PATTERN_PREFIX << to_string(i) << UI_BACKGROUND_PATTERN_TYPE;
         patterns[i] = loadImage(patternLocation.str(), *gameRenderer);
+
         if (!patterns[i]) {
             cout << IMG_GetError() << "\n";
+        } else {
+            SDL_SetTextureAlphaMod(patterns[i], UI_BACKGROUND_PATTERN_ALPHA);
+            SDL_SetTextureColorMod(patterns[i], primaryColor.red, primaryColor.green,
+             primaryColor.blue);
         }
     }
 }
@@ -1098,7 +1111,8 @@ void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* 
     }
 }
 
-void Player::render(SDL_Renderer* renderer) {
+void Player::render(Game* game) {
+    SDL_Renderer* renderer = game->renderer();
     // draws the player to the screen using the supplied renderer
     if (alive == true) {
         if (invulnerable == true) { // if the player is in an invulnerable state, draw the icon below them
@@ -1119,6 +1133,7 @@ void Player::render(SDL_Renderer* renderer) {
             // set the color to that of the player and render
             SDL_SetTextureColorMod(invulnImage, playerColors.red,
              playerColors.green, playerColors.blue);
+            SDL_SetTextureAlphaMod(invulnImage, CHARACTER_INVULN_ALPHA);
             SDL_RenderCopy(renderer, invulnImage, NULL, &invulnRect);
         }
         SDL_SetTextureColorMod(playerImage, playerColors.red,
@@ -1137,6 +1152,10 @@ void Player::render(SDL_Renderer* renderer) {
             SDL_SetTextureAlphaMod(rollOutline, CHARACTER_ROLL_ALPHA);
             SDL_RenderCopyEx(renderer, rollOutline, NULL, &outlineRect,
              atan2(-rollDirection.y, -rollDirection.x)*180/M_PI, NULL, SDL_FLIP_NONE);
+        }
+
+        if (DEBUG_DRAW_WEAPONARC == true) {
+            weapon->debugRender(game, centreX, centreY, angle);
         }
     } else {
         deathMarker->render(renderer);
@@ -1210,7 +1229,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler)
     } else {
         mouseDown = false;
     }
-    double projectileAngle = player->getAngle()+((rand()%AR_MAX_BULLET_SPREAD)-AR_MAX_BULLET_SPREAD/2);
+    double projectileAngle = player->getAngle()+generateRandDouble(-AR_MAX_BULLET_SPREAD/2, AR_MAX_BULLET_SPREAD/2);
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
             game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
@@ -1252,11 +1271,19 @@ void AssaultRifle::resetGun(void) {
     mouseDown = false;
 }
 
+void AssaultRifle::debugRender(Game* game, int x, int y, double a) {
+    double a1 = (a+180)-AR_MAX_BULLET_SPREAD/2;
+    double a2 = (a+180)+AR_MAX_BULLET_SPREAD/2;
+    lineRGBA(game->renderer(), x, y, x+cos(a1*M_PI/180)*DEBUG_WEAPONARC_RADIUS, y+sin(a1*M_PI/180)*DEBUG_WEAPONARC_RADIUS, 0, 0, 0, UI_COLOR_MAX_VALUE);
+    lineRGBA(game->renderer(), x, y, x+cos(a2*M_PI/180)*DEBUG_WEAPONARC_RADIUS, y+sin(a2*M_PI/180)*DEBUG_WEAPONARC_RADIUS, 0, 0, 0, UI_COLOR_MAX_VALUE);
+    arcRGBA(game->renderer(), x, y, DEBUG_WEAPONARC_RADIUS, a1, a2, 0, 0, 0, UI_COLOR_MAX_VALUE);
+}
+
 
 Pistol::Pistol(void): Weapon() {
     mouseDown = false;
     reloading = false;
-    currRecoil = 0;
+    currRecoil = PISTOL_MIN_BULLET_SPREAD;
     currAmmo = PISTOL_CLIP_SIZE;
     reloadFramesLeft = 0;
 }
@@ -1266,10 +1293,7 @@ Pistol::~Pistol(void) {
 }
 
 void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
-    double projectileAngle = player->getAngle();
-    if (currRecoil > 0) {
-         projectileAngle = player->getAngle()+((rand()%currRecoil)-currRecoil/2);
-    }
+    double projectileAngle = player->getAngle()+generateRandDouble(-currRecoil/2, currRecoil/2);
     if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
         if (mouseDown != true && reloadFramesLeft == 0) {
             if (currAmmo > 0) {
@@ -1296,8 +1320,11 @@ void Pistol::beginReload(void) {
 }
 
 void Pistol::updateGun(void) {
-    if (currRecoil > 0) {
+    if (currRecoil > PISTOL_MIN_BULLET_SPREAD) {
         currRecoil -= PISTOL_RECOIL_RECOVERY_PER_FRAME;
+        if (currRecoil < PISTOL_MIN_BULLET_SPREAD) {
+            currRecoil = PISTOL_MIN_BULLET_SPREAD;
+        }
     }
     if (currRecoil > PISTOL_MAX_BULLET_SPREAD) {
         currRecoil = PISTOL_MAX_BULLET_SPREAD;
@@ -1321,6 +1348,14 @@ void Pistol::resetGun(void) {
     mouseDown = false;
 }
 
+void Pistol::debugRender(Game* game, int x, int y, double a) {
+    double a1 = (a+180)-currRecoil/2;
+    double a2 = (a+180)+currRecoil/2;
+    lineRGBA(game->renderer(), x, y, x+cos(a1*M_PI/180)*DEBUG_WEAPONARC_RADIUS, y+sin(a1*M_PI/180)*DEBUG_WEAPONARC_RADIUS, 0, 0, 0, UI_COLOR_MAX_VALUE);
+    lineRGBA(game->renderer(), x, y, x+cos(a2*M_PI/180)*DEBUG_WEAPONARC_RADIUS, y+sin(a2*M_PI/180)*DEBUG_WEAPONARC_RADIUS, 0, 0, 0, UI_COLOR_MAX_VALUE);
+    arcRGBA(game->renderer(), x, y, DEBUG_WEAPONARC_RADIUS, a1, a2, 0, 0, 0, UI_COLOR_MAX_VALUE);
+}
+
 
 
 Shotgun::Shotgun(void): Weapon() {
@@ -1333,16 +1368,23 @@ Shotgun::~Shotgun(void) {
 }
 
 void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
-    double projectileAngle;
+    double projectileAngle = player->getAngle()-SHOTGUN_SPREAD_RANGE/2;
+    double shotAngle;
     if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
         if (mouseDown != true && shotDelay == 0) {
             mouseDown = true;
-            for (int n = -SHOTGUN_PROJECTILES_PER_SHOT/2; n < SHOTGUN_PROJECTILES_PER_SHOT/2; n++) {
+            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
+                shotAngle = generateRandDouble(projectileAngle, projectileAngle+SHOTGUN_PROJECTILE_SPREAD);
+                game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+                 shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
+                projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
+            }
+            /*for (double n = -SHOTGUN_PROJECTILES_PER_SHOT/2; n < SHOTGUN_PROJECTILES_PER_SHOT/2; n++) {
                 projectileAngle = player->getAngle()+n*SHOTGUN_PROJECTILE_SPREAD; // set base angle of projectile
                 projectileAngle += (rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2;
                 game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
                  projectileAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
-            }
+            }*/
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
     } else {
@@ -1363,6 +1405,22 @@ void Shotgun::updateGun(void) {
 void Shotgun::resetGun() {
     shotDelay = 0;
     mouseDown = false;
+}
+
+void Shotgun::debugRender(Game* game, int x, int y, double a) {
+    double a1 = (a+180)-SHOTGUN_SPREAD_RANGE/2;
+    double a2 = (a+180)+SHOTGUN_SPREAD_RANGE/2;
+    thickLineRGBA(game->renderer(), x, y, x+cos(a1*M_PI/180)*DEBUG_WEAPONARC_RADIUS,
+     y+sin(a1*M_PI/180)*DEBUG_WEAPONARC_RADIUS, 3, 0, 0, 0, UI_COLOR_MAX_VALUE);
+    thickLineRGBA(game->renderer(), x, y, x+cos(a2*M_PI/180)*DEBUG_WEAPONARC_RADIUS,
+     y+sin(a2*M_PI/180)*DEBUG_WEAPONARC_RADIUS, 3, 0, 0, 0, UI_COLOR_MAX_VALUE);
+    for (int n = 1; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
+        lineRGBA(game->renderer(), x, y,
+         x+cos((a1+n*SHOTGUN_PROJECTILE_SPREAD)*M_PI/180)*DEBUG_WEAPONARC_RADIUS,
+         y+sin((a1+n*SHOTGUN_PROJECTILE_SPREAD)*M_PI/180)*DEBUG_WEAPONARC_RADIUS,
+         0, 0, 0, UI_COLOR_MAX_VALUE);
+    }
+    arcRGBA(game->renderer(), x, y, DEBUG_WEAPONARC_RADIUS, a1, a2, 0, 0, 0, UI_COLOR_MAX_VALUE);
 }
 
 
@@ -2063,13 +2121,13 @@ void testGetInterceptY(void) {
 
 void testCheckExitMap(void) {
     assert(checkExitMap(0, 0, 10) == true);
-    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT, SCREEN_HEIGHT_DEFAULT, 10) == true);
-    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, 10) == false);
-    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT-10, SCREEN_HEIGHT_DEFAULT/2, 10) == false);
-    assert(checkExitMap(SCREEN_WIDTH_DEFAULT/2, SCREEN_HEIGHT_DEFAULT-10, 5) == false);
+    assert(checkExitMap(GAMESPACE_WIDTH, GAMESPACE_HEIGHT, 10) == true);
+    assert(checkExitMap(GAMESPACE_WIDTH/2, GAMESPACE_HEIGHT/2, 10) == false);
+    assert(checkExitMap(GAMESPACE_WIDTH-10, GAMESPACE_HEIGHT/2, 10) == false);
+    assert(checkExitMap(GAMESPACE_WIDTH/2, GAMESPACE_HEIGHT-10, 5) == false);
 
-    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT-5, SCREEN_HEIGHT_DEFAULT/2, 10) == true);
-    assert(checkExitMap(SCREEN_HEIGHT_DEFAULT/2, SCREEN_HEIGHT_DEFAULT/2, SCREEN_WIDTH_DEFAULT) == true);
+    assert(checkExitMap(GAMESPACE_WIDTH-5, GAMESPACE_HEIGHT/2, 10) == true);
+    assert(checkExitMap(GAMESPACE_WIDTH/2, GAMESPACE_HEIGHT/2, SCREEN_WIDTH_DEFAULT) == true);
     assert(checkExitMap(10, 10, 10) == false);
     assert(checkExitMap(9, 9, 10) == true);
     assert(checkExitMap(0, 0, 0) == false);

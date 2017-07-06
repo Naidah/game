@@ -9,3 +9,4 @@ Wrote HUD_AMMO_HEIGHT = HUD_AMMO_HEIGHT, fixed after identifying it held an unex
 http://en.cppreference.com
 http://lazyfoo.net/tutorials
 https://www.tutorialspoint.com/cplusplus/
+http://www.ferzkopp.net/Software/SDL2_gfx/Docs/html/_s_d_l2__gfx_primitives_8h.html
