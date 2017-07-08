@@ -39,8 +39,8 @@ typedef struct _coordSet {
 // General Parameters
 const int SCREEN_FPS = 60; // desired framerate of the screen
 
-// values of the different colour schemes that can be used
-// red
+                           // values of the different colour schemes that can be used
+                           // red
 const string COLOR_RED_NAME = "red";
 const int COLOR_RED_RED = 255;
 const int COLOR_RED_GREEN = 0;
@@ -107,15 +107,15 @@ const int COLOR_KEY_GREEN = 255;
 const int COLOR_KEY_BLUE = 255;
 
 // directions returned by the get direction function for movement
-const direction MOVE_NONE = {0,0};
-const direction MOVE_UP = {0,-1};
-const direction MOVE_DOWN = {0,1};
-const direction MOVE_LEFT = {-1,0};
-const direction MOVE_RIGHT = {1,0};
-const direction MOVE_UP_LEFT = {-1,-1};
-const direction MOVE_UP_RIGHT = {1,-1};
-const direction MOVE_DOWN_LEFT = {-1,1};
-const direction MOVE_DOWN_RIGHT = {1,1};
+const direction MOVE_NONE = { 0,0 };
+const direction MOVE_UP = { 0,-1 };
+const direction MOVE_DOWN = { 0,1 };
+const direction MOVE_LEFT = { -1,0 };
+const direction MOVE_RIGHT = { 1,0 };
+const direction MOVE_UP_LEFT = { -1,-1 };
+const direction MOVE_UP_RIGHT = { 1,-1 };
+const direction MOVE_DOWN_LEFT = { -1,1 };
+const direction MOVE_DOWN_RIGHT = { 1,1 };
 
 // location of the config file
 const string CONFIG_FILE_LOCATION = "config.gabisbad";
@@ -129,11 +129,11 @@ const string CHARACTER_DEATH_IMAGE = "images/deathCircle.png";
 const string CHARACTER_INVULN_IMAGE = "images/invuln.png";
 
 const double CHARACTER_VEL_MAX_PS = 300;
-const double CHARACTER_VEL_MAX = CHARACTER_VEL_MAX_PS/SCREEN_FPS; // Max movementspeed of the player in any direction
+const double CHARACTER_VEL_MAX = CHARACTER_VEL_MAX_PS / SCREEN_FPS; // Max movementspeed of the player in any direction
 const double CHARACTER_ACCEL_PS = 36;
-const double CHARACTER_ACCEL_PER_FRAME = CHARACTER_ACCEL_PS/SCREEN_FPS; // Acceleration speed of the plater
+const double CHARACTER_ACCEL_PER_FRAME = CHARACTER_ACCEL_PS / SCREEN_FPS; // Acceleration speed of the plater
 const double CHARACTER_DECCEL_PS = 24;
-const double CHARACTER_DECEL_PER_FRAME = CHARACTER_DECCEL_PS/SCREEN_FPS; // Multiplier used to decelerate player when not giving input movement
+const double CHARACTER_DECEL_PER_FRAME = CHARACTER_DECCEL_PS / SCREEN_FPS; // Multiplier used to decelerate player when not giving input movement
 
 const int CHARACTER_WIDTH = 40; // width of the player on the default screen size
 const int CHARACTER_HEIGHT = 40; // height of the player in the default screen size
@@ -141,7 +141,7 @@ const int CHARACTER_HEIGHT = 40; // height of the player in the default screen s
 const double CHARACTER_ROLL_DURATION_SEC = 0.25;
 const double CHARACTER_ROLL_DURATION = CHARACTER_ROLL_DURATION_SEC*SCREEN_FPS;
 const double CHARACTER_ROLL_SPEED_PS = 850;
-const double CHARACTER_ROLL_SPEED = CHARACTER_ROLL_SPEED_PS/SCREEN_FPS;
+const double CHARACTER_ROLL_SPEED = CHARACTER_ROLL_SPEED_PS / SCREEN_FPS;
 const double CHARACTER_ROLL_COOLDOWN_SEC = 3;
 const double CHARACTER_ROLL_COOLDOWN = CHARACTER_ROLL_COOLDOWN_SEC*SCREEN_FPS;
 const int CHARACTER_ROLL_ALPHA = 100;
@@ -151,7 +151,7 @@ const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game
 const int CHARACTER_MAX_HP = 3; // max health a player can have
 const double CHARACTER_DEATH_DURATION_SEC = 5;
 const double CHARACTER_DEATH_DURATION = CHARACTER_DEATH_DURATION_SEC*SCREEN_FPS; // the number of frames the player remains dead for
-const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH*4;
+const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH * 4;
 const double CHARACTER_INVULN_SEC = 2.5;
 const double CHARACTER_INVULN_FRAMES = CHARACTER_INVULN_SEC*SCREEN_FPS;
 
@@ -172,6 +172,40 @@ enum CHARACTER_WEAPONS {
 
 // Weapon Related Constants
 // ASSAULT RIFLE
+const int AR_CLIP_SIZE = 18; // number of shots before AR reloads
+const double AR_MAX_BULLET_SPREAD = 13; // max angle bullets can deflect by
+const double AR_RELOAD_SEC = 1.6;
+const double AR_RELOAD_FRAMES = AR_RELOAD_SEC*SCREEN_FPS; // number of frames in reload animation
+const double AR_SHOT_DELAY_SEC = 0.2;
+const double AR_SHOT_DELAY = AR_SHOT_DELAY_SEC*SCREEN_FPS; //number of frames between each projectile firing
+const double AR_PROJECTILE_SPEED_PS = 1000;
+const double AR_PROJECTILE_SPEED = AR_PROJECTILE_SPEED_PS / SCREEN_FPS; // speed of an AR projectile
+
+                                                                        // PISTOL
+const int PISTOL_CLIP_SIZE = 8;
+const int PISTOL_MIN_BULLET_SPREAD = 5;
+const int PISTOL_MAX_BULLET_SPREAD = 40;
+const double PISTOL_RELOAD_SEC = 0.9;
+const double PISTOL_RELOAD_FRAMES = PISTOL_RELOAD_SEC*SCREEN_FPS;
+const double PISTOL_RECOIL_INCREASE_PER_SHOT = 30;
+const double PISTOL_RECOIL_RECOVERY_PS = 90;
+const double PISTOL_RECOIL_RECOVERY_PER_FRAME = PISTOL_RECOIL_RECOVERY_PS / SCREEN_FPS;
+const double PISTOL_PROJECTILE_SPEED_PS = 1100;
+const double PISTOL_PROJECTILE_SPEED = PISTOL_PROJECTILE_SPEED_PS / SCREEN_FPS;
+
+// SHOTGUN
+const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
+const double SHOTGUN_SPREAD_RANGE = 40;
+const double SHOTGUN_PROJECTILE_SPREAD = SHOTGUN_SPREAD_RANGE / SHOTGUN_PROJECTILES_PER_SHOT;
+const double SHOTGUN_SHOT_DELAY_SEC = 0.6;
+const double SHOTGUN_SHOT_DELAY = SHOTGUN_SHOT_DELAY_SEC*SCREEN_FPS;
+const double SHOTGUN_PROJECTILE_SPEED_PS = 600;
+const double SHOTGUN_PROJECTILE_SPEED = SHOTGUN_PROJECTILE_SPEED_PS / SCREEN_FPS;
+
+
+/* Defaults
+// Weapon Related Constants
+// ASSAULT RIFLE
 const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
 const double AR_MAX_BULLET_SPREAD = 13; // max angle bullets can deflect by
 const double AR_RELOAD_SEC = 1.8;
@@ -187,44 +221,20 @@ const int PISTOL_MIN_BULLET_SPREAD = 5;
 const int PISTOL_MAX_BULLET_SPREAD = 40;
 const double PISTOL_RELOAD_SEC = 0.9;
 const double PISTOL_RELOAD_FRAMES = PISTOL_RELOAD_SEC*SCREEN_FPS;
-const double PISTOL_RECOIL_INCREASE_PER_SHOT = 30;
-const double PISTOL_RECOIL_RECOVERY_PS = 90;
+const double PISTOL_RECOIL_INCREASE_PER_SHOT = 25;
+const double PISTOL_RECOIL_RECOVERY_PS = 60;
 const double PISTOL_RECOIL_RECOVERY_PER_FRAME = PISTOL_RECOIL_RECOVERY_PS/SCREEN_FPS;
 const double PISTOL_PROJECTILE_SPEED_PS = 900;
 const double PISTOL_PROJECTILE_SPEED = PISTOL_PROJECTILE_SPEED_PS/SCREEN_FPS;
 
 // SHOTGUN
 const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
-const double SHOTGUN_SPREAD_RANGE = 40;
+const double SHOTGUN_SPREAD_RANGE = 50;
 const double SHOTGUN_PROJECTILE_SPREAD = SHOTGUN_SPREAD_RANGE/SHOTGUN_PROJECTILES_PER_SHOT;
 const double SHOTGUN_SHOT_DELAY_SEC = 0.8;
 const double SHOTGUN_SHOT_DELAY = SHOTGUN_SHOT_DELAY_SEC*SCREEN_FPS;
 const double SHOTGUN_PROJECTILE_SPEED_PS = 600;
 const double SHOTGUN_PROJECTILE_SPEED = SHOTGUN_PROJECTILE_SPEED_PS/SCREEN_FPS;
-
-
-/* Defaults
-// Weapon Related Constants
-// ASSAULT RIFLE
-const int AR_CLIP_SIZE = 15; // number of shots before AR reloads
-const int AR_MAX_BULLET_SPREAD = 15; // max angle bullets can deflect by
-const int AR_RELOAD_FRAMES = 100; // number of frames in reload animation
-const int AR_SHOT_DELAY = 9; //number of frames between each projectile firing
-const double AR_PROJECTILE_SPEED = 18.0;
-
-// PISTOL
-const int PISTOL_CLIP_SIZE = 8;
-const int PISTOL_MAX_BULLET_SPREAD = 50;
-const int PISTOL_RELOAD_FRAMES = 60;
-const int PISTOL_RECOIL_INCREASE_PER_SHOT = 25;
-const int PISTOL_RECOIL_RECOVERY_PER_FRAME = 1;
-const double PISTOL_PROJECTILE_SPEED = 16.0;
-
-// SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
-const int SHOTGUN_PROJECTILE_SPREAD = 8;
-const int SHOTGUN_SHOT_DELAY = 50;
-const double SHOTGUN_PROJECTILE_SPEED = 12.0;
 */
 
 // SNIPER
@@ -237,7 +247,7 @@ const string PROJECTILE_IMAGE_LOCATION = "images/invuln.png"; // location of the
 const int PROJECTILE_WIDTH = 8; // width of projectile image on default screen size
 const int PROJECTILE_HEIGHT = 8; // height of projectile image on default screen size
 
-// identifiers for which object type an object collides with
+                                 // identifiers for which object type an object collides with
 enum PROJECTILE_COLLISION_IDENTIFIERS {
     PROJECTILE_COLLISION_NONE,
     PROJECTILE_COLLISION_PLAYER,
@@ -246,7 +256,7 @@ enum PROJECTILE_COLLISION_IDENTIFIERS {
 
 const int PROJECTILE_EXPLOSION_START_RADIUS = 8;
 const int PROJECTILE_EXPLOSION_END_RADIUS = 12;
-const double PROJECTILE_EXPLOSION_DURATION_SEC = 0.3;   
+const double PROJECTILE_EXPLOSION_DURATION_SEC = 0.3;
 const int PROJECTILE_EXPLOSION_DURATION = PROJECTILE_EXPLOSION_DURATION_SEC*SCREEN_FPS;
 const string PROJECTILE_EXPLOSION_IMAGE = "images/deathCircle.png";
 
@@ -259,7 +269,7 @@ const double SCREEN_TICKRATE = 1000.0 / SCREEN_FPS; // duration of each frame on
 
 const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
 
-const int SCREEN_WIDTH_DEFAULT = 1300; // width of screen to scale against
+const int SCREEN_WIDTH_DEFAULT = 1350; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
@@ -268,15 +278,15 @@ const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 
 // Gamespace parameters
-const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT*1.5; // the gameplay space takes a square on the far right
+const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT*1.6; // the gameplay space takes a square on the far right
 const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
 
-const int GAMESPACE_MARGIN = 50; // margin within the gamespace where no walls can appear
+const int GAMESPACE_MARGIN = 100; // margin within the gamespace where no walls can appear
 
 
-// Game UI parameters
+                                  // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
 const string UI_GAME_CURSOR_LOCATION = "images/gameCursor.png";
 
@@ -284,16 +294,16 @@ const int UI_CURSOR_WIDTH = 16;
 const int UI_CURSOR_HEIGHT = 16;
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
-// multiplier on the primary color used in determining background color
-const double UI_BACKGROUND_MULTIPLIER = 1-(double)UI_BACKGROUND_ADDITION/UI_COLOR_MAX_VALUE;
+                                        // multiplier on the primary color used in determining background color
+const double UI_BACKGROUND_MULTIPLIER = 1 - (double)UI_BACKGROUND_ADDITION / UI_COLOR_MAX_VALUE;
 const int UI_BACKGROUND_COLOR_RED = 100;
-const int UI_BACKGROUND_COLOR_GREEN =160;
+const int UI_BACKGROUND_COLOR_GREEN = 160;
 const int UI_BACKGROUND_COLOR_BLUE = 255;
 
 const int UI_BACKGROUND_PATTERN_WIDTH = 50;
 const int UI_BACKGROUND_PATTERN_HEIGHT = 50;
-const int UI_BACKGROUND_PATTERN_ROW = ceil((double)GAMESPACE_WIDTH/UI_BACKGROUND_PATTERN_WIDTH);
-const int UI_BACKGROUND_PATTERN_COL = ceil((double)GAMESPACE_HEIGHT/UI_BACKGROUND_PATTERN_HEIGHT);
+const int UI_BACKGROUND_PATTERN_ROW = GAMESPACE_WIDTH / UI_BACKGROUND_PATTERN_WIDTH + 1;
+const int UI_BACKGROUND_PATTERN_COL = GAMESPACE_HEIGHT / UI_BACKGROUND_PATTERN_HEIGHT + 1;
 const int UI_BACKGROUND_PATTERN_COUNT = 6;
 const string UI_BACKGROUND_PATTERN_PREFIX = "images/pattern";
 const string UI_BACKGROUND_PATTERN_TYPE = ".png";
@@ -311,7 +321,7 @@ const int MAPBOX_NUM_CORNERS = 4;
 const int MAPBOX_MINIMUM_WIDTH = CHARACTER_WIDTH*1.4;
 const int MAPBOX_MINIMUM_HEIGHT = CHARACTER_WIDTH*1.4;
 
-const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH*3;
+const int MAPBOX_MINIMUM_GAP = CHARACTER_WIDTH * 3;
 
 /* Default generation settings
 const int MAPBOX_START_ITERATIONS = 4;
@@ -333,15 +343,15 @@ const double HUD_COLOR_SCALE = 0.8;
 // ammo box parameters
 const string HUD_AMMO_ICON_LOCATION = "images/ammoIcon.png";
 
-const int HUD_AMMO_WIDTH = HUD_WIDTH/2;
+const int HUD_AMMO_WIDTH = HUD_WIDTH / 2;
 const int HUD_AMMO_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_AMMO_TOPLEFT_X = HUD_AMMO_WIDTH;
 const int HUD_AMMO_TOPLEFT_Y = HUD_HEIGHT - HUD_AMMO_HEIGHT;
 
 const int HUD_AMMO_ICON_WIDTH = HUD_AMMO_WIDTH*0.6;
 const int HUD_AMMO_ICON_HEIGHT = HUD_AMMO_HEIGHT*0.6;
-const int HUD_AMMO_ICON_TOPLEFT_X = HUD_AMMO_TOPLEFT_X+(HUD_AMMO_WIDTH - HUD_AMMO_ICON_WIDTH)/2;
-const int HUD_AMMO_ICON_TOPLEFT_Y = HUD_AMMO_TOPLEFT_Y+(HUD_AMMO_HEIGHT - HUD_AMMO_ICON_HEIGHT)/2;
+const int HUD_AMMO_ICON_TOPLEFT_X = HUD_AMMO_TOPLEFT_X + (HUD_AMMO_WIDTH - HUD_AMMO_ICON_WIDTH) / 2;
+const int HUD_AMMO_ICON_TOPLEFT_Y = HUD_AMMO_TOPLEFT_Y + (HUD_AMMO_HEIGHT - HUD_AMMO_ICON_HEIGHT) / 2;
 
 const double HUD_AMMO_BOX_COLOR_SCALE = 0.55;
 const double HUD_AMMO_BAR_COLOR_SCALE = 0.75;
@@ -350,15 +360,15 @@ const int HUD_AMMO_ICON_ALPHA = 155;
 // rool cooldown display parameters
 const string HUD_COOLDOWN_ICON_LOCATION = "images/rollIcon.png";
 
-const int HUD_COOLDOWN_WIDTH = HUD_WIDTH/2;
+const int HUD_COOLDOWN_WIDTH = HUD_WIDTH / 2;
 const int HUD_COOLDOWN_HEIGHT = HUD_HEIGHT*0.2;
 const int HUD_COOLDOWN_TOPLEFT_X = 0;
 const int HUD_COOLDOWN_TOPLEFT_Y = HUD_HEIGHT - HUD_COOLDOWN_HEIGHT;
 
 const int HUD_COOLDOWN_ICON_HEIGHT = HUD_COOLDOWN_HEIGHT*0.75;
 const int HUD_COOLDOWN_ICON_WIDTH = HUD_COOLDOWN_ICON_HEIGHT;
-const int HUD_COOLDOWN_ICON_TOPLEFT_X = HUD_COOLDOWN_TOPLEFT_X+(HUD_COOLDOWN_WIDTH - HUD_COOLDOWN_ICON_WIDTH)/2;
-const int HUD_COOLDOWN_ICON_TOPLEFT_Y = HUD_COOLDOWN_TOPLEFT_Y+(HUD_COOLDOWN_HEIGHT - HUD_COOLDOWN_ICON_HEIGHT)/2;
+const int HUD_COOLDOWN_ICON_TOPLEFT_X = HUD_COOLDOWN_TOPLEFT_X + (HUD_COOLDOWN_WIDTH - HUD_COOLDOWN_ICON_WIDTH) / 2;
+const int HUD_COOLDOWN_ICON_TOPLEFT_Y = HUD_COOLDOWN_TOPLEFT_Y + (HUD_COOLDOWN_HEIGHT - HUD_COOLDOWN_ICON_HEIGHT) / 2;
 
 const double HUD_COOLDOWN_BOX_COLOR_SCALE = 0.55;
 const double HUD_COOLDOWN_BAR_COLOR_SCALE = 0.75;
@@ -394,16 +404,20 @@ const int CHARBUFF_LENGTH = 256;
 
 
 // constants used in debugging
-const bool DEBUG_ENABLE_DRIVERS = true;
-const bool DEBUG_HIDE_SHADOWS = true;
-const bool DEBUG_KILL_PLAYER = true;
+const bool DEBUG_ENABLE_DRIVERS = false;
+const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_KILL_PLAYER = false;
 const bool DEBUG_SHOW_CURSOR = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
 const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
-const bool DEBUG_DRAW_WEAPONARC = true;
+const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
 const int DEBUG_NUM_PLAYERS = 4;
+
+const bool DEBUG_IS_HOST = false;
+const Uint16 DEBUG_PORT = 2880;
+const string DEBUG_HOST_IP = "192.168.2.101";
 
 
 /*-------------------------- Typedefs ------------------------------*/
@@ -444,24 +458,24 @@ protected:
     bool fullscreen;
 public:
     Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
-     forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
-     SDL_Renderer** renderer);
+        forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
+        SDL_Renderer** renderer);
 
     void setPatterns(void);
 
-    forward_list<Player>* players(void) {return playerList;}
-    forward_list<Wall*>* walls(void) {return wallContainer;}
-    forward_list<coordSet>* spawns(void) {return spawnPoints;}
-    forward_list<Projectile>* projectiles(void) {return projectileList;}
-    SDL_Renderer* renderer(void) {return *gameRenderer;}
-    SDL_Texture* pattern(int x, int y) {return patterns[patternBoard[x][y]];}
-    int screenWidth(void) {return swidth;}
-    int screenHeight(void) {return sheight;}
-    int isFullscreen(void) {return fullscreen;}
-    colorSet primaryColors(void) {return primaryColor;}
-    colorSet secondaryColors(void) {return secondaryColor;}
+    forward_list<Player>* players(void) { return playerList; }
+    forward_list<Wall*>* walls(void) { return wallContainer; }
+    forward_list<coordSet>* spawns(void) { return spawnPoints; }
+    forward_list<Projectile>* projectiles(void) { return projectileList; }
+    SDL_Renderer* renderer(void) { return *gameRenderer; }
+    SDL_Texture* pattern(int x, int y) { return patterns[patternBoard[x][y]]; }
+    int screenWidth(void) { return swidth; }
+    int screenHeight(void) { return sheight; }
+    int isFullscreen(void) { return fullscreen; }
+    colorSet primaryColors(void) { return primaryColor; }
+    colorSet secondaryColors(void) { return secondaryColor; }
 
-    void setSize(int w, int h) {swidth = w; sheight = h;}
+    void setSize(int w, int h) { swidth = w; sheight = h; }
 };
 
 
@@ -475,7 +489,7 @@ protected:
     int centreY;
     int radius; // contains the radius of the character circle in pixels
 
-    // players velocity in each direction
+                // players velocity in each direction
     double velx;
     double vely;
 
@@ -494,14 +508,14 @@ protected:
 
     Weapon* weapon; // address of the player's weapon object
 
-    // life values of the player
+                    // life values of the player
     int health;
     bool alive;
     int deathFrames; // counter containing how long the player remains dead
 
     int id; // ID number of the player object to differentiate it
 
-    // the sprite sheet for the player
+            // the sprite sheet for the player
     SDL_Texture* playerImage;
     SDL_Texture* rollOutline;
     SDL_Texture* invulnImage;
@@ -514,16 +528,16 @@ public:
     Player(Game* game, int startX, int startY, int idNum, int weaponID);
 
     //getters for the private variables
-    Weapon* getWeapon(void) {return weapon;}
-    int getX(void) {return centreX;}
-    int getY(void) {return centreY;}
-    int getRadius(void) {return radius;}
-    int getID(void) {return id;}
-    double getAngle(void) {return angle;}
-    int getRollCooldown(void) {return rollCooldown;}
-    int getDeathFrames(void) {return deathFrames;}
-    int getHealth(void) {return health;}
-    bool isAlive(void) {return alive;}
+    Weapon* getWeapon(void) { return weapon; }
+    int getX(void) { return centreX; }
+    int getY(void) { return centreY; }
+    int getRadius(void) { return radius; }
+    int getID(void) { return id; }
+    double getAngle(void) { return angle; }
+    int getRollCooldown(void) { return rollCooldown; }
+    int getDeathFrames(void) { return deathFrames; }
+    int getHealth(void) { return health; }
+    bool isAlive(void) { return alive; }
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler, Game* game);
@@ -534,7 +548,7 @@ public:
     void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
     void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList); // respawn the player after death
 
-    //draws the player to the screen
+                                                                                         //draws the player to the screen
     void render(Game* game);
 };
 
@@ -573,7 +587,7 @@ public:
 
 // Weapon Derived classes
 // Assault rifle
-class AssaultRifle: public Weapon {
+class AssaultRifle : public Weapon {
 private:
     int shotDelay;
     bool mouseDown;
@@ -581,11 +595,11 @@ public:
     AssaultRifle(void);
     ~AssaultRifle(void);
 
-    int getMaxAmmo(void) {return AR_CLIP_SIZE;}
-    int getCurrAmmo(void) {return currAmmo;}
-    int getReloadFrames(void) {return reloadFramesLeft;}
-    int getMaxReloadFrames(void) {return AR_RELOAD_FRAMES;}
-    bool isReloading(void) {return reloading;}
+    int getMaxAmmo(void) { return AR_CLIP_SIZE; }
+    int getCurrAmmo(void) { return currAmmo; }
+    int getReloadFrames(void) { return reloadFramesLeft; }
+    int getMaxReloadFrames(void) { return AR_RELOAD_FRAMES; }
+    bool isReloading(void) { return reloading; }
 
     void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
@@ -594,7 +608,7 @@ public:
     void debugRender(Game* game, int x, int y, double a);
 };
 
-class Pistol: public Weapon {
+class Pistol : public Weapon {
 private:
     double currRecoil;
     bool mouseDown;
@@ -602,11 +616,11 @@ public:
     Pistol(void);
     ~Pistol(void);
 
-    int getMaxAmmo(void) {return PISTOL_CLIP_SIZE;}
-    int getCurrAmmo(void) {return currAmmo;}
-    int getReloadFrames(void) {return reloadFramesLeft;}
-    int getMaxReloadFrames(void) {return PISTOL_RELOAD_FRAMES;}
-    bool isReloading(void) {return reloading;}
+    int getMaxAmmo(void) { return PISTOL_CLIP_SIZE; }
+    int getCurrAmmo(void) { return currAmmo; }
+    int getReloadFrames(void) { return reloadFramesLeft; }
+    int getMaxReloadFrames(void) { return PISTOL_RELOAD_FRAMES; }
+    bool isReloading(void) { return reloading; }
 
     void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
@@ -615,7 +629,7 @@ public:
     void debugRender(Game* game, int x, int y, double a);
 };
 
-class Shotgun: public Weapon {
+class Shotgun : public Weapon {
 private:
     int shotDelay;
     bool mouseDown;
@@ -623,11 +637,11 @@ public:
     Shotgun(void);
     ~Shotgun(void);
 
-    int getMaxAmmo(void) {return 1;} // shotguns do not use ammo, so return 1 as default (not 0 to avoid errors)
-    int getCurrAmmo(void) {return currAmmo;}
-    int getReloadFrames(void) {return shotDelay;}
-    int getMaxReloadFrames(void) {return SHOTGUN_SHOT_DELAY;}
-    bool isReloading(void) {return true;} // treat shot delay as reloading
+    int getMaxAmmo(void) { return 1; } // shotguns do not use ammo, so return 1 as default (not 0 to avoid errors)
+    int getCurrAmmo(void) { return currAmmo; }
+    int getReloadFrames(void) { return shotDelay; }
+    int getMaxReloadFrames(void) { return SHOTGUN_SHOT_DELAY; }
+    bool isReloading(void) { return true; } // treat shot delay as reloading
 
     void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
     void beginReload(void);
@@ -648,7 +662,7 @@ private:
 public:
     ~Wall(void); // frees any memory associated with the wall
     Wall(int x, int y, int w, int h); // initializer function
-    SDL_Rect getLocation(void) {return wallLocation;} // returns the SDL_Rect describing the wall
+    SDL_Rect getLocation(void) { return wallLocation; } // returns the SDL_Rect describing the wall
     bool checkCollision(int x, int y, int radius); // checks if the object at (x, y) with radius r is in contact with the wall
     void render(Game* game); // draw the wall to the screen
     void renderShadow(int x, int y, Game* game); // draw the LOS shadow by the wall to the screen
@@ -666,7 +680,7 @@ private:
 
     int radius; // radius of the bullet
 
-    // velocity of the bullet in each direction
+                // velocity of the bullet in each direction
     double velx;
     double vely;
 
@@ -685,8 +699,8 @@ private:
 public:
     Projectile(int x, int y, double a, const double speed, Game* game, int id);
 
-    SDL_Rect getLocation(void) {return projectileRect;}
-    colorSet getColors(void) {return projectileColors;}
+    SDL_Rect getLocation(void) { return projectileRect; }
+    colorSet getColors(void) { return projectileColors; }
 
     int checkCollision(Game* game);
     bool move(Game* game);
@@ -720,11 +734,11 @@ public:
     MapBox(int xinp, int yinp, int winp, int hinp, int iters, int divChance);
     ~MapBox(void);
 
-    int getIterations(void) {return iterations;}
-    int getX(void) {return x;}
-    int getY(void) {return y;}
-    int getWidth(void) {return w;}
-    int getHeight(void) {return h;}
+    int getIterations(void) { return iterations; }
+    int getX(void) { return x; }
+    int getY(void) { return y; }
+    int getWidth(void) { return w; }
+    int getHeight(void) { return h; }
     coordSet getCentre(void);
 
     list<MapBox*> divideBox(void);
@@ -764,11 +778,11 @@ public:
 class CIpAddress {
 private:
     IPaddress m_Ip; // the IPaddress structure
-protected:
+public:
     CIpAddress(); // base constructor
     CIpAddress(Uint16 port); // constructor that assigns default port
     CIpAddress(string host, Uint16 port); // constructor that associates a port and host
-    void setIp(IPaddress sdl_ip); // set IP from an SDL_ip instance
+    void setIp(IPaddress sdl_ip); // set IP from an IPaddress instance
     bool Ok() const; // True when the instance has a port and host assigned
     IPaddress getIpAddress() const; // return a SDL_net IPaddress structure
     Uint32 getHost() const; // return host
@@ -797,31 +811,32 @@ class CHostSocket : public CTcpSocket {
 public:
     CHostSocket(CIpAddress& ipAddress); // create a socket with a CIpAddress object
     CHostSocket(Uint16 port); // create and open a socket at an existing port
-    bool Accept(CClientSocket&); // set a client CTcpSocket object after listening to the port
-    virtual void onReady(); // pure virtual
+
+    bool accept(CClientSocket& clientSocket); // set a client CTcpSocket object after listening to the port
+    virtual void OnReady(); // pure virtual
 };
 
 
 class CClientSocket : public CTcpSocket {
 private:
-    CIpAddress m_remoteIP; // CIpAddress object corresponding to remote host
+    CIpAddress m_RemoteIp; // CIpAddress object corresponding to remote host
 public:
     CClientSocket();
     CClientSocket(string host, Uint16 port); // create the object and connect to a host in a given port
     bool Connect(CIpAddress& remoteIP); // make a connection to communicate to a remote host
     bool Connect(CHostSocket& listenerSocket); // make a connection to communicate with a client
     void setSocket(TCPsocket sdlSocket); // set a socket from and existing SDL_socket
-    CIpAddress GetIPAddress() const; // return CIpAddress associtated with remote host
+    CIpAddress getIpAddress() const; // return CIpAddress associtated with remote host
     virtual void onReady(); // pure virtual
-    bool Recieve(CNetMessage& rData); // recieve data and load it into an CNetMessage object
-    bool Send (CNetMessage& sData); // send data in a CNetMessage object
+    bool recieve(CNetMessage& rData); // recieve data and load it into an CNetMessage object
+    bool send(CNetMessage& sData); // send data in a CNetMessage object
 };
 
 
 /*--------------------- Function definitions -------------------------*/
 
 void quitGame(SDL_Window* window, forward_list<Player> playerList,
-     forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
+    forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
 bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
@@ -830,9 +845,9 @@ int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the 
 direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(Game* game, forward_list<BulletExplosion> explosionList,
-     int playerMainX, int playerMainY); // render the gameplay area of the screen
+    int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(Game* game, Player userCharacter,
- hudInfo hudInfoContainer); // render the HUD area of the screen
+    hudInfo hudInfoContainer); // render the HUD area of the screen
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
 int generateRandInt(int min, int max);
 double generateRandDouble(double min, double max);
