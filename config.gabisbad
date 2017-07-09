@@ -1,9 +1,10 @@
-swidth=1350
-sheight=650
+swidth=675
+sheight=325
 fullscreen=0
 primaryColor=pink
 secondaryColor=white
-hostip=192.168.1.25
+ishost=1
+hostip=127.0.0.1
 hostport=2880
 clientport=2881
 gabisbad=12

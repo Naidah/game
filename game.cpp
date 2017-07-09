@@ -84,6 +84,8 @@ int main(int argc, char const *argv[]) {
     int frameStart = 0;
     int frameEnd = 0;
 
+    int messageType = 1;
+
     forward_list<Wall*> wallContainer; // stores the game walls
     forward_list<coordSet> spawnPoints; // stores spawn point locations
     forward_list<Player> playerList; // stores the players
@@ -108,6 +110,7 @@ int main(int argc, char const *argv[]) {
 
 
     while (gameRunning == true) { // begin game loop
+        messageType = 1;
 
         frameStart = SDL_GetTicks();
         while (SDL_PollEvent(&eventHandler) != 0) { // check each event instance to ensure the game is not quit
@@ -117,55 +120,78 @@ int main(int argc, char const *argv[]) {
             else if (eventHandler.type == SDL_KEYDOWN) {
                 if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
                     gameRunning = false;
-                } else if (eventHandler.key.keysym.sym == SDLK_SPACE) {
+                } else if (eventHandler.key.keysym.sym == SDLK_SPACE && game->hosting() == true) {
                     inMenu = false;
                     game->initialize();
                 }
             }
         }
+        if (game->hosting() == false) {
+            while (messageType > 0) {
+                messageType = game->getInput();
+                if (messageType == MESSAGE_WALL) {
+                    inMenu = false;
+                }
+            }
+        }
 
         if (inMenu == true) {
-            game->recieveConnection();
+            if (game->hosting() == true) {
+                game->recieveConnection();
+            } else {
+                if (game->isConnected() == false) {
+                    game->attemptConnection();
+                }
+            }
+
+
         } else {
+            if (game->hosting() == true) {
+                cout << "top of section\n";
+                // update the state of the controlled character
+                for (auto character = playerList.begin(); character != playerList.end(); character++) {
+                    character->updateState(&eventHandler, game);
+                }
 
-            // update the state of the controlled character
-            for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                character->updateState(&eventHandler, game);
-            }
+                // update the explosion effects from bullets
+                explosionUpdated.clear();
+                for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
+                    if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
+                        explosion->deleteObject();
+                    }
+                    else {
+                        explosionUpdated.push_front(*explosion);
+                    }
+                }
+                cout << "start of section\n";
+                explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
-            // update the explosion effects from bullets
-            explosionUpdated.clear();
-            for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-                if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
-                    explosion->deleteObject();
+                                                  // move all players and projectiles
+                for (auto character = playerList.begin(); character != playerList.end(); character++) {
+                    character->move(game->walls());
+                    if (character->getID() == CHARACTER_MAIN_ID) {
+                        playerMainX = character->getX();
+                        playerMainY = character->getY();
+                    }
                 }
-                else {
-                    explosionUpdated.push_front(*explosion);
-                }
-            }
-            explosionList = explosionUpdated; // set the list of active explosions to those that remain
+                cout << "middle of section\n";
 
-                                              // move all players and projectiles
-            for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                character->move(game->walls());
-                if (character->getID() == CHARACTER_MAIN_ID) {
-                    playerMainX = character->getX();
-                    playerMainY = character->getY();
+                // update all projectiles
+                newList.clear();
+                for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+                    if (bullet->move(game) != true) { // store bullets still in flight
+                        newList.push_front(*bullet);
+                    }
+                    else { // delete and replace with explosions those that have collided
+                        explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
+                        bullet->deleteObject();
+                    }
                 }
+                projectileList = newList; // store remaining projectiles
+                cout << "just before sending the update\n";
+                game->sendUpdate();
+                cout << "end of section\n";
             }
-
-            // update all projectiles
-            newList.clear();
-            for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-                if (bullet->move(game) != true) { // store bullets still in flight
-                    newList.push_front(*bullet);
-                }
-                else { // delete and replace with explosions those that have collided
-                    explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
-                    bullet->deleteObject();
-                }
-            }
-            projectileList = newList; // store remaining projectiles
 
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
             SDL_RenderClear(renderer); // clear the previous frame
@@ -236,13 +262,18 @@ bool UDPConnectionClient::send(string msg) {
     return success;
 }
 
-bool UDPConnectionClient::recieve(void) {
-    bool success = false;
+connection UDPConnectionClient::recieve(string* field) {
+    connection sender = {0, 0};
+    stringstream output;
     if (SDLNet_UDP_Recv(socket, packetIn)) {
-        cout << "Message: " << packetIn->data << "\n";
-        success = true;
+        for (int i = 0; i < packetIn->len; i++) {
+            output << packetIn->data[i];
+        }
+        sender.ip = packetIn->address.host;
+        sender.port = packetIn->address.port;
     }
-    return success;
+    *field = output.str();
+    return sender;
 }
 
 
@@ -262,6 +293,7 @@ UDPConnectionServer::~UDPConnectionServer(void) {
 }
 
 bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
+    cout << "in send\n";
     bool success = true;
     memcpy(packetOut->data, msg.c_str(), msg.length()+1);
     packetOut->len = msg.length()+1;
@@ -269,11 +301,24 @@ bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
         packetOut->address.host = ips[i].ip;
         packetOut->address.port = ips[i].port;
         if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
-            cout << "SDLNet_UDP_Send: " << SDLNet_GetError() << "\n";
+            cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
             success = false;
         }
     }
-    
+    cout << "out send\n";
+    return success;
+}
+
+bool UDPConnectionServer::send(string msg, connection target) {
+    bool success = true;
+    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
+    packetOut->len = msg.length()+1;
+    packetOut->address.host = target.ip;
+    packetOut->address.port = target.port;
+    if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+        cout << "SDLNet_UDP_Send server2: " << SDLNet_GetError() << "\n";
+        success = false;
+    }
     return success;
 }
 
@@ -282,7 +327,6 @@ connection UDPConnectionServer::recieve(void) {
     if (SDLNet_UDP_Recv(socket, packetIn)) {
         sender.ip = packetIn->address.host;
         sender.port = packetIn->address.port;
-        cout << packetIn->data << "\n";
     }
     return sender;
 }
@@ -814,9 +858,18 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
         fullscreen = SCREEN_FULLSCREEN;
     }
 
+    if (configElements["ishost"] != "") {
+        if (configElements["ishost"] == "true") {
+            isHost = true;
+        } else {
+            isHost = false;
+        }
+    } else {
+        isHost = DEBUG_IS_HOST;
+    }
+
     if (configElements["hostip"] != "") {
         hostIp = configElements["hostip"];
-        cout << hostIp << "\n";
     } else {
         hostIp = DEBUG_HOST_IP;
     }
@@ -962,8 +1015,11 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     }
 
     numPlayers = 0;
-    server = new UDPConnectionServer(this);
-
+    if (isHost == true) {
+        server = new UDPConnectionServer(this);
+    } else {
+        client = new UDPConnectionClient(this);
+    }
     configFile.close();
 }
 
@@ -978,11 +1034,24 @@ void Game::recieveConnection(void) {
     if (numPlayers < GAME_MAX_PLAYERS-1) {
         connection inboundConnection = server->recieve();
         if (inboundConnection.ip != 0) {
-            cout << "New Connection Recieved\n";
-            currPlayers[numPlayers] = inboundConnection;
-            numPlayers++;
+            bool match = false;
+            for (int i = 0; i < numPlayers; i++) {
+                if (inboundConnection == currPlayers[i]) {
+                    match = true;
+                }
+            }
+            if (match == false) {
+                cout << "New Connection Recieved\n";
+                currPlayers[numPlayers] = inboundConnection;
+                numPlayers++;
+            }
+            server->send(to_string(MESSAGE_CONF_CONNECTION), inboundConnection);
         }
     }
+}
+
+void Game::attemptConnection(void) {
+    client->send(to_string(MESSAGE_CONF_CONNECTION));
 }
 
 void Game::initialize(void) {
@@ -998,29 +1067,105 @@ void Game::initialize(void) {
             playerList->front().killPlayer();
         }
     }
-    cout << getMapString() << "\n";
-    cout << getPlayerString() << "\n";
-    //server->send(getMapString(), currPlayers, numPlayers);
-    //server->send(getPlayerString(), currPlayers, numPlayers);
+    server->send(getMapString(), currPlayers, numPlayers);
+    server->send(getPlayerString(), currPlayers, numPlayers);
 }
+
+void Game::sendUpdate(void) {
+    cout << "in send update\n";
+    server->send(getPlayerString(), currPlayers, numPlayers);
+    cout << "out send update\n";
+}
+
+int Game::getInput(void) {
+    int messageType = 0;
+    string serverString;
+    connection msg = client->recieve(&serverString);
+    if (msg.ip != 0) {
+        messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
+        connected = true;
+        if (serverString[0] == MESSAGE_CONF_CONNECTION) {
+            cout << "Connection established\n";
+        } else if (messageType == MESSAGE_WALL) {
+            updateMap(serverString);
+        } else if (messageType == MESSAGE_PLAYER) {
+            updatePlayers(serverString);
+        }
+    }
+    return messageType;
+}
+
+void Game::updateMap(string serverString) {
+    wallContainer->clear();
+    int x, y, w, h;
+    for (int wall = 0; wall < (serverString.length()-1)/(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS); wall++) {
+        x = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+1, MESSAGE_LOC_CHAR));
+        y = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+MESSAGE_LOC_CHAR+1, MESSAGE_LOC_CHAR));
+        w = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+MESSAGE_LOC_CHAR*2+1, MESSAGE_LOC_CHAR));
+        h = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+MESSAGE_LOC_CHAR*3+1, MESSAGE_LOC_CHAR));
+        wallContainer->push_front(new Wall(x, y, w, h));
+    }
+}
+
+void Game::updatePlayers(string serverString) {
+    int currIndex = 1; // start after the indentifying character
+    playerState currState;
+    bool found;
+    for (int pIndex = 0; pIndex < (serverString.length()-1)/MESSAGE_PLAYER_LEN; pIndex++) {
+        currState.x = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
+        currIndex += MESSAGE_LOC_CHAR;
+        currState.y = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
+        currIndex += MESSAGE_LOC_CHAR;
+        currState.angle = stoi(serverString.substr(currIndex, MESSAGE_ANGLE_CHAR));
+        currIndex += MESSAGE_ANGLE_CHAR;
+        currState.rolling = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+        currState.rollX = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+        currState.rollY = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+        currState.invuln = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+        currState.alive = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+
+        found = false;
+        for (auto player = playerList->begin(); player != playerList->end(); player++) {
+            if (player->getID() == pIndex) {
+                found = true;
+                player->updateState(currState);
+            }
+        }
+        if (found == false) {
+            playerList->push_front(Player(this, currState.x, currState.y, pIndex, CHARACTER_WEAPON_ASSAULT_RIFLE));
+        }
+    }
+}
+
 
 string Game::getMapString(void) {
     // converts the wall objects in the game into a single stream to send to clients
     stringstream wallString;
     SDL_Rect currw;
+    wallString << MESSAGE_WALL;
     for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
         currw = (*wall)->getLocation();
-        wallString << strOfLen(currw.x, GAME_LOC_CHAR) << strOfLen(currw.y, GAME_LOC_CHAR) <<
-         strOfLen(currw.h, GAME_LOC_CHAR) << strOfLen(currw.y, GAME_LOC_CHAR);
+        wallString << strOfLen(currw.x, MESSAGE_LOC_CHAR) << strOfLen(currw.y, MESSAGE_LOC_CHAR) <<
+         strOfLen(currw.w, MESSAGE_LOC_CHAR) << strOfLen(currw.h, MESSAGE_LOC_CHAR);
     }
     return wallString.str();
 }
 
 string Game::getPlayerString(void) {
+    cout << "in player string\n";
     stringstream playerString;
+    playerString << MESSAGE_PLAYER;
+    cout << "pre loop\n";
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
+        cout << "looping\n";
         playerString << player->getStateString();
     }
+    cout << "out player string\n";
     return playerString.str();
 }
 
@@ -1242,7 +1387,18 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
             deathMarker->updateState();
         }
     }
+}
 
+void Player::updateState(playerState newState) {
+    playerRect.x = newState.x;
+    playerRect.y = newState.y;
+    setPlayerCentre();
+    rolling = newState.rolling;
+    rollDirection.x = newState.rollX;
+    rollDirection.y = newState.rollY;
+    invulnerable = newState.invuln;
+    alive = newState.alive;
+    angle = newState.angle;
 }
 
 void Player::move(forward_list<Wall*>* wallContainer) {
@@ -1388,10 +1544,22 @@ string Player::getStateString(void) {
     x, y, angle, rolling state, roll dirx, roll diry, invuln state, alive state
     NEED TO ADD WEAPON
     */
+    cout << "in state string\n";
     stringstream statestring;
-    statestring << strOfLen(centreX, GAME_LOC_CHAR) << " " << strOfLen(centreY, GAME_LOC_CHAR)
-     << " " << strOfLen(angle, GAME_ANGLE_CHAR) << " " << rolling << " " << rollDirection.x
-     << " " << rollDirection.y << " " << invulnerable << " " << alive <<  " | ";
+    statestring << strOfLen(playerRect.x, MESSAGE_LOC_CHAR);
+    statestring << strOfLen(playerRect.y, MESSAGE_LOC_CHAR);
+    cout << "a\n";
+    cout << angle << "\n";
+    statestring << strOfLen(angle, MESSAGE_ANGLE_CHAR);
+    cout << "alph\n";
+    statestring << rolling;
+    cout << "b\n";
+    statestring << rollDirection.x;
+    statestring << rollDirection.y;
+    cout << "c\n";
+    statestring << invulnerable;
+    statestring << alive;
+    cout << "out state string\n";
     return statestring.str();
 }
 

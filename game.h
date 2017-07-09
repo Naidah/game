@@ -43,6 +43,17 @@ typedef struct _coordSet {
     int y;
 } coordSet;
 
+typedef struct _playerState {
+    int x;
+    int y;
+    int angle;
+    bool rolling;
+    int rollX;
+    int rollY;
+    bool invuln;
+    bool alive;
+} playerState;
+
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
@@ -51,10 +62,6 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 
 // constants used in setting up the game instance
 const int GAME_MAX_PLAYERS = 4;
-
-// amounts of characters used to represent different variables types in networking strings
-const int GAME_LOC_CHAR = 4;
-const int GAME_ANGLE_CHAR = 3;
 
                            // values of the different colour schemes that can be used
                            // red
@@ -417,12 +424,21 @@ const int HUD_HEALTH_DIVIDE_BLUE = 0;
 
 // constants used in netcode
 const int CHARBUFF_LENGTH = 1024;
+const int MESSAGE_CONF_CONNECTION = 1;
+const int MESSAGE_WALL = 2;
+const int MESSAGE_PLAYER = 3;
+
+const int MESSAGE_PLAYER_LEN = 16;
+
+// amounts of characters used to represent different variables types in networking strings
+const int MESSAGE_LOC_CHAR = 4;
+const int MESSAGE_ANGLE_CHAR = 3;
 
 
 
 // constants used in debugging
 const bool DEBUG_ENABLE_DRIVERS = true;
-const bool DEBUG_HIDE_SHADOWS = false;
+const bool DEBUG_HIDE_SHADOWS = true;
 const bool DEBUG_KILL_PLAYER = false;
 const bool DEBUG_SHOW_CURSOR = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
@@ -432,7 +448,7 @@ const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
 const int DEBUG_NUM_PLAYERS = 4;
 
-const bool DEBUG_IS_HOST = true;
+const bool DEBUG_IS_HOST = false;
 const Uint16 DEBUG_HOST_PORT = 2880;
 const Uint16 DEBUG_CLIENT_PORT = 2881;
 const string DEBUG_HOST_IP = "192.168.1.25";
@@ -473,7 +489,10 @@ protected:
     int numPlayers;
     connection currPlayers[GAME_MAX_PLAYERS-1];
 
+    bool isHost;
     UDPConnectionServer* server;
+    UDPConnectionClient* client;
+    bool connected;
 
     colorSet primaryColor;
     colorSet secondaryColor;
@@ -494,9 +513,15 @@ public:
 
     void initialize(void);
     void recieveConnection(void);
+    void attemptConnection(void);
 
     string getMapString(void);
     string getPlayerString(void);
+
+    int getInput(void);
+    void sendUpdate(void);
+    void updateMap(string serverString);
+    void updatePlayers(string serverString);
 
     forward_list<Player>* players(void) { return playerList; }
     forward_list<Wall*>* walls(void) { return wallContainer; }
@@ -510,6 +535,8 @@ public:
     string hIP(void) {return hostIp;}
     Uint16 hPort(void) {return hostPort;}
     Uint16 cPort(void) {return clientPort;}
+    bool isConnected(void) {return connected;}
+    bool hosting(void) {return isHost;}
 
     colorSet primaryColors(void) { return primaryColor; }
     colorSet secondaryColors(void) { return secondaryColor; }
@@ -582,6 +609,7 @@ public:
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler, Game* game);
+    void updateState(playerState newState);
     void move(forward_list<Wall*>* wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
@@ -701,8 +729,8 @@ private:
 
 
 public:
-    ~Wall(void); // frees any memory associated with the wall
     Wall(int x, int y, int w, int h); // initializer function
+    ~Wall(void); // frees any memory associated with the wall
     SDL_Rect getLocation(void) { return wallLocation; } // returns the SDL_Rect describing the wall
     bool checkCollision(int x, int y, int radius); // checks if the object at (x, y) with radius r is in contact with the wall
     void render(Game* game); // draw the wall to the screen
@@ -803,7 +831,7 @@ public:
     UDPConnectionClient(Game* game);
     ~UDPConnectionClient(void);
     bool send(string msg);
-    bool recieve(void);
+    connection recieve(string* field);
 };
 
 class UDPConnectionServer {
@@ -817,6 +845,7 @@ public:
     UDPConnectionServer(Game* game);
     ~UDPConnectionServer(void);
     bool send(string msg, connection* ips, int numIps);
+    bool send(string msg, connection target);
     connection recieve(void);
 };
 
