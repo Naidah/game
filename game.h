@@ -17,6 +17,15 @@ bool operator!=(const direction lhs, const direction rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y;
 }
 
+typedef struct _connection {
+    Uint16 port;
+    Uint32 ip;
+} connection;
+
+bool operator==(const connection lhs, const connection rhs) {
+    return lhs.port == rhs.port && lhs.ip == rhs.ip;
+}
+
 typedef struct _hudInfo {
     SDL_Texture* ammoIcon;
     SDL_Texture* cooldownIcon;
@@ -42,6 +51,10 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 
 // constants used in setting up the game instance
 const int GAME_MAX_PLAYERS = 4;
+
+// amounts of characters used to represent different variables types in networking strings
+const int GAME_LOC_CHAR = 4;
+const int GAME_ANGLE_CHAR = 3;
 
                            // values of the different colour schemes that can be used
                            // red
@@ -408,12 +421,12 @@ const int CHARBUFF_LENGTH = 1024;
 
 
 // constants used in debugging
-const bool DEBUG_ENABLE_DRIVERS = false;
+const bool DEBUG_ENABLE_DRIVERS = true;
 const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = false;
 const bool DEBUG_SHOW_CURSOR = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
-const bool DEBUG_DRAW_SPAWN_POINTS = false;
+const bool DEBUG_DRAW_SPAWN_POINTS = true;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
 const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
@@ -441,6 +454,8 @@ class Wall;
 class Projectile;
 class BulletExplosion;
 class MapBox;
+class UDPConnectionServer;
+class UDPConnectionClient;
 
 // Class definitions
 class Game {
@@ -455,6 +470,11 @@ protected:
     Uint16 hostPort;
     Uint16 clientPort;
 
+    int numPlayers;
+    connection currPlayers[GAME_MAX_PLAYERS-1];
+
+    UDPConnectionServer* server;
+
     colorSet primaryColor;
     colorSet secondaryColor;
 
@@ -468,8 +488,15 @@ public:
     Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
         forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
         SDL_Renderer** renderer);
+    ~Game(void);
 
     void setPatterns(void);
+
+    void initialize(void);
+    void recieveConnection(void);
+
+    string getMapString(void);
+    string getPlayerString(void);
 
     forward_list<Player>* players(void) { return playerList; }
     forward_list<Wall*>* walls(void) { return wallContainer; }
@@ -550,6 +577,8 @@ public:
     int getDeathFrames(void) { return deathFrames; }
     int getHealth(void) { return health; }
     bool isAlive(void) { return alive; }
+
+    string getStateString(void);
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler, Game* game);
@@ -763,88 +792,6 @@ public:
 };
 
 // Classes related to networking aspect of the game
-
-class CNetMessage {
-protected:
-    charbuff buffer;
-    enum bufferStates {
-        EMPTY,
-        READING,
-        WRITING,
-        FULL
-    };
-    bufferStates state;
-
-public:
-    CNetMessage();
-    virtual int numToLoad(); // returns how many bytes can be loaded into the message
-    virtual int numToUnload(); // returns how many bytes can be downloaded from the message
-    void reset();
-
-    void loadBytes(charbuff& inputBuffer, int n); //load a set of characters into the message
-    void unloadBytes(charbuff& destBuffer); // unload a set of characters from the message
-    void finish(void); // set object to full
-};
-
-
-class CIpAddress {
-private:
-    IPaddress m_Ip; // the IPaddress structure
-public:
-    CIpAddress(); // base constructor
-    CIpAddress(Uint16 port); // constructor that assigns default port
-    CIpAddress(string host, Uint16 port); // constructor that associates a port and host
-    void setIp(IPaddress sdl_ip); // set IP from an IPaddress instance
-    bool Ok() const; // True when the instance has a port and host assigned
-    IPaddress getIpAddress() const; // return a SDL_net IPaddress structure
-    Uint32 getHost() const; // return host
-    Uint16 getPort() const; // return port
-};
-
-
-class CTcpSocket {
-protected:
-    TCPsocket m_Socket; // TCPsocket structure
-    SDLNet_SocketSet set; // a set of sockets
-public:
-    CTcpSocket();
-    virtual ~CTcpSocket();
-    virtual void setSocket(TCPsocket sdlSocket); // set an instance from an existing SDL socket
-    bool Ok() const; // check if a TCPsocket is associated to the instance
-    bool Ready() const; // true if there are bytes to be read
-    virtual void OnReady(); // pure virtual
-};
-
-
-class CClientSocket;
-
-
-class CHostSocket : public CTcpSocket {
-public:
-    CHostSocket(CIpAddress& ipAddress); // create a socket with a CIpAddress object
-    CHostSocket(Uint16 port); // create and open a socket at an existing port
-
-    bool accept(CClientSocket& clientSocket); // set a client CTcpSocket object after listening to the port
-    virtual void OnReady(); // pure virtual
-};
-
-
-class CClientSocket : public CTcpSocket {
-private:
-    CIpAddress m_RemoteIp; // CIpAddress object corresponding to remote host
-public:
-    CClientSocket();
-    CClientSocket(string host, Uint16 port); // create the object and connect to a host in a given port
-    bool Connect(CIpAddress& remoteIP); // make a connection to communicate to a remote host
-    bool Connect(CHostSocket& listenerSocket); // make a connection to communicate with a client
-    void setSocket(TCPsocket sdlSocket); // set a socket from and existing SDL_socket
-    CIpAddress getIpAddress() const; // return CIpAddress associtated with remote host
-    virtual void onReady(); // pure virtual
-    bool recieve(CNetMessage& rData); // recieve data and load it into an CNetMessage object
-    bool send(CNetMessage& sData); // send data in a CNetMessage object
-};
-
-
 class UDPConnectionClient {
 private:
     IPaddress connectionIp;
@@ -869,14 +816,13 @@ private:
 public:
     UDPConnectionServer(Game* game);
     ~UDPConnectionServer(void);
-    bool send(string msg);
-    bool recieve(void);
+    bool send(string msg, connection* ips, int numIps);
+    connection recieve(void);
 };
 
 /*--------------------- Function definitions -------------------------*/
 
-void quitGame(SDL_Window* window, forward_list<Player> playerList,
-    forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList); // frees any used memory at the end of runtime
+void quitGame(SDL_Window* window, Game* game); // frees any used memory at the end of runtime
 bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
@@ -891,8 +837,9 @@ void renderGameUI(Game* game, Player userCharacter,
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
 int generateRandInt(int min, int max);
 double generateRandDouble(double min, double max);
-bool validateSpawnPoint(coordSet point, forward_list<Player> playerList);
-coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> playerList);
+bool validateSpawnPoint(coordSet point, forward_list<Player>* playerList);
+coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList);
+string strOfLen(int number, int len);
 
 //drivers
 void testDistBetweenPoints(void);
@@ -901,3 +848,4 @@ void testGetInterceptY(void);
 void testCheckExitMap(void);
 void testGenerateRandInt(void);
 void testGenerateRandDouble(void);
+void testStrOfLen(void);

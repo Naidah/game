@@ -66,11 +66,13 @@ int main(int argc, char const *argv[]) {
         testCheckExitMap();
         testGenerateRandInt();
         testGenerateRandDouble();
+        testStrOfLen();
     }
     srand(time(NULL)); // initialize the seed
 
                        // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
+    bool inMenu = true;
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
@@ -86,8 +88,6 @@ int main(int argc, char const *argv[]) {
     forward_list<coordSet> spawnPoints; // stores spawn point locations
     forward_list<Player> playerList; // stores the players
     forward_list<Projectile> projectileList; // stores the current set of projectiles
-    generateMap(&wallContainer, &spawnPoints); // generate a random set of walls and spawn points for the game
-                                               // initialize a game object to store game elements and data to pass around the program
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, &renderer);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
@@ -100,17 +100,6 @@ int main(int argc, char const *argv[]) {
     SDL_Texture* gameCursor = loadImage(UI_GAME_CURSOR_LOCATION, renderer);
 
 
-    coordSet initSpawn; // temporarily stores spawn points for each player
-    for (int i = 0; i<DEBUG_NUM_PLAYERS; i++) {
-        initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList.push_front(Player(game, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
-        if (initSpawn.x == 0) {
-            // if no valid spawn point was found (i.e. all points to close to players), kill them
-            playerList.front().killPlayer();
-        }
-    }
-
-
 
 
     forward_list<Projectile> newList; // temporarily store projectiles that have not collided
@@ -118,74 +107,8 @@ int main(int argc, char const *argv[]) {
     forward_list<BulletExplosion> explosionUpdated; // temporary store for active projectiles
 
 
-
-    // TESTING NETCODE
-    /*bool connected = false;
-    CNetMessage msg;
-    charbuff dataBuff = {};
-    if (DEBUG_IS_HOST == true) {
-        CHostSocket* tcplistener = new CHostSocket(DEBUG_PORT);
-        CClientSocket* tcpclient = new CClientSocket();
-        cout << "Waiting for connection\n";
-        while (connected == false) {
-            if (tcplistener->accept(*tcpclient)) {
-                connected = true;
-            }
-        }
-        while (!tcpclient->Ready()) {}
-        if (tcpclient->recieve(msg)) {
-            msg.unloadBytes(dataBuff);
-        }
-        cout << "Message recieved: " << dataBuff << "\n";
-        msg.reset();
-        charbuff newBuff = "This is a test of sending strings. Hope this works!";
-        cout << "Message to send: " << newBuff << "\n";
-        newBuff[CHARBUFF_LENGTH-1] = 0;
-        msg.loadBytes(newBuff, strlen(newBuff));
-        msg.finish();
-        tcpclient->send(msg);
-        cout << "Message sent\n";
-        delete tcpclient;
-        delete tcplistener;
-    } else {
-        dataBuff[0] = 97; dataBuff[1] = 98; dataBuff[2] = 99; dataBuff[3] = 100;
-        cout << "Message to send: " << dataBuff << "\n";
-        msg.loadBytes(dataBuff, strlen(dataBuff));
-        msg.finish();
-        CClientSocket* tcpclient = new CClientSocket();
-        CIpAddress* remoteip = new CIpAddress(DEBUG_HOST_IP, DEBUG_PORT);
-        while (connected == false) {
-            if (tcpclient->Connect(*remoteip)) {
-                if (tcpclient->Ok() == true) {
-                    connected = true;
-                }
-            }
-        }
-        tcpclient->send(msg);
-        delete tcpclient;
-        delete remoteip;
-        cout << "Message Sent\n";
-    }*/
-
-    bool connected = false;
-    if (DEBUG_IS_HOST == true) {
-        UDPConnectionServer* server = new UDPConnectionServer(game);
-        while (connected == false) {
-            connected = server->recieve();
-        }
-        server->send("returning the thing");
-        delete server;
-    } else {
-        UDPConnectionClient* client = new UDPConnectionClient(game);
-        client->send("hope this works");
-        while (!connected) {
-            connected = client->recieve();
-        }
-        delete client;
-    }
-
-
     while (gameRunning == true) { // begin game loop
+
         frameStart = SDL_GetTicks();
         while (SDL_PollEvent(&eventHandler) != 0) { // check each event instance to ensure the game is not quit
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
@@ -194,78 +117,85 @@ int main(int argc, char const *argv[]) {
             else if (eventHandler.type == SDL_KEYDOWN) {
                 if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
                     gameRunning = false;
+                } else if (eventHandler.key.keysym.sym == SDLK_SPACE) {
+                    inMenu = false;
+                    game->initialize();
                 }
             }
         }
 
-        // update the state of the controlled character
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->updateState(&eventHandler, game);
-        }
+        if (inMenu == true) {
+            game->recieveConnection();
+        } else {
 
-        // update the explosion effects from bullets
-        explosionUpdated.clear();
-        for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-            if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
-                explosion->deleteObject();
+            // update the state of the controlled character
+            for (auto character = playerList.begin(); character != playerList.end(); character++) {
+                character->updateState(&eventHandler, game);
+            }
+
+            // update the explosion effects from bullets
+            explosionUpdated.clear();
+            for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
+                if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
+                    explosion->deleteObject();
+                }
+                else {
+                    explosionUpdated.push_front(*explosion);
+                }
+            }
+            explosionList = explosionUpdated; // set the list of active explosions to those that remain
+
+                                              // move all players and projectiles
+            for (auto character = playerList.begin(); character != playerList.end(); character++) {
+                character->move(game->walls());
+                if (character->getID() == CHARACTER_MAIN_ID) {
+                    playerMainX = character->getX();
+                    playerMainY = character->getY();
+                }
+            }
+
+            // update all projectiles
+            newList.clear();
+            for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+                if (bullet->move(game) != true) { // store bullets still in flight
+                    newList.push_front(*bullet);
+                }
+                else { // delete and replace with explosions those that have collided
+                    explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
+                    bullet->deleteObject();
+                }
+            }
+            projectileList = newList; // store remaining projectiles
+
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
+            SDL_RenderClear(renderer); // clear the previous frame
+            renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
+            for (auto character = playerList.begin(); character != playerList.end(); character++) {
+                if (character->getID() == CHARACTER_MAIN_ID) {
+                    renderGameUI(game, *character, hudInfoContainer); // draw the HUD
+                }
+            }
+
+            // draw the cursor to the screen
+            SDL_Rect screen = { 0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT };
+            SDL_RenderSetViewport(game->renderer(), &screen);
+            double ratio;
+            if ((double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT <
+                (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT) {
+                ratio = (double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT;
             }
             else {
-                explosionUpdated.push_front(*explosion);
+                ratio = (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT;
             }
+            int x, y;
+            SDL_GetMouseState(&x, &y);
+            x /= ratio;
+            y /= ratio;
+            SDL_Rect cursorRect = { x - UI_CURSOR_WIDTH / 2, y - UI_CURSOR_HEIGHT / 2, UI_CURSOR_WIDTH, UI_CURSOR_HEIGHT };
+            SDL_SetTextureColorMod(gameCursor, game->secondaryColors().red,
+                game->secondaryColors().green, game->secondaryColors().blue);
+            SDL_RenderCopy(renderer, gameCursor, NULL, &cursorRect);
         }
-        explosionList = explosionUpdated; // set the list of active explosions to those that remain
-
-                                          // move all players and projectiles
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            character->move(game->walls());
-            if (character->getID() == CHARACTER_MAIN_ID) {
-                playerMainX = character->getX();
-                playerMainY = character->getY();
-            }
-        }
-
-        // update all projectiles
-        newList.clear();
-        for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-            if (bullet->move(game) != true) { // store bullets still in flight
-                newList.push_front(*bullet);
-            }
-            else { // delete and replace with explosions those that have collided
-                explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
-                bullet->deleteObject();
-            }
-        }
-        projectileList = newList; // store remaining projectiles
-
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
-        SDL_RenderClear(renderer); // clear the previous frame
-        renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
-        for (auto character = playerList.begin(); character != playerList.end(); character++) {
-            if (character->getID() == CHARACTER_MAIN_ID) {
-                renderGameUI(game, *character, hudInfoContainer); // draw the HUD
-            }
-        }
-
-        // draw the cursor to the screen
-        SDL_Rect screen = { 0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT };
-        SDL_RenderSetViewport(game->renderer(), &screen);
-        double ratio;
-        if ((double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT <
-            (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT) {
-            ratio = (double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT;
-        }
-        else {
-            ratio = (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT;
-        }
-        int x, y;
-        SDL_GetMouseState(&x, &y);
-        x /= ratio;
-        y /= ratio;
-        SDL_Rect cursorRect = { x - UI_CURSOR_WIDTH / 2, y - UI_CURSOR_HEIGHT / 2, UI_CURSOR_WIDTH, UI_CURSOR_HEIGHT };
-        SDL_SetTextureColorMod(gameCursor, game->secondaryColors().red,
-            game->secondaryColors().green, game->secondaryColors().blue);
-        SDL_RenderCopy(renderer, gameCursor, NULL, &cursorRect);
-
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
 
@@ -275,7 +205,7 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    quitGame(window, playerList, wallContainer, projectileList); // quit the game when the session finishes
+    quitGame(window, game); // quit the game when the session finishes
 
     return EXIT_SUCCESS; // return success if the program terminates correctly
 }
@@ -331,47 +261,52 @@ UDPConnectionServer::~UDPConnectionServer(void) {
     SDLNet_FreePacket(packetOut);
 }
 
-bool UDPConnectionServer::send(string msg) {
+bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
     bool success = true;
     memcpy(packetOut->data, msg.c_str(), msg.length()+1);
     packetOut->len = msg.length()+1;
-    if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
-        cout << "SDLNet_UDP_Send: " << SDLNet_GetError() << "\n";
-        success = false;
+    for (int i = 0; i < numIps; i++) {
+        packetOut->address.host = ips[i].ip;
+        packetOut->address.port = ips[i].port;
+        if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+            cout << "SDLNet_UDP_Send: " << SDLNet_GetError() << "\n";
+            success = false;
+        }
     }
+    
     return success;
 }
 
-bool UDPConnectionServer::recieve(void) {
-    bool success = false;
-    Uint32 currHost = packetOut->address.host;
+connection UDPConnectionServer::recieve(void) {
+    connection sender = {0,0};
     if (SDLNet_UDP_Recv(socket, packetIn)) {
-        if (currHost == 0) {
-            packetOut->address.host = packetIn->address.host;
-            packetOut->address.port = packetIn->address.port;
-        }
-        success = true;
+        sender.ip = packetIn->address.host;
+        sender.port = packetIn->address.port;
         cout << packetIn->data << "\n";
     }
-    return success;
+    return sender;
 }
 
 
 /* -------------------------- FUNCTIONS ------------------------- */
 
-void quitGame(SDL_Window* window, forward_list<Player> playerList, forward_list<Wall*> wallContainer, forward_list<Projectile> projectileList) {
+void quitGame(SDL_Window* window, Game* game) {
     SDL_DestroyWindow(window); // destroy the window
                                // go through all game objects, clearing any memory used and destroying them
-    for (auto character = playerList.begin(); character != playerList.end(); character++) {
+    for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
         character->deleteObject();
     }
-    for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
+    for (auto bullet = game->projectiles()->begin(); bullet != game->projectiles()->end(); bullet++) {
         bullet->deleteObject();
     }
-    for (auto wall = wallContainer.begin(); wall != wallContainer.end(); wall++) {
+    for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
         delete *wall;
     }
+    delete game;
     SDL_Quit();
+    SDLNet_Quit();
+    IMG_Quit();
+
 }
 
 bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initialize important SDL functionalities
@@ -521,7 +456,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
         debugRect.w = 3;
         debugRect.h = 3;
         for (auto point = game->spawns()->begin(); point != game->spawns()->end(); point++) { // only draws active spawnpoints if enabled
-            if (validateSpawnPoint(*point, *(game->players())) == true || DEBUG_DRAW_VALID_SPAWNS_ONLY == false) {
+            if (validateSpawnPoint(*point, game->players()) == true || DEBUG_DRAW_VALID_SPAWNS_ONLY == false) {
                 debugRect.x = point->x;
                 debugRect.y = point->y;
                 SDL_RenderFillRect(game->renderer(), &debugRect);
@@ -691,8 +626,8 @@ direction getDirections(void) {
     direction output = MOVE_NONE; // set the default output to no keys pressed
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL); // load the array of keyboard states
 
-                                                             // go through each key combination (A, SD, WD, etc) and see if the corresponding key
-                                                             // for a given case, if the required keys are pressed, set movement in that direction
+    // go through each key combination (A, SD, WD, etc) and see if the corresponding key
+    // for a given case, if the required keys are pressed, set movement in that direction
     if (keyboardState[SDL_SCANCODE_W] && keyboardState[SDL_SCANCODE_A]) {
         output = MOVE_UP_LEFT;
     }
@@ -761,7 +696,7 @@ int generateRandInt(int min, int max) {
     return roll;
 }
 
-coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> playerList) {
+coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
     // selects a spawn point from all valid spawn points (not within a certain range of a player)
     // returns 0,0 if no points are valid, meaning the player will wait until a point becomes available
     list<coordSet> validPoints;
@@ -771,7 +706,7 @@ coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> 
     int index;
 
     // go through each spawn point, adding it to the list of valid spawn points if it is found to be usable
-    for (auto point = spawnPoints.begin(); point != spawnPoints.end(); point++) {
+    for (auto point = spawnPoints->begin(); point != spawnPoints->end(); point++) {
         valid = validateSpawnPoint(*point, playerList);
         if (valid == true) {
             validPoints.push_front(*point);
@@ -792,10 +727,10 @@ coordSet getSpawnPoint(forward_list<coordSet> spawnPoints, forward_list<Player> 
     return output;
 }
 
-bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
+bool validateSpawnPoint(coordSet point, forward_list<Player>* playerList) {
     // check if a spawn point is valid (not within CHARACTER_MIN_RESPAWN_RANGE of a player)
     bool valid = true;
-    for (auto player = playerList.begin(); player != playerList.end(); player++) {
+    for (auto player = playerList->begin(); player != playerList->end(); player++) {
         if (distBetweenPoints(point.x, point.y, player->getX(),
             player->getY()) < CHARACTER_MIN_RESPAWN_RANGE && player->isAlive() == true) {
             valid = false;
@@ -804,6 +739,15 @@ bool validateSpawnPoint(coordSet point, forward_list<Player> playerList) {
     return valid;
 }
 
+string strOfLen(int number, int len) {
+    // converts number into a string of length len (leading 0s)
+    stringstream output;
+    for (int i = 0; i < len-to_string(number).length(); i++) {
+        output << "0";
+    }
+    output << to_string(number);
+    return output.str();
+}
 
 /* -------------------------- CLASSES --------------------------- */
 
@@ -1017,7 +961,67 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
         secondaryColor.green = COLOR_BLUE_GREEN;
     }
 
+    numPlayers = 0;
+    server = new UDPConnectionServer(this);
+
     configFile.close();
+}
+
+Game::~Game(void) {
+    for (int p = 0; p < UI_BACKGROUND_PATTERN_COUNT; p++) {
+        SDL_DestroyTexture(patterns[p]);
+    }
+    delete server;
+}
+
+void Game::recieveConnection(void) {
+    if (numPlayers < GAME_MAX_PLAYERS-1) {
+        connection inboundConnection = server->recieve();
+        if (inboundConnection.ip != 0) {
+            cout << "New Connection Recieved\n";
+            currPlayers[numPlayers] = inboundConnection;
+            numPlayers++;
+        }
+    }
+}
+
+void Game::initialize(void) {
+    // starts a new game instance
+    generateMap(wallContainer, spawnPoints); // generate a random set of walls and spawn points for the game
+    coordSet initSpawn; // temporarily stores spawn points for each player
+    playerList->clear();
+    for (int i = 0; i<DEBUG_NUM_PLAYERS; i++) {
+        initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
+        playerList->push_front(Player(this, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
+        if (initSpawn.x == 0) {
+            // if no valid spawn point was found (i.e. all points to close to players), kill them
+            playerList->front().killPlayer();
+        }
+    }
+    cout << getMapString() << "\n";
+    cout << getPlayerString() << "\n";
+    //server->send(getMapString(), currPlayers, numPlayers);
+    //server->send(getPlayerString(), currPlayers, numPlayers);
+}
+
+string Game::getMapString(void) {
+    // converts the wall objects in the game into a single stream to send to clients
+    stringstream wallString;
+    SDL_Rect currw;
+    for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
+        currw = (*wall)->getLocation();
+        wallString << strOfLen(currw.x, GAME_LOC_CHAR) << strOfLen(currw.y, GAME_LOC_CHAR) <<
+         strOfLen(currw.h, GAME_LOC_CHAR) << strOfLen(currw.y, GAME_LOC_CHAR);
+    }
+    return wallString.str();
+}
+
+string Game::getPlayerString(void) {
+    stringstream playerString;
+    for (auto player = playerList->begin(); player != playerList->end(); player++) {
+        playerString << player->getStateString();
+    }
+    return playerString.str();
 }
 
 void Game::setPatterns(void) {
@@ -1302,7 +1306,7 @@ void Player::killPlayer(void) { // kill the player, and create a object to show 
 
 void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
     // respawns the player to a new position if their respawn timer expires
-    coordSet newPosition = getSpawnPoint(*spawnPoints, *playerList); // get a location to spawn to
+    coordSet newPosition = getSpawnPoint(spawnPoints, playerList); // get a location to spawn to
     if (newPosition.x != 0) { // if the player has a position they are able to spawn at, do so, otherwise respawn will call again next frame
                               // reset the players state
         alive = true;
@@ -1376,6 +1380,19 @@ void Player::render(Game* game) {
     else {
         deathMarker->render(renderer);
     }
+}
+
+string Player::getStateString(void) {
+    // gets a string representing the players variables for sending throuhg the network
+    /* format:
+    x, y, angle, rolling state, roll dirx, roll diry, invuln state, alive state
+    NEED TO ADD WEAPON
+    */
+    stringstream statestring;
+    statestring << strOfLen(centreX, GAME_LOC_CHAR) << " " << strOfLen(centreY, GAME_LOC_CHAR)
+     << " " << strOfLen(angle, GAME_ANGLE_CHAR) << " " << rolling << " " << rollDirection.x
+     << " " << rollDirection.y << " " << invulnerable << " " << alive <<  " | ";
+    return statestring.str();
 }
 
 void Player::deleteObject(void) {
@@ -2141,6 +2158,8 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
     list<MapBox*> boxesComplete;
     list<MapBox*> boxesFinal;
     list<MapBox*> boxesSplit;
+    wallContainer->clear();
+    spawnPoints->clear();
 
     for (int i = 0; i<4; i++) {
         w = (GAMESPACE_WIDTH - 2 * GAMESPACE_MARGIN) / 2;
@@ -2202,264 +2221,6 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
     }
 }
 
-
-CNetMessage::CNetMessage() {
-    reset();
-}
-
-void CNetMessage::reset() {
-    for (int i = 0; i < CHARBUFF_LENGTH; i++) {
-        buffer[i] = 0;
-    }
-    state = EMPTY;
-}
-
-int CNetMessage::numToLoad() {
-    int output = 0;
-    if (state == EMPTY) {
-        output = CHARBUFF_LENGTH-1;
-    }
-    return output;
-}
-
-int CNetMessage::numToUnload() {
-    int output = 0;
-    if (state == FULL) {
-        return strlen(buffer) + 1;
-    }
-    return output;
-}
-
-void CNetMessage::loadBytes(charbuff& inputBuffer, int n) {
-    for (int i = 0; i < n; i++) {
-        buffer[i] = inputBuffer[i];
-    }
-    state = READING;
-}
-
-void CNetMessage::unloadBytes(charbuff& destBuffer) {
-    for (int i = 0; i < this->numToUnload(); i++) {
-        destBuffer[i] = buffer[i];
-    }
-    reset();
-}
-
-void CNetMessage::finish(void) {
-    if (state == READING) {
-        state = FULL;
-    }
-}
-
-
-CIpAddress::CIpAddress() {
-    m_Ip.host = 0;
-    m_Ip.port = 0;
-}
-
-CIpAddress::CIpAddress(Uint16 port) {
-    if (SDLNet_ResolveHost(&m_Ip, NULL, port) < 0) {
-        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
-        m_Ip.host = 0;
-        m_Ip.port = 0;
-    }
-}
-
-CIpAddress::CIpAddress(string host, Uint16 port) {
-    if (SDLNet_ResolveHost(&m_Ip, host.c_str(), port) < 0) {
-        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
-        m_Ip.host = 0;
-        m_Ip.port = 0;
-    }
-}
-
-bool CIpAddress::Ok() const {
-    return (m_Ip.port != 0);
-}
-
-void CIpAddress::setIp(IPaddress sdl_ip) {
-    m_Ip = sdl_ip;
-}
-
-IPaddress CIpAddress::getIpAddress() const {
-    return m_Ip;
-}
-
-Uint32 CIpAddress::getHost() const {
-    return m_Ip.host;
-}
-
-Uint16 CIpAddress::getPort() const {
-    return m_Ip.port;
-}
-
-CTcpSocket::CTcpSocket() {
-    m_Socket = NULL;
-    set = SDLNet_AllocSocketSet(1);
-}
-
-CTcpSocket::~CTcpSocket() {
-    if (m_Socket != NULL) {
-        SDLNet_TCP_DelSocket(set, m_Socket);
-        SDLNet_FreeSocketSet(set);
-        SDLNet_TCP_Close(m_Socket);
-    }
-}
-
-void CTcpSocket::setSocket(TCPsocket sdlSocket) {
-    if (m_Socket != NULL) {
-        SDLNet_TCP_DelSocket(set, m_Socket);
-        SDLNet_TCP_Close(m_Socket);
-    }
-    m_Socket = sdlSocket;
-    if (SDLNet_TCP_AddSocket(set, m_Socket) == -1) {
-        cout << "SDLNet_TCP_AddSocket: " << SDLNet_GetError() << "\n";
-        m_Socket = NULL;
-    }
-}
-
-bool CTcpSocket::Ok() const {
-    return !(m_Socket == NULL);
-}
-
-bool CTcpSocket::Ready() const {
-    bool ready = false;
-    int numReady = SDLNet_CheckSockets(set, 0);
-    if (numReady == -1) {
-        cout << "SDLNet_CheckSockets: " << SDLNet_GetError() << "\n";
-    } else if (numReady) {
-        ready = SDLNet_SocketReady(m_Socket);
-    }
-    return ready;
-}
-
-void CTcpSocket::OnReady() {
-}
-
-CHostSocket::CHostSocket(CIpAddress& ipAddress) {
-    CTcpSocket();
-    IPaddress iph = ipAddress.getIpAddress();
-    if (!(m_Socket = SDLNet_TCP_Open(&iph))) {
-        SDLNet_FreeSocketSet(set);
-        cout << "SDLNet_TCP_Open: " << SDLNet_GetError() << "\n";
-    }
-}
-
-CHostSocket::CHostSocket(Uint16 port) {
-    CIpAddress ipListener(port);
-    if (!ipListener.Ok()) {
-        m_Socket = NULL;
-    } else {
-        CTcpSocket();
-        IPaddress iph = ipListener.getIpAddress();
-        if (!(m_Socket = SDLNet_TCP_Open(&iph))) {
-            SDLNet_FreeSocketSet(set);
-            cout << "SDLNet_TCP_Open: " << SDLNet_GetError() << "\n";
-        }
-    }
-}
-
-bool CHostSocket::accept(CClientSocket& clientSocket) {
-    TCPsocket cs;
-    bool success = false;
-    if ((cs = SDLNet_TCP_Accept(m_Socket))) {
-        clientSocket.setSocket(cs);
-        success = true;
-    } else {
-        success = false;
-    }
-    return success;
-}
-
-void CHostSocket::OnReady() {
-
-}
-
-CClientSocket::CClientSocket() {
-    CTcpSocket();
-}
-
-CClientSocket::CClientSocket(string host, Uint16 port) {
-    CIpAddress remoteIp(host.c_str(), port);
-    if (!remoteIp.Ok()) {
-        m_Socket = NULL;
-    } else {
-        CTcpSocket();
-        Connect(remoteIp);
-    }
-}
-
-bool CClientSocket::Connect(CIpAddress& remoteIp) {
-    TCPsocket cs;
-    bool success = false;
-    IPaddress ip = remoteIp.getIpAddress();
-    if ((cs = SDLNet_TCP_Open(&ip))) {
-        setSocket(cs);
-        success = true;
-    } else {
-        success = false;
-        cout << "SDLNet_TCP_Open: " << SDLNet_GetError() << "\n";
-    }
-    return success;
-}
-
-void CClientSocket::setSocket(TCPsocket sdlSocket) {
-    CTcpSocket::setSocket(sdlSocket);
-    IPaddress* ips;
-    if ((ips = SDLNet_TCP_GetPeerAddress(m_Socket))) {
-        m_RemoteIp.setIp(*ips);
-        Uint32 hbo = m_RemoteIp.getHost();
-        Uint16 pbo = m_RemoteIp.getPort();
-        cout << "Client Connected: " << SDLNet_Read32(&hbo) << " " << SDLNet_Read16(&pbo) << "\n";
-    } else {
-        cout << "SDLNet_TCP_GetPeerAddress: " << SDLNet_GetError() << "\n";
-    }
-}
-
-CIpAddress CClientSocket::getIpAddress() const {
-    return m_RemoteIp;
-}
-
-bool CClientSocket::recieve(CNetMessage& rData) {
-    bool success = true;
-    if (m_Socket == NULL) {
-        success = false;
-    } else {
-        charbuff buf;
-        bool inLoop = true;
-        while (rData.numToLoad() > 0 && inLoop) {
-            if (SDLNet_TCP_Recv(m_Socket, buf, rData.numToLoad()) > 0) {
-                rData.loadBytes(buf, rData.numToLoad());
-            } else {
-                inLoop = false;
-                success = false;
-            }
-        }
-    }
-    rData.finish();
-    return success;
-}
-
-bool CClientSocket::send(CNetMessage& sData) {
-    bool success = true;
-    if (m_Socket == NULL) {
-        success = false;
-    } else {
-        charbuff buf;
-        int len;
-        while ((len = sData.numToUnload()) > 0) {
-            sData.unloadBytes(buf);
-            if (SDLNet_TCP_Send(m_Socket, (void *)buf, len) < len) {
-                cout << "SDLNet_TCP_Send: " << SDLNet_GetError() << "\n";
-                success = false;
-            }
-        }
-    }
-    return success;
-}
-
-void CClientSocket::onReady() {
-
-}
 
 
 void testDistBetweenPoints() {
@@ -2566,4 +2327,20 @@ void testGenerateRandDouble(void) {
     assert(generateRandDouble(-5.67, -5.67) == -5.67);
 
     cout << "generateRandDouble passed all tests\n";
+}
+
+void testStrOfLen(void) {
+    assert(strOfLen(123, 4) == "0123");
+    assert(strOfLen(0, 4) == "0000");
+    assert(strOfLen(8989, 4) == "8989");
+    assert(strOfLen(123, 3) == "123");
+    assert(strOfLen(4, 4) == "0004");
+
+    assert(strOfLen(12, 12) == "000000000012");
+    assert(strOfLen(123, 5) == "00123");
+    assert(strOfLen(310, 4) == "0310");
+    assert(strOfLen(203, 3) == "203");
+    assert(strOfLen(4005, 6) == "004005");
+
+    cout << "strOfLen passed all test\n";
 }
