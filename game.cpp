@@ -120,9 +120,9 @@ int main(int argc, char const *argv[]) {
 
 
     // TESTING NETCODE
-    bool connected = false;
+    /*bool connected = false;
     CNetMessage msg;
-    charbuff dataBuff = {0};
+    charbuff dataBuff = {};
     if (DEBUG_IS_HOST == true) {
         CHostSocket* tcplistener = new CHostSocket(DEBUG_PORT);
         CClientSocket* tcpclient = new CClientSocket();
@@ -137,6 +137,14 @@ int main(int argc, char const *argv[]) {
             msg.unloadBytes(dataBuff);
         }
         cout << "Message recieved: " << dataBuff << "\n";
+        msg.reset();
+        charbuff newBuff = "This is a test of sending strings. Hope this works!";
+        cout << "Message to send: " << newBuff << "\n";
+        newBuff[CHARBUFF_LENGTH-1] = 0;
+        msg.loadBytes(newBuff, strlen(newBuff));
+        msg.finish();
+        tcpclient->send(msg);
+        cout << "Message sent\n";
         delete tcpclient;
         delete tcplistener;
     } else {
@@ -157,6 +165,23 @@ int main(int argc, char const *argv[]) {
         delete tcpclient;
         delete remoteip;
         cout << "Message Sent\n";
+    }*/
+
+    bool connected = false;
+    if (DEBUG_IS_HOST == true) {
+        UDPConnectionServer* server = new UDPConnectionServer(game);
+        while (connected == false) {
+            connected = server->recieve();
+        }
+        server->send("returning the thing");
+        delete server;
+    } else {
+        UDPConnectionClient* client = new UDPConnectionClient(game);
+        client->send("hope this works");
+        while (!connected) {
+            connected = client->recieve();
+        }
+        delete client;
     }
 
 
@@ -256,9 +281,80 @@ int main(int argc, char const *argv[]) {
 }
 
 
+UDPConnectionClient::UDPConnectionClient(Game* game) {
+    socket = SDLNet_UDP_Open(game->cPort());
+    if (SDLNet_ResolveHost(&connectionIp, game->hIP().c_str(), game->hPort()) == -1) {
+        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
+    }
+    packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut->address.host = connectionIp.host;
+    packetOut->address.port = connectionIp.port;
+}
+
+UDPConnectionClient::~UDPConnectionClient(void) {
+    SDLNet_UDP_Close(socket);
+    SDLNet_FreePacket(packetIn);
+    SDLNet_FreePacket(packetOut);
+}
+
+bool UDPConnectionClient::send(string msg) {
+    bool success = true;
+    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
+    packetOut->len = msg.length()+1;
+    SDLNet_UDP_Send(socket, -1, packetOut);
+    return success;
+}
+
+bool UDPConnectionClient::recieve(void) {
+    bool success = false;
+    if (SDLNet_UDP_Recv(socket, packetIn)) {
+        cout << "Message: " << packetIn->data << "\n";
+        success = true;
+    }
+    return success;
+}
 
 
 
+UDPConnectionServer::UDPConnectionServer(Game* game) {
+    socket = SDLNet_UDP_Open(game->hPort());
+    packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut->address.host = 0;
+    packetOut->address.port = 0;
+}
+
+UDPConnectionServer::~UDPConnectionServer(void) {
+    SDLNet_UDP_Close(socket);
+    SDLNet_FreePacket(packetIn);
+    SDLNet_FreePacket(packetOut);
+}
+
+bool UDPConnectionServer::send(string msg) {
+    bool success = true;
+    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
+    packetOut->len = msg.length()+1;
+    if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+        cout << "SDLNet_UDP_Send: " << SDLNet_GetError() << "\n";
+        success = false;
+    }
+    return success;
+}
+
+bool UDPConnectionServer::recieve(void) {
+    bool success = false;
+    Uint32 currHost = packetOut->address.host;
+    if (SDLNet_UDP_Recv(socket, packetIn)) {
+        if (currHost == 0) {
+            packetOut->address.host = packetIn->address.host;
+            packetOut->address.port = packetIn->address.port;
+        }
+        success = true;
+        cout << packetIn->data << "\n";
+    }
+    return success;
+}
 
 
 /* -------------------------- FUNCTIONS ------------------------- */
@@ -740,7 +836,7 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     string value;
     ifstream configFile(CONFIG_FILE_LOCATION, ifstream::in); // open the config file
 
-    regex pattern("([a-zA-Z]+)=([a-zA-Z0-9]+)"); // create a regex used to extract data from each line
+    regex pattern("([a-zA-Z]+)=([a-zA-Z0-9\.]+)"); // create a regex used to extract data from each line
     smatch matches; // datatype to store the regex matches
     map<string, string> configElements; // map used to store the value of each data item
 
@@ -772,6 +868,25 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     }
     else {
         fullscreen = SCREEN_FULLSCREEN;
+    }
+
+    if (configElements["hostip"] != "") {
+        hostIp = configElements["hostip"];
+        cout << hostIp << "\n";
+    } else {
+        hostIp = DEBUG_HOST_IP;
+    }
+
+    if (configElements["hostport"] != "") {
+        hostPort = stoi(configElements["hostport"]);
+    } else {
+        hostPort = DEBUG_HOST_PORT;
+    }
+
+    if (configElements["clientport"] != "") {
+        clientPort = stoi(configElements["clientport"]);
+    } else {
+        clientPort = DEBUG_CLIENT_PORT;
     }
 
     string primColor = configElements["primaryColor"];
@@ -2102,7 +2217,7 @@ void CNetMessage::reset() {
 int CNetMessage::numToLoad() {
     int output = 0;
     if (state == EMPTY) {
-        output = 255;
+        output = CHARBUFF_LENGTH-1;
     }
     return output;
 }

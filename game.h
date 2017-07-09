@@ -39,6 +39,10 @@ typedef struct _coordSet {
 // General Parameters
 const int SCREEN_FPS = 60; // desired framerate of the screen
 
+
+// constants used in setting up the game instance
+const int GAME_MAX_PLAYERS = 4;
+
                            // values of the different colour schemes that can be used
                            // red
 const string COLOR_RED_NAME = "red";
@@ -399,7 +403,7 @@ const int HUD_HEALTH_DIVIDE_BLUE = 0;
 
 
 // constants used in netcode
-const int CHARBUFF_LENGTH = 256;
+const int CHARBUFF_LENGTH = 1024;
 
 
 
@@ -415,10 +419,10 @@ const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
 const int DEBUG_NUM_PLAYERS = 4;
 
-const bool DEBUG_IS_HOST = false;
-const Uint16 DEBUG_PORT = 2880;
-const string DEBUG_HOST_IP = "192.168.2.101";
-
+const bool DEBUG_IS_HOST = true;
+const Uint16 DEBUG_HOST_PORT = 2880;
+const Uint16 DEBUG_CLIENT_PORT = 2881;
+const string DEBUG_HOST_IP = "192.168.1.25";
 
 /*-------------------------- Typedefs ------------------------------*/
 
@@ -447,6 +451,10 @@ protected:
     forward_list<Projectile>* projectileList;
     SDL_Renderer** gameRenderer;
 
+    string hostIp;
+    Uint16 hostPort;
+    Uint16 clientPort;
+
     colorSet primaryColor;
     colorSet secondaryColor;
 
@@ -472,6 +480,10 @@ public:
     int screenWidth(void) { return swidth; }
     int screenHeight(void) { return sheight; }
     int isFullscreen(void) { return fullscreen; }
+    string hIP(void) {return hostIp;}
+    Uint16 hPort(void) {return hostPort;}
+    Uint16 cPort(void) {return clientPort;}
+
     colorSet primaryColors(void) { return primaryColor; }
     colorSet secondaryColors(void) { return secondaryColor; }
 
@@ -762,12 +774,12 @@ protected:
         FULL
     };
     bufferStates state;
-    void reset();
 
 public:
     CNetMessage();
     virtual int numToLoad(); // returns how many bytes can be loaded into the message
     virtual int numToUnload(); // returns how many bytes can be downloaded from the message
+    void reset();
 
     void loadBytes(charbuff& inputBuffer, int n); //load a set of characters into the message
     void unloadBytes(charbuff& destBuffer); // unload a set of characters from the message
@@ -832,6 +844,34 @@ public:
     bool send(CNetMessage& sData); // send data in a CNetMessage object
 };
 
+
+class UDPConnectionClient {
+private:
+    IPaddress connectionIp;
+
+    UDPpacket* packetIn;
+    UDPpacket* packetOut;
+    UDPsocket socket;
+public:
+    UDPConnectionClient(Game* game);
+    ~UDPConnectionClient(void);
+    bool send(string msg);
+    bool recieve(void);
+};
+
+class UDPConnectionServer {
+private:
+    IPaddress connectionIp;
+
+    UDPpacket* packetIn;
+    UDPpacket* packetOut;
+    UDPsocket socket;
+public:
+    UDPConnectionServer(Game* game);
+    ~UDPConnectionServer(void);
+    bool send(string msg);
+    bool recieve(void);
+};
 
 /*--------------------- Function definitions -------------------------*/
 
