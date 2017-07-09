@@ -1549,8 +1549,7 @@ string Player::getStateString(void) {
     statestring << strOfLen(playerRect.x, MESSAGE_LOC_CHAR);
     statestring << strOfLen(playerRect.y, MESSAGE_LOC_CHAR);
     cout << "a\n";
-    cout << angle << "\n";
-    statestring << strOfLen(angle, MESSAGE_ANGLE_CHAR);
+    statestring << strOfLen(angle+360, MESSAGE_ANGLE_CHAR);
     cout << "alph\n";
     statestring << rolling;
     cout << "b\n";
