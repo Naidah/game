@@ -1,9 +1,9 @@
 swidth=675
 sheight=325
 fullscreen=0
-primaryColor=pink
-secondaryColor=white
-ishost=1
+primaryColor=green
+secondaryColor=blue
+ishost=true
 hostip=127.0.0.1
 hostport=2880
 clientport=2881

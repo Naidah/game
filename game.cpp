@@ -4,29 +4,10 @@
 // TODO
 /*
 MAJOR:
---- Start artwork for objects and background
 -- Comment current work
-- Move code to be in different files to make editing easier
 --- NETCODE
-- Make a HUD class
-
--- rework quit game to work off the Game object
--- redo shotgun spread to be based off spliting within a total, no on a between shot basis
 -- redo characters, projectiles, etc to be called by reference
--- setup time in seconds rather than frames
-
-MINOR:
-- Improve dash outline
-- Roll icon
-- Make projectile explosion object appear on surface of collision getLocation
-- Fix bullets travelling through corners
 */
-
-/* Current balance considerations:
-- Pistols to good at all ranges (base scatter?)
-
-*/
-
 
 
 // Included modules in the program
@@ -66,6 +47,7 @@ int main(int argc, char const *argv[]) {
         testCheckExitMap();
         testGenerateRandInt();
         testGenerateRandDouble();
+        testGetLength();
         testStrOfLen();
     }
     srand(time(NULL)); // initialize the seed
@@ -126,12 +108,15 @@ int main(int argc, char const *argv[]) {
                 }
             }
         }
+
         if (game->hosting() == false) {
-            while (messageType > 0) {
+            int inputs = 0;
+            while (messageType > 0 && inputs < DEBUG_MAX_INPUTS_PF) {
                 messageType = game->getInput();
                 if (messageType == MESSAGE_WALL) {
                     inMenu = false;
                 }
+                inputs++;
             }
         }
 
@@ -147,7 +132,6 @@ int main(int argc, char const *argv[]) {
 
         } else {
             if (game->hosting() == true) {
-                cout << "top of section\n";
                 // update the state of the controlled character
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
                     character->updateState(&eventHandler, game);
@@ -163,18 +147,16 @@ int main(int argc, char const *argv[]) {
                         explosionUpdated.push_front(*explosion);
                     }
                 }
-                cout << "start of section\n";
                 explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
                                                   // move all players and projectiles
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
                     character->move(game->walls());
-                    if (character->getID() == CHARACTER_MAIN_ID) {
+                    if (character->getID() == game->getID()) {
                         playerMainX = character->getX();
                         playerMainY = character->getY();
                     }
                 }
-                cout << "middle of section\n";
 
                 // update all projectiles
                 newList.clear();
@@ -188,16 +170,14 @@ int main(int argc, char const *argv[]) {
                     }
                 }
                 projectileList = newList; // store remaining projectiles
-                cout << "just before sending the update\n";
                 game->sendUpdate();
-                cout << "end of section\n";
             }
 
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
             SDL_RenderClear(renderer); // clear the previous frame
             renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                if (character->getID() == CHARACTER_MAIN_ID) {
+                if (character->getID() == game->getID()) {
                     renderGameUI(game, *character, hudInfoContainer); // draw the HUD
                 }
             }
@@ -293,7 +273,6 @@ UDPConnectionServer::~UDPConnectionServer(void) {
 }
 
 bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
-    cout << "in send\n";
     bool success = true;
     memcpy(packetOut->data, msg.c_str(), msg.length()+1);
     packetOut->len = msg.length()+1;
@@ -305,7 +284,6 @@ bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
             success = false;
         }
     }
-    cout << "out send\n";
     return success;
 }
 
@@ -786,11 +764,26 @@ bool validateSpawnPoint(coordSet point, forward_list<Player>* playerList) {
 string strOfLen(int number, int len) {
     // converts number into a string of length len (leading 0s)
     stringstream output;
-    for (int i = 0; i < len-to_string(number).length(); i++) {
+    for (int i = 0; i < len-getLength(number); i++) {
         output << "0";
     }
     output << to_string(number);
     return output.str();
+}
+
+int getLength(int number) {
+    // returns the number of digits in an int
+    // Returns 1 for 0 (specific for useage), does not consider negatives
+    int length;
+    if (number == 0) {
+        length = 1;
+    } else {
+        for (int l = 1; number != 0; l++) {
+            number /= 10;
+            length = l;
+        }
+    }
+    return length;
 }
 
 /* -------------------------- CLASSES --------------------------- */
@@ -1016,6 +1009,8 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
 
     numPlayers = 0;
     if (isHost == true) {
+        myID = CHARACTER_MAIN_ID;
+        nextID = myID + 1;
         server = new UDPConnectionServer(this);
     } else {
         client = new UDPConnectionClient(this);
@@ -1044,8 +1039,11 @@ void Game::recieveConnection(void) {
                 cout << "New Connection Recieved\n";
                 currPlayers[numPlayers] = inboundConnection;
                 numPlayers++;
+                stringstream message;
+                message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
+                server->send(message.str(), inboundConnection);
+                nextID++;
             }
-            server->send(to_string(MESSAGE_CONF_CONNECTION), inboundConnection);
         }
     }
 }
@@ -1072,9 +1070,7 @@ void Game::initialize(void) {
 }
 
 void Game::sendUpdate(void) {
-    cout << "in send update\n";
     server->send(getPlayerString(), currPlayers, numPlayers);
-    cout << "out send update\n";
 }
 
 int Game::getInput(void) {
@@ -1084,8 +1080,9 @@ int Game::getInput(void) {
     if (msg.ip != 0) {
         messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
         connected = true;
-        if (serverString[0] == MESSAGE_CONF_CONNECTION) {
-            cout << "Connection established\n";
+        if (messageType == MESSAGE_CONF_CONNECTION) {
+            myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
+            cout << "Connection established as player " << myID << "\n";
         } else if (messageType == MESSAGE_WALL) {
             updateMap(serverString);
         } else if (messageType == MESSAGE_PLAYER) {
@@ -1097,6 +1094,8 @@ int Game::getInput(void) {
 
 void Game::updateMap(string serverString) {
     wallContainer->clear();
+    playerList->clear();
+    projectileList->clear();
     int x, y, w, h;
     for (int wall = 0; wall < (serverString.length()-1)/(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS); wall++) {
         x = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+1, MESSAGE_LOC_CHAR));
@@ -1118,26 +1117,44 @@ void Game::updatePlayers(string serverString) {
         currIndex += MESSAGE_LOC_CHAR;
         currState.angle = stoi(serverString.substr(currIndex, MESSAGE_ANGLE_CHAR));
         currIndex += MESSAGE_ANGLE_CHAR;
+
         currState.rolling = stoi(serverString.substr(currIndex, 1));
         currIndex++;
-        currState.rollX = stoi(serverString.substr(currIndex, 1));
+        currState.rollFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
+        currIndex += MESSAGE_FRAMES_CHAR;
+        currState.rollX = stoi(serverString.substr(currIndex, 1))-2;
         currIndex++;
-        currState.rollY = stoi(serverString.substr(currIndex, 1));
+        currState.rollY = stoi(serverString.substr(currIndex, 1))-2;
         currIndex++;
+
         currState.invuln = stoi(serverString.substr(currIndex, 1));
         currIndex++;
+        currState.invulnFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
+        currIndex += MESSAGE_FRAMES_CHAR;
         currState.alive = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+        currState.deathFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
+        currIndex += MESSAGE_FRAMES_CHAR;
+
+        currState.dmX = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
+        currIndex += MESSAGE_LOC_CHAR;
+        currState.dmY = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
+        currIndex += MESSAGE_LOC_CHAR;
+        currState.id = stoi(serverString.substr(currIndex, 1));
+        currIndex++;
+        currState.weapID = stoi(serverString.substr(currIndex, 1));
         currIndex++;
 
         found = false;
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
-            if (player->getID() == pIndex) {
+            if (player->getID() == currState.id) {
                 found = true;
                 player->updateState(currState);
             }
         }
         if (found == false) {
-            playerList->push_front(Player(this, currState.x, currState.y, pIndex, CHARACTER_WEAPON_ASSAULT_RIFLE));
+            playerList->push_front(Player(this, currState.x, currState.y,
+             currState.id, currState.weapID));
         }
     }
 }
@@ -1157,15 +1174,11 @@ string Game::getMapString(void) {
 }
 
 string Game::getPlayerString(void) {
-    cout << "in player string\n";
     stringstream playerString;
     playerString << MESSAGE_PLAYER;
-    cout << "pre loop\n";
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
-        cout << "looping\n";
         playerString << player->getStateString();
     }
-    cout << "out player string\n";
     return playerString.str();
 }
 
@@ -1209,6 +1222,8 @@ Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
     // load in the players spritesheet
     rollOutline = loadImage(CHARACTER_ROLL_IMAGE, game->renderer());
     invulnImage = loadImage(CHARACTER_INVULN_IMAGE, game->renderer());
+
+    weapID = weaponID;
     if (weaponID == CHARACTER_WEAPON_ASSAULT_RIFLE) {
         playerImage = loadImage(CHARACTER_IMAGE_AR_LOCATION, game->renderer());
         weapon = new AssaultRifle;
@@ -1243,7 +1258,7 @@ Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
     id = idNum; // set the ID number to the one provided
 
                 // set the players color scheme
-    if (id == CHARACTER_MAIN_ID) {
+    if (id == game->getID()) {
         playerColors.red = game->primaryColors().red;
         playerColors.green = game->primaryColors().green;
         playerColors.blue = game->primaryColors().blue;
@@ -1256,7 +1271,7 @@ Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
     playerColors.alpha = UI_COLOR_MAX_VALUE;
 
     playerRenderer = game->renderer();
-    deathMarker = NULL;
+    deathMarker = new DeathObject(game->renderer(), playerRect, playerColors);
 }
 
 void Player::setPlayerCentre(void) {
@@ -1276,7 +1291,7 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
         int mouseY = 0;
         double ratio;
 
-        if (id == CHARACTER_MAIN_ID) { // only move the player related to the partiicular game instance
+        if (id == game->getID()) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
             if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
                 && rollCooldown == 0 && direction != MOVE_NONE) { // if the player presses the roll key while they can start rolling
@@ -1393,12 +1408,16 @@ void Player::updateState(playerState newState) {
     playerRect.x = newState.x;
     playerRect.y = newState.y;
     setPlayerCentre();
+    angle = newState.angle;
     rolling = newState.rolling;
+    rollFrames = newState.rollFrames;
     rollDirection.x = newState.rollX;
     rollDirection.y = newState.rollY;
     invulnerable = newState.invuln;
+    invulnFrames = newState.invulnFrames;
     alive = newState.alive;
-    angle = newState.angle;
+    deathFrames = newState.deathFrames;
+    deathMarker->updateState(deathFrames, newState.dmX, newState.dmY);
 }
 
 void Player::move(forward_list<Wall*>* wallContainer) {
@@ -1457,7 +1476,7 @@ void Player::killPlayer(void) { // kill the player, and create a object to show 
     vely = 0;
     rolling = false;
     rollDirection = MOVE_NONE;
-    deathMarker = new DeathObject(playerRenderer, playerRect, playerColors);
+    deathMarker->reset(playerRect);
 }
 
 void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
@@ -1479,10 +1498,6 @@ void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* 
 
         rollCooldown = 0;
         weapon->resetGun();
-
-        // delete the death marker object now it is no longer needed
-        delete deathMarker;
-        deathMarker = NULL;
     }
 }
 
@@ -1511,6 +1526,7 @@ void Player::render(Game* game) {
             SDL_SetTextureAlphaMod(invulnImage, CHARACTER_INVULN_ALPHA);
             SDL_RenderCopy(renderer, invulnImage, NULL, &invulnRect);
         }
+        //cout << playerRect.x << "\n";
         SDL_SetTextureColorMod(playerImage, playerColors.red,
             playerColors.green, playerColors.blue); // modulates the color based on the players settings
         SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
@@ -1541,24 +1557,26 @@ void Player::render(Game* game) {
 string Player::getStateString(void) {
     // gets a string representing the players variables for sending throuhg the network
     /* format:
-    x, y, angle, rolling state, roll dirx, roll diry, invuln state, alive state
+    x, y, angle, rolling state, roll frames, roll dirx, roll diry, invuln state, invuln frames,
+     alive state, death frames, deathmarkerX, deathmarkerY, id, weapon type
     NEED TO ADD WEAPON
     */
-    cout << "in state string\n";
     stringstream statestring;
     statestring << strOfLen(playerRect.x, MESSAGE_LOC_CHAR);
     statestring << strOfLen(playerRect.y, MESSAGE_LOC_CHAR);
-    cout << "a\n";
     statestring << strOfLen(angle+360, MESSAGE_ANGLE_CHAR);
-    cout << "alph\n";
     statestring << rolling;
-    cout << "b\n";
-    statestring << rollDirection.x;
-    statestring << rollDirection.y;
-    cout << "c\n";
+    statestring << strOfLen(rollFrames, MESSAGE_FRAMES_CHAR);
+    statestring << rollDirection.x+2; // shift the roll values to avoid negative numbers during sending
+    statestring << rollDirection.y+2;
     statestring << invulnerable;
+    statestring << strOfLen(invulnFrames, MESSAGE_FRAMES_CHAR);
     statestring << alive;
-    cout << "out state string\n";
+    statestring << strOfLen(deathFrames, MESSAGE_FRAMES_CHAR);
+    statestring << strOfLen(deathMarker->getX(), MESSAGE_LOC_CHAR);
+    statestring << strOfLen(deathMarker->getY(), MESSAGE_LOC_CHAR);
+    statestring << id;
+    statestring << weapID;
     return statestring.str();
 }
 
@@ -1584,12 +1602,24 @@ DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
     circleColors.red = playerColors.red;
     circleColors.blue = playerColors.blue;
     circleColors.green = playerColors.green;
+    circleColors.alpha = 0;
+}
+
+void DeathObject::reset(SDL_Rect playerCoordinates) {
+    circleRect.x = playerCoordinates.x;
+    circleRect.y = playerCoordinates.y;
     circleColors.alpha = UI_COLOR_MAX_VALUE;
 }
 
 void DeathObject::updateState(void) {
     // update the objects alpha each frame
     circleColors.alpha -= (double)UI_COLOR_MAX_VALUE / CHARACTER_DEATH_DURATION;
+}
+
+void DeathObject::updateState(int framesLeft, int x, int y) {
+    circleRect.x = x;
+    circleRect.y = y;
+    circleColors.alpha = UI_COLOR_MAX_VALUE*((double)framesLeft / CHARACTER_DEATH_DURATION);
 }
 
 void DeathObject::render(SDL_Renderer* renderer) { // draw the marker to its starting position
@@ -2093,7 +2123,7 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, i
     velx = -speed * cos(angle*M_PI / 180);
     vely = -speed * sin(angle*M_PI / 180);
 
-    if (id == CHARACTER_MAIN_ID) {
+    if (id == game->getID()) {
         projectileColors.red = game->primaryColors().red;
         projectileColors.blue = game->primaryColors().blue;
         projectileColors.green = game->primaryColors().green;
@@ -2510,4 +2540,20 @@ void testStrOfLen(void) {
     assert(strOfLen(4005, 6) == "004005");
 
     cout << "strOfLen passed all test\n";
+}
+
+void testGetLength(void) {
+    assert(getLength(123) == 3);
+    assert(getLength(4444) == 4);
+    assert(getLength(12) == 2);
+    assert(getLength(0) == 1);
+    assert(getLength(8) == 1);
+
+    assert(getLength(9630369) == 7);
+    assert(getLength(2000) == 4);
+    assert(getLength(300030003) == 9);
+    assert(getLength(9989) == 4);
+    assert(getLength(1000000000) == 10);
+
+    cout << "getLength passed all tests\n";
 }

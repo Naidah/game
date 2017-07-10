@@ -48,10 +48,17 @@ typedef struct _playerState {
     int y;
     int angle;
     bool rolling;
+    int rollFrames;
     int rollX;
     int rollY;
     bool invuln;
+    int invulnFrames;
     bool alive;
+    int deathFrames;
+    int dmX;
+    int dmY;
+    int id;
+    int weapID;
 } playerState;
 
 /*------------- All program constants defined here ------------------*/
@@ -428,11 +435,13 @@ const int MESSAGE_CONF_CONNECTION = 1;
 const int MESSAGE_WALL = 2;
 const int MESSAGE_PLAYER = 3;
 
-const int MESSAGE_PLAYER_LEN = 16;
+const int MESSAGE_PLAYER_LEN = 41;
 
 // amounts of characters used to represent different variables types in networking strings
+const int MESSAGE_ID_CHAR = 2;
 const int MESSAGE_LOC_CHAR = 4;
 const int MESSAGE_ANGLE_CHAR = 3;
+const int MESSAGE_FRAMES_CHAR = 5;
 
 
 
@@ -447,6 +456,7 @@ const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
 const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
 const int DEBUG_NUM_PLAYERS = 4;
+const int DEBUG_MAX_INPUTS_PF = 5;
 
 const bool DEBUG_IS_HOST = false;
 const Uint16 DEBUG_HOST_PORT = 2880;
@@ -485,6 +495,9 @@ protected:
     string hostIp;
     Uint16 hostPort;
     Uint16 clientPort;
+
+    int myID;
+    int nextID;
 
     int numPlayers;
     connection currPlayers[GAME_MAX_PLAYERS-1];
@@ -537,11 +550,13 @@ public:
     Uint16 cPort(void) {return clientPort;}
     bool isConnected(void) {return connected;}
     bool hosting(void) {return isHost;}
+    int getID(void) {return myID;}
 
     colorSet primaryColors(void) { return primaryColor; }
     colorSet secondaryColors(void) { return secondaryColor; }
 
     void setSize(int w, int h) { swidth = w; sheight = h; }
+    void setID(int newID) {myID = newID;}
 };
 
 
@@ -573,6 +588,7 @@ protected:
     colorSet playerColors;
 
     Weapon* weapon; // address of the player's weapon object
+    int weapID; // type of weapon used by the player
 
                     // life values of the player
     int health;
@@ -629,7 +645,13 @@ protected:
 public:
     DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates, colorSet playerColors);
     ~DeathObject(void);
+
+    int getX(void) {return circleRect.x;}
+    int getY(void) {return circleRect.y;}
+
+    void reset(SDL_Rect playerCoordinates);
     void updateState(void);
+    void updateState(int framesLeft, int x, int y);
     void render(SDL_Renderer* renderer);
 };
 
@@ -869,6 +891,7 @@ double generateRandDouble(double min, double max);
 bool validateSpawnPoint(coordSet point, forward_list<Player>* playerList);
 coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList);
 string strOfLen(int number, int len);
+int getLength(int number);
 
 //drivers
 void testDistBetweenPoints(void);
@@ -878,3 +901,4 @@ void testCheckExitMap(void);
 void testGenerateRandInt(void);
 void testGenerateRandDouble(void);
 void testStrOfLen(void);
+void testGetLength(void);
