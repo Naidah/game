@@ -70,9 +70,11 @@ int main(int argc, char const *argv[]) {
 
     forward_list<Wall*> wallContainer; // stores the game walls
     forward_list<coordSet> spawnPoints; // stores spawn point locations
-    forward_list<Player> playerList; // stores the players
-    forward_list<Projectile> projectileList; // stores the current set of projectiles
-    Game* game = new Game(&playerList, &wallContainer, &spawnPoints, &projectileList, &renderer);
+    forward_list<Player*> playerList; // stores the players
+    forward_list<Projectile*> projectileList; // stores the current set of projectiles
+    forward_list<BulletExplosion> explosionList; // stores explosions created by projectile collisions
+    Game* game = new Game(&playerList, &wallContainer, &spawnPoints,
+     &projectileList, &explosionList, &renderer);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
 
@@ -86,8 +88,7 @@ int main(int argc, char const *argv[]) {
 
 
 
-    forward_list<Projectile> newList; // temporarily store projectiles that have not collided
-    forward_list<BulletExplosion> explosionList; // stores explosions created by projectile collisions
+    forward_list<Projectile*> newList; // temporarily store projectiles that have not collided
     forward_list<BulletExplosion> explosionUpdated; // temporary store for active projectiles
 
 
@@ -113,12 +114,13 @@ int main(int argc, char const *argv[]) {
             int inputs = 0;
             while (messageType > 0 && inputs < DEBUG_MAX_INPUTS_PF) {
                 messageType = game->getInput();
-                if (messageType == MESSAGE_WALL) {
+                if (messageType != MESSAGE_CONF_CONNECTION && messageType != MESSAGE_NONE) {
                     inMenu = false;
                 }
                 inputs++;
             }
         }
+
 
         if (inMenu == true) {
             if (game->hosting() == true) {
@@ -134,50 +136,57 @@ int main(int argc, char const *argv[]) {
             if (game->hosting() == true) {
                 // update the state of the controlled character
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                    character->updateState(&eventHandler, game);
+                    (*character)->updateState(&eventHandler, game);
                 }
-
-                // update the explosion effects from bullets
-                explosionUpdated.clear();
-                for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-                    if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
-                        explosion->deleteObject();
-                    }
-                    else {
-                        explosionUpdated.push_front(*explosion);
-                    }
-                }
-                explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
                                                   // move all players and projectiles
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                    character->move(game->walls());
-                    if (character->getID() == game->getID()) {
-                        playerMainX = character->getX();
-                        playerMainY = character->getY();
-                    }
+                    (*character)->move(game->walls());
                 }
 
                 // update all projectiles
                 newList.clear();
                 for (auto bullet = projectileList.begin(); bullet != projectileList.end(); bullet++) {
-                    if (bullet->move(game) != true) { // store bullets still in flight
+                    if ((*bullet)->move(game) != true) { // store bullets still in flight
                         newList.push_front(*bullet);
                     }
                     else { // delete and replace with explosions those that have collided
-                        explosionList.push_front(BulletExplosion(renderer, bullet->getLocation(), bullet->getColors()));
-                        bullet->deleteObject();
+                        BulletExplosion newExplosion = BulletExplosion(renderer,
+                         (*bullet)->getLocation(), (*bullet)->getColors(), (*bullet)->getOwner());
+                        explosionList.push_front(newExplosion);
+                        game->addNewExplosion(newExplosion);
+                        delete *bullet;
                     }
                 }
                 projectileList = newList; // store remaining projectiles
                 game->sendUpdate();
             }
 
+            for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
+                if ((*character)->getID() == game->getID()) {
+                    playerMainX = (*character)->getX();
+                    playerMainY = (*character)->getY();
+                }
+            }
+
+            // update the explosion effects from bullets
+            explosionUpdated.clear();
+            for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
+                if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
+                    explosion->deleteObject();
+                }
+                else {
+                    explosionUpdated.push_front(*explosion);
+                }
+            }
+            explosionList = explosionUpdated; // set the list of active explosions to those that remain
+
+
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
             SDL_RenderClear(renderer); // clear the previous frame
             renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                if (character->getID() == game->getID()) {
+                if ((*character)->getID() == game->getID()) {
                     renderGameUI(game, *character, hudInfoContainer); // draw the HUD
                 }
             }
@@ -316,10 +325,10 @@ void quitGame(SDL_Window* window, Game* game) {
     SDL_DestroyWindow(window); // destroy the window
                                // go through all game objects, clearing any memory used and destroying them
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
-        character->deleteObject();
+        delete *character;
     }
     for (auto bullet = game->projectiles()->begin(); bullet != game->projectiles()->end(); bullet++) {
-        bullet->deleteObject();
+        delete* bullet;
     }
     for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
         delete *wall;
@@ -451,11 +460,11 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
 
     // render all objects to the screen
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
-        character->render(game);
+        (*character)->render(game);
     }
 
     for (auto bullet = game->projectiles()->begin(); bullet != game->projectiles()->end(); bullet++) {
-        bullet->render(game->renderer());
+        (*bullet)->render(game->renderer());
     }
 
     if (DEBUG_HIDE_SHADOWS != true) { // draws shadows by default unless debug settings are enabled
@@ -508,7 +517,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
 
 }
 
-void renderGameUI(Game* game, Player userCharacter, hudInfo hudInfoContainer) {
+void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer) {
     // draw the game HUD to the screen
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
 
@@ -539,7 +548,7 @@ void renderGameUI(Game* game, Player userCharacter, hudInfo hudInfoContainer) {
         UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(game->renderer(), &elementRect);
 
-    Weapon* userWeapon = userCharacter.getWeapon(); // store the users weapon used in referencing ammo
+    Weapon* userWeapon = userCharacter->getWeapon(); // store the users weapon used in referencing ammo
 
                                                     // create a second bar over the first to show percent of ammo remaining
     SDL_SetRenderDrawColor(game->renderer(),
@@ -547,7 +556,6 @@ void renderGameUI(Game* game, Player userCharacter, hudInfo hudInfoContainer) {
         game->primaryColors().green*HUD_AMMO_BAR_COLOR_SCALE,
         game->primaryColors().blue*HUD_AMMO_BAR_COLOR_SCALE,
         UI_COLOR_MAX_VALUE);
-
     if (userWeapon->isReloading() == false) { // if not reloading, show the amount of ammo left relative to the maximum
         elementRect.w *= (double)userWeapon->getCurrAmmo() / userWeapon->getMaxAmmo();
     }
@@ -587,7 +595,7 @@ void renderGameUI(Game* game, Player userCharacter, hudInfo hudInfoContainer) {
         game->secondaryColors().blue*HUD_COOLDOWN_BAR_COLOR_SCALE,
         UI_COLOR_MAX_VALUE);
 
-    elementRect.w *= 1 - userCharacter.getRollCooldown() / (double)CHARACTER_ROLL_COOLDOWN;
+    elementRect.w *= 1 - userCharacter->getRollCooldown() / (double)CHARACTER_ROLL_COOLDOWN;
     SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // draw the cooldown icon on top of the HUD element to indicate its use
@@ -614,11 +622,11 @@ void renderGameUI(Game* game, Player userCharacter, hudInfo hudInfoContainer) {
     SDL_RenderFillRect(game->renderer(), &elementRect);
 
     // draw a scaled bar over the top to present hp left or respawn time remaining
-    if (userCharacter.isAlive()) {
-        elementRect.w *= (double)userCharacter.getHealth() / CHARACTER_MAX_HP;
+    if (userCharacter->isAlive()) {
+        elementRect.w *= (double)userCharacter->getHealth() / CHARACTER_MAX_HP;
     }
     else {
-        elementRect.w *= 1 - (double)userCharacter.getDeathFrames() / CHARACTER_DEATH_DURATION;
+        elementRect.w *= 1 - (double)userCharacter->getDeathFrames() / CHARACTER_DEATH_DURATION;
     }
     SDL_SetRenderDrawColor(game->renderer(), HUD_HEALTH_BAR_RED, HUD_HEALTH_BAR_GREEN, HUD_HEALTH_BAR_BLUE, UI_COLOR_MAX_VALUE);
     SDL_RenderFillRect(game->renderer(), &elementRect);
@@ -718,7 +726,7 @@ int generateRandInt(int min, int max) {
     return roll;
 }
 
-coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
+coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player*>* playerList) {
     // selects a spawn point from all valid spawn points (not within a certain range of a player)
     // returns 0,0 if no points are valid, meaning the player will wait until a point becomes available
     list<coordSet> validPoints;
@@ -749,12 +757,12 @@ coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player>
     return output;
 }
 
-bool validateSpawnPoint(coordSet point, forward_list<Player>* playerList) {
+bool validateSpawnPoint(coordSet point, forward_list<Player*>* playerList) {
     // check if a spawn point is valid (not within CHARACTER_MIN_RESPAWN_RANGE of a player)
     bool valid = true;
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
-        if (distBetweenPoints(point.x, point.y, player->getX(),
-            player->getY()) < CHARACTER_MIN_RESPAWN_RANGE && player->isAlive() == true) {
+        if (distBetweenPoints(point.x, point.y, (*player)->getX(),
+            (*player)->getY()) < CHARACTER_MIN_RESPAWN_RANGE && (*player)->isAlive() == true) {
             valid = false;
         }
     }
@@ -786,14 +794,22 @@ int getLength(int number) {
     return length;
 }
 
+int sizeOfProj(forward_list<Projectile*>* list) {
+    int size = 0;
+    for (auto proj = list->begin(); proj != list->end(); proj++) {
+        size++;
+    }
+    return size;
+}
+
 /* -------------------------- CLASSES --------------------------- */
 
 
 // Function definitions for each class
 
-Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
-    forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
-    SDL_Renderer** renderer) {
+Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
+    forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
+    forward_list<BulletExplosion>* explList, SDL_Renderer** renderer) {
     // initializes the Game object
 
     // set all the parameters to their required values from input
@@ -801,6 +817,7 @@ Game::Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
     wallContainer = wallSet;
     spawnPoints = spawnSet;
     projectileList = projSet;
+    explosionList = explList;
     gameRenderer = renderer;
 
     // generate the pattern board
@@ -1059,10 +1076,10 @@ void Game::initialize(void) {
     playerList->clear();
     for (int i = 0; i<DEBUG_NUM_PLAYERS; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList->push_front(Player(this, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
+        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
-            playerList->front().killPlayer();
+            playerList->front()->killPlayer();
         }
     }
     server->send(getMapString(), currPlayers, numPlayers);
@@ -1071,15 +1088,22 @@ void Game::initialize(void) {
 
 void Game::sendUpdate(void) {
     server->send(getPlayerString(), currPlayers, numPlayers);
+    server->send(getProjectileString(), currPlayers, numPlayers);
+    server->send(getExplosionString(), currPlayers, numPlayers);
+}
+
+void Game::addNewExplosion(BulletExplosion newExplosion) {
+    explosionsToSend.push_front(newExplosion);
 }
 
 int Game::getInput(void) {
-    int messageType = 0;
+    int messageType = MESSAGE_NONE;
     string serverString;
     connection msg = client->recieve(&serverString);
     if (msg.ip != 0) {
         messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
         connected = true;
+        cout << messageType << "\n";
         if (messageType == MESSAGE_CONF_CONNECTION) {
             myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
             cout << "Connection established as player " << myID << "\n";
@@ -1087,6 +1111,10 @@ int Game::getInput(void) {
             updateMap(serverString);
         } else if (messageType == MESSAGE_PLAYER) {
             updatePlayers(serverString);
+        } else if (messageType == MESSAGE_PROJECTILE) {
+            updateProjectiles(serverString);
+        } else if (messageType == MESSAGE_EXPLOSION) {
+            updateExplosions(serverString);
         }
     }
     return messageType;
@@ -1147,18 +1175,62 @@ void Game::updatePlayers(string serverString) {
 
         found = false;
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
-            if (player->getID() == currState.id) {
+            if ((*player)->getID() == currState.id) {
                 found = true;
-                player->updateState(currState);
+                (*player)->updateState(currState);
             }
         }
         if (found == false) {
-            playerList->push_front(Player(this, currState.x, currState.y,
+            playerList->push_front(new Player(this, currState.x, currState.y,
              currState.id, currState.weapID));
         }
     }
 }
 
+void Game::updateProjectiles(string serverString) {
+    int numProj = (serverString.length()-1)/(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR);
+    int moddedProj = 0;
+    int x, y, id;
+    for (int bullet = 0; bullet < numProj; bullet++) {
+        x = stoi(serverString.substr(1+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*bullet, MESSAGE_LOC_CHAR));
+        y = stoi(serverString.substr(1+MESSAGE_LOC_CHAR+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*bullet, MESSAGE_LOC_CHAR));
+        id = stoi(serverString.substr(1+MESSAGE_LOC_CHAR*2+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*bullet, MESSAGE_ID_CHAR));
+        if (moddedProj < sizeOfProj(projectileList)) {
+            int index = 0;
+            for (auto toMod = projectileList->begin(); toMod != projectileList->end(); toMod++) {
+                if (index == bullet) {
+                    (*toMod)->updateState(x, y, this, id);
+                    moddedProj++;
+                }
+                index++;
+            }
+        } else {
+            projectileList->push_front(new Projectile(x, y, this, id));
+        }
+    }
+    if (numProj < sizeOfProj(projectileList)) {
+        forward_list<Projectile*> newList = *projectileList;
+        projectileList->clear();
+        int index = 0;
+        for (auto toMod = newList.begin(); toMod != newList.end(); toMod++) {
+            if (index < moddedProj) {
+                projectileList->push_front(*toMod);
+            }
+            index++;
+        }
+    }
+}
+
+void Game::updateExplosions(string serverString) {
+    int numExpl = (serverString.length()-1)/(MESSAGE_LOC_CHAR*2+MESSAGE_ID_CHAR);
+    for (int expl = 0; expl < numExpl; expl++) {
+        int x, y, id;
+        x = stoi(serverString.substr(1+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_LOC_CHAR));
+        y = stoi(serverString.substr(1+MESSAGE_LOC_CHAR+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_LOC_CHAR));
+        id = stoi(serverString.substr(1+MESSAGE_LOC_CHAR*2+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_ID_CHAR));
+        explosionList->push_front(BulletExplosion(this, x, y, id));
+    }
+}
 
 string Game::getMapString(void) {
     // converts the wall objects in the game into a single stream to send to clients
@@ -1177,9 +1249,29 @@ string Game::getPlayerString(void) {
     stringstream playerString;
     playerString << MESSAGE_PLAYER;
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
-        playerString << player->getStateString();
+        playerString << (*player)->getStateString();
     }
     return playerString.str();
+}
+
+string Game::getProjectileString(void) {
+    stringstream projString;
+    projString << MESSAGE_PROJECTILE;
+    for (auto bullet = projectileList->begin(); bullet != projectileList->end(); bullet++) {
+        projString << (*bullet)->getStateString();
+    }
+    return projString.str();
+}
+
+string Game::getExplosionString(void) {
+    stringstream explosionString;
+    explosionString << MESSAGE_EXPLOSION;
+    for (auto explosion = explosionsToSend.begin();
+     explosion != explosionsToSend.end(); explosion++) {
+        explosionString << explosion->getStateString();
+    }
+    explosionsToSend.clear();
+    return explosionString.str();
 }
 
 void Game::setPatterns(void) {
@@ -1274,6 +1366,15 @@ Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
     deathMarker = new DeathObject(game->renderer(), playerRect, playerColors);
 }
 
+Player::~Player(void) {
+    // clears any memory used by the player
+    SDL_DestroyTexture(playerImage);
+    if (deathMarker) {
+        delete deathMarker;
+    }
+    delete weapon;
+}
+
 void Player::setPlayerCentre(void) {
     // calculate the X and Y centres of the player
     centreX = playerRect.x + radius;
@@ -1290,7 +1391,6 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
         int mouseX = 0;
         int mouseY = 0;
         double ratio;
-
         if (id == game->getID()) { // only move the player related to the partiicular game instance
             direction = getDirections(); // get the direction of movement for the player at the current frame
             if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
@@ -1306,7 +1406,6 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
             if (keyboardState[SDL_SCANCODE_K] && DEBUG_KILL_PLAYER == true) { // if enabled in debug settings, kill the player on command
                 killPlayer();
             }
-
             if (rolling == true) {
                 // while rolling, move the player in the initial direction of the roll, and remove the state if they finish
                 rollFrames--;
@@ -1366,6 +1465,7 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
                     rollCooldown--;
                 }
             }
+
             // rotate the player to look toward the mouse
             // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
             SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
@@ -1384,6 +1484,7 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
             angle = atan2((double)(centreY - mouseY),
                 (double)(centreX - mouseX))*180.0 / M_PI; // find the angle between the character and the mouse
 
+            
             weapon->takeShot(game, this, eventHandler); // have the player shoot a projectile
         }
         if (invulnFrames > 0) { // if invulnerable, take a frame off the counter
@@ -1479,7 +1580,7 @@ void Player::killPlayer(void) { // kill the player, and create a object to show 
     deathMarker->reset(playerRect);
 }
 
-void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList) {
+void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player*>* playerList) {
     // respawns the player to a new position if their respawn timer expires
     coordSet newPosition = getSpawnPoint(spawnPoints, playerList); // get a location to spawn to
     if (newPosition.x != 0) { // if the player has a position they are able to spawn at, do so, otherwise respawn will call again next frame
@@ -1503,6 +1604,7 @@ void Player::respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* 
 
 void Player::render(Game* game) {
     SDL_Renderer* renderer = game->renderer();
+
     // draws the player to the screen using the supplied renderer
     if (alive == true) {
         if (invulnerable == true) { // if the player is in an invulnerable state, draw the icon below them
@@ -1580,15 +1682,6 @@ string Player::getStateString(void) {
     return statestring.str();
 }
 
-void Player::deleteObject(void) {
-    // clears any memory used by the player
-    SDL_DestroyTexture(playerImage);
-    if (deathMarker) {
-        delete deathMarker;
-    }
-    delete weapon;
-}
-
 
 
 DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
@@ -1638,7 +1731,6 @@ DeathObject::~DeathObject(void) { // delete the marker when it expires
 // Weapon object functions
 
 Weapon::~Weapon(void) {
-
 }
 
 AssaultRifle::AssaultRifle(void) : Weapon() {
@@ -1663,7 +1755,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler)
     double projectileAngle = player->getAngle() + generateRandDouble(-AR_MAX_BULLET_SPREAD / 2, AR_MAX_BULLET_SPREAD / 2);
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
-            game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+            game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
                 projectileAngle, AR_PROJECTILE_SPEED, game, player->getID()));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
@@ -1731,7 +1823,7 @@ void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
                 mouseDown = true;
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
-                game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+                game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
                     projectileAngle, PISTOL_PROJECTILE_SPEED, game, player->getID()));
             }
         }
@@ -1808,16 +1900,10 @@ void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
             mouseDown = true;
             for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
                 shotAngle = generateRandDouble(projectileAngle, projectileAngle + SHOTGUN_PROJECTILE_SPREAD);
-                game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
+                game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
                     shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
                 projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
             }
-            /*for (double n = -SHOTGUN_PROJECTILES_PER_SHOT/2; n < SHOTGUN_PROJECTILES_PER_SHOT/2; n++) {
-            projectileAngle = player->getAngle()+n*SHOTGUN_PROJECTILE_SPREAD; // set base angle of projectile
-            projectileAngle += (rand()%SHOTGUN_PROJECTILE_SPREAD)-SHOTGUN_PROJECTILE_SPREAD/2;
-            game->projectiles()->push_front(Projectile(player->getX(), player->getY(),
-            projectileAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
-            }*/
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
     }
@@ -2141,6 +2227,46 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, i
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
 }
 
+Projectile::Projectile(int x, int y, Game* game, int id) {
+    // set the location of the projectile
+    currPosX = x;
+    currPosY = y;
+
+    // set the angle
+    angle = 0;
+
+    // set the SDL_Rect for the projectile
+    projectileRect.x = x;
+    projectileRect.y = y;
+    projectileRect.w = PROJECTILE_WIDTH;
+    projectileRect.h = PROJECTILE_HEIGHT;
+
+    // set the projectiles radius and centre
+    radius = PROJECTILE_WIDTH / 2;
+    setProjectileCentre();
+
+    // initialize the speed to 0, since it is not used for clients
+    velx = 0;
+    vely = 0;
+
+    if (id == game->getID()) {
+        projectileColors.red = game->primaryColors().red;
+        projectileColors.blue = game->primaryColors().blue;
+        projectileColors.green = game->primaryColors().green;
+    }
+    else {
+        projectileColors.red = game->secondaryColors().red;
+        projectileColors.blue = game->secondaryColors().blue;
+        projectileColors.green = game->secondaryColors().green;
+    }
+
+
+    ownerID = id;
+
+    // load the spritesheet to memory
+    projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
+}
+
 void Projectile::setProjectileCentre(void) {
     centreX = projectileRect.x + radius;
     centreY = projectileRect.y + radius;
@@ -2149,10 +2275,10 @@ void Projectile::setProjectileCentre(void) {
 int Projectile::checkCollision(Game* game) {
     int output = PROJECTILE_COLLISION_NONE; // default to no collision
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
-        if (distBetweenPoints(centreX, centreY, character->getX(),
-            character->getY()) < (radius + character->getRadius())) { // check whether the projectile is contacting the player
-            if (character->getID() != ownerID && character->isAlive() == true) { // check the player hit is not the one who shot the projectile and is still alive
-                character->successfulShot(); // tell the player they are hit
+        if (distBetweenPoints(centreX, centreY, (*character)->getX(),
+            (*character)->getY()) < (radius + (*character)->getRadius())) { // check whether the projectile is contacting the player
+            if ((*character)->getID() != ownerID && (*character)->isAlive() == true) { // check the player hit is not the one who shot the projectile and is still alive
+                (*character)->successfulShot(); // tell the player they are hit
                 output = PROJECTILE_COLLISION_PLAYER;
             }
         }
@@ -2165,6 +2291,38 @@ int Projectile::checkCollision(Game* game) {
         }
     }
     return output;
+}
+
+string Projectile::getStateString(void) {
+    stringstream currState;
+    currState << strOfLen(projectileRect.x, MESSAGE_LOC_CHAR)
+     << strOfLen(projectileRect.y, MESSAGE_LOC_CHAR) << strOfLen(ownerID, MESSAGE_ID_CHAR);
+    return currState.str();
+}
+
+void Projectile::updateState(int x, int y, Game* game, int id) {
+    // set the location of the projectile
+    currPosX = x;
+    currPosY = y;
+
+    // set the SDL_Rect for the projectile
+    projectileRect.x = x;
+    projectileRect.y = y;
+    setProjectileCentre();
+
+    if (id == game->getID()) {
+        projectileColors.red = game->primaryColors().red;
+        projectileColors.blue = game->primaryColors().blue;
+        projectileColors.green = game->primaryColors().green;
+    }
+    else {
+        projectileColors.red = game->secondaryColors().red;
+        projectileColors.blue = game->secondaryColors().blue;
+        projectileColors.green = game->secondaryColors().green;
+    }
+
+
+    ownerID = id;
 }
 
 bool Projectile::move(Game* game) {
@@ -2206,7 +2364,7 @@ void Projectile::deleteObject(void) {
 }
 
 BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLocation,
-    colorSet projectileColors) {
+    colorSet projectileColors, int id) {
     explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, renderer);
 
     explosionLocation.w = PROJECTILE_EXPLOSION_START_RADIUS * 2;
@@ -2219,10 +2377,43 @@ BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLoca
     explosionColors.blue = projectileColors.blue;
     explosionColors.green = projectileColors.green;
     explosionColors.alpha = UI_COLOR_MAX_VALUE;
+
+    ownerID = id;
+}
+
+BulletExplosion::BulletExplosion(Game* game, int x, int y, int id) {
+    explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, game->renderer());
+
+    explosionLocation.w = PROJECTILE_EXPLOSION_START_RADIUS * 2;
+    explosionLocation.h = PROJECTILE_EXPLOSION_START_RADIUS * 2;
+    explosionLocation.x = x;
+    explosionLocation.y = y;
+    radius = PROJECTILE_EXPLOSION_START_RADIUS;
+
+    if (id == game->getID()) {
+        explosionColors.red = game->primaryColors().red;
+        explosionColors.blue = game->primaryColors().blue;
+        explosionColors.green = game->primaryColors().green;
+    } else {
+        explosionColors.red = game->secondaryColors().red;
+        explosionColors.blue = game->secondaryColors().blue;
+        explosionColors.green = game->secondaryColors().green;
+    }
+    explosionColors.alpha = UI_COLOR_MAX_VALUE;
+
+    ownerID = id;
 }
 
 void BulletExplosion::deleteObject(void) {
     SDL_DestroyTexture(explosionImage);
+}
+
+string BulletExplosion::getStateString(void) {
+    stringstream output;
+    output << strOfLen(explosionLocation.x, MESSAGE_LOC_CHAR)
+     << strOfLen(explosionLocation.y, MESSAGE_LOC_CHAR)
+     << strOfLen(ownerID, MESSAGE_ID_CHAR);
+    return output.str();
 }
 
 bool BulletExplosion::updateState(void) {

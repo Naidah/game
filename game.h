@@ -431,9 +431,12 @@ const int HUD_HEALTH_DIVIDE_BLUE = 0;
 
 // constants used in netcode
 const int CHARBUFF_LENGTH = 1024;
+const int MESSAGE_NONE = 0;
 const int MESSAGE_CONF_CONNECTION = 1;
 const int MESSAGE_WALL = 2;
 const int MESSAGE_PLAYER = 3;
+const int MESSAGE_PROJECTILE = 4;
+const int MESSAGE_EXPLOSION = 5;
 
 const int MESSAGE_PLAYER_LEN = 41;
 
@@ -447,11 +450,11 @@ const int MESSAGE_FRAMES_CHAR = 5;
 
 // constants used in debugging
 const bool DEBUG_ENABLE_DRIVERS = true;
-const bool DEBUG_HIDE_SHADOWS = true;
+const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = false;
 const bool DEBUG_SHOW_CURSOR = false;
 const bool DEBUG_DRAW_MOUSE_POINT = false;
-const bool DEBUG_DRAW_SPAWN_POINTS = true;
+const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
 const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
@@ -486,10 +489,11 @@ class UDPConnectionClient;
 // Class definitions
 class Game {
 protected:
-    forward_list<Player>* playerList;
+    forward_list<Player*>* playerList;
     forward_list<Wall*>* wallContainer;
     forward_list<coordSet>* spawnPoints;
-    forward_list<Projectile>* projectileList;
+    forward_list<Projectile*>* projectileList;
+    forward_list<BulletExplosion>* explosionList;
     SDL_Renderer** gameRenderer;
 
     string hostIp;
@@ -507,6 +511,8 @@ protected:
     UDPConnectionClient* client;
     bool connected;
 
+    forward_list<BulletExplosion> explosionsToSend;
+
     colorSet primaryColor;
     colorSet secondaryColor;
 
@@ -517,9 +523,9 @@ protected:
     int sheight;
     bool fullscreen;
 public:
-    Game(forward_list<Player>* playerSet, forward_list<Wall*>* wallSet,
-        forward_list<coordSet>* spawnSet, forward_list<Projectile>* projSet,
-        SDL_Renderer** renderer);
+    Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
+        forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
+        forward_list<BulletExplosion>* explList, SDL_Renderer** renderer);
     ~Game(void);
 
     void setPatterns(void);
@@ -530,16 +536,22 @@ public:
 
     string getMapString(void);
     string getPlayerString(void);
+    string getProjectileString(void);
+    string getExplosionString(void);
 
     int getInput(void);
     void sendUpdate(void);
     void updateMap(string serverString);
     void updatePlayers(string serverString);
+    void updateProjectiles(string serverString);
+    void updateExplosions(string serverString);
 
-    forward_list<Player>* players(void) { return playerList; }
+    void addNewExplosion(BulletExplosion newExplosion);
+
+    forward_list<Player*>* players(void) { return playerList; }
     forward_list<Wall*>* walls(void) { return wallContainer; }
     forward_list<coordSet>* spawns(void) { return spawnPoints; }
-    forward_list<Projectile>* projectiles(void) { return projectileList; }
+    forward_list<Projectile*>* projectiles(void) { return projectileList; }
     SDL_Renderer* renderer(void) { return *gameRenderer; }
     SDL_Texture* pattern(int x, int y) { return patterns[patternBoard[x][y]]; }
     int screenWidth(void) { return swidth; }
@@ -608,6 +620,7 @@ protected:
 public:
     // initializer function for the class
     Player(Game* game, int startX, int startY, int idNum, int weaponID);
+    ~Player(void);
 
     //getters for the private variables
     Weapon* getWeapon(void) { return weapon; }
@@ -630,10 +643,9 @@ public:
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
     void successfulShot(void); // called when the player is hit by a bullet
     void killPlayer(void); // kills the player
-    void deleteObject(void); // frees any variables from memory as needed // MAKE A DECONSTRUCTOR
-    void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList); // respawn the player after death
+    void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player*>* playerList); // respawn the player after death
 
-                                                                                         //draws the player to the screen
+    //draws the player to the screen
     void render(Game* game);
 };
 
@@ -789,12 +801,16 @@ private:
     SDL_Texture* projectileImage;
 public:
     Projectile(int x, int y, double a, const double speed, Game* game, int id);
+    Projectile(int x, int y, Game* game, int id);
 
     SDL_Rect getLocation(void) { return projectileRect; }
     colorSet getColors(void) { return projectileColors; }
+    int getOwner(void) {return ownerID;}
 
     int checkCollision(Game* game);
+    string getStateString(void);
     bool move(Game* game);
+    void updateState(int x, int y, Game* game, int id);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer);
     void deleteObject(void);
@@ -806,10 +822,13 @@ protected:
     SDL_Rect explosionLocation;
     colorSet explosionColors;
     double radius;
+    int ownerID;
 public:
-    BulletExplosion(SDL_Renderer* render, SDL_Rect projectileLocation, colorSet projectileColors);
+    BulletExplosion(SDL_Renderer* render, SDL_Rect projectileLocation, colorSet projectileColors, int id);
+    BulletExplosion(Game* game, int x, int y, int id);
     void deleteObject(void);
     bool updateState(void);
+    string getStateString(void);
     void render(SDL_Renderer* renderer);
 };
 
@@ -883,15 +902,16 @@ direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(Game* game, forward_list<BulletExplosion> explosionList,
     int playerMainX, int playerMainY); // render the gameplay area of the screen
-void renderGameUI(Game* game, Player userCharacter,
+void renderGameUI(Game* game, Player* userCharacter,
     hudInfo hudInfoContainer); // render the HUD area of the screen
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
 int generateRandInt(int min, int max);
 double generateRandDouble(double min, double max);
-bool validateSpawnPoint(coordSet point, forward_list<Player>* playerList);
-coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player>* playerList);
+bool validateSpawnPoint(coordSet point, forward_list<Player*>* playerList);
+coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player*>* playerList);
 string strOfLen(int number, int len);
 int getLength(int number);
+int sizeOfProj(forward_list<Projectile*>* list);
 
 //drivers
 void testDistBetweenPoints(void);
