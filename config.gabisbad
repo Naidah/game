@@ -1,10 +1,5 @@
-swidth=675
-sheight=325
+swidth=1156
+sheight=650
 fullscreen=0
-primaryColor=purple
-secondaryColor=blue
-ishost=true
-hostip=127.0.0.1
-hostport=3456
-clientport=6543
-gabisbad=12
+primaryColor=cyan
+secondaryColor=pink

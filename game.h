@@ -39,6 +39,18 @@ typedef struct _colorSet {
     double alpha;
 } colorSet;
 
+colorSet operator*(const colorSet lhs, const double rhs) {
+    return {lhs.red*rhs, lhs.green*rhs, lhs.blue*rhs};
+}
+
+bool operator==(const colorSet lhs, const colorSet rhs) {
+    return lhs.red == rhs.red && lhs.green == rhs.green && lhs.blue == rhs.blue;
+}
+
+bool operator!=(const colorSet lhs, const colorSet rhs) {
+    return !(lhs == rhs);
+}
+
 typedef struct _coordSet {
     int x;
     int y;
@@ -86,6 +98,8 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 const int GAME_MAX_PLAYERS = 4;
 
 // values of the different colour schemes that can be used
+const colorSet COLOR_NONE = {0,0,0};
+
 // red
 const string COLOR_RED_NAME = "red";
 const int COLOR_RED_RED = 255;
@@ -146,6 +160,32 @@ const int COLOR_GREY_RED = 155;
 const int COLOR_GREY_GREEN = 155;
 const int COLOR_GREY_BLUE = 155;
 
+const int COLOR_NUM = 9;
+const string COLOR_NAMES[] = {
+    COLOR_RED_NAME,
+     COLOR_GREEN_NAME,
+     COLOR_BLUE_NAME,
+     COLOR_PURPLE_NAME,
+     COLOR_YELLOW_NAME,
+     COLOR_CYAN_NAME,
+     COLOR_ORANGE_NAME,
+     COLOR_PINK_NAME,
+     COLOR_WHITE_NAME
+};
+
+map<string, colorSet> COLOR_VALUES = 
+{
+    {COLOR_RED_NAME, {COLOR_RED_RED, COLOR_RED_GREEN, COLOR_RED_BLUE}},
+    {COLOR_GREEN_NAME, {COLOR_GREEN_RED, COLOR_GREEN_GREEN, COLOR_GREEN_BLUE}},
+    {COLOR_BLUE_NAME, {COLOR_BLUE_RED, COLOR_BLUE_GREEN, COLOR_BLUE_BLUE}},
+    {COLOR_PURPLE_NAME, {COLOR_PURPLE_RED, COLOR_PURPLE_GREEN, COLOR_PURPLE_BLUE}},
+    {COLOR_YELLOW_NAME, {COLOR_YELLOW_RED, COLOR_YELLOW_GREEN, COLOR_YELLOW_BLUE}},
+    {COLOR_CYAN_NAME, {COLOR_CYAN_RED, COLOR_CYAN_GREEN, COLOR_CYAN_BLUE}},
+    {COLOR_ORANGE_NAME, {COLOR_ORANGE_RED, COLOR_ORANGE_GREEN, COLOR_ORANGE_BLUE}},
+    {COLOR_PINK_NAME, {COLOR_PINK_RED, COLOR_PINK_GREEN, COLOR_PINK_BLUE}},
+    {COLOR_WHITE_NAME, {COLOR_WHITE_RED, COLOR_WHITE_GREEN, COLOR_WHITE_BLUE}}
+};
+
 
 // RGB color of background on images to allow tranparency
 const int COLOR_KEY_RED = 255;
@@ -162,9 +202,6 @@ const direction MOVE_UP_LEFT = { -1,-1 };
 const direction MOVE_UP_RIGHT = { 1,-1 };
 const direction MOVE_DOWN_LEFT = { -1,1 };
 const direction MOVE_DOWN_RIGHT = { 1,1 };
-
-// location of the config file
-const string CONFIG_FILE_LOCATION = "config.gabisbad";
 
 // Character related constants
 const string CHARACTER_IMAGE_AR_LOCATION = "images/characterAssaultRifle.png"; // path to the character spritesheet
@@ -240,10 +277,10 @@ const double PISTOL_PROJECTILE_SPEED_PS = 1100;
 const double PISTOL_PROJECTILE_SPEED = PISTOL_PROJECTILE_SPEED_PS / SCREEN_FPS;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 4;
-const double SHOTGUN_SPREAD_RANGE = 35;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
+const double SHOTGUN_SPREAD_RANGE = 45;
 const double SHOTGUN_PROJECTILE_SPREAD = SHOTGUN_SPREAD_RANGE / SHOTGUN_PROJECTILES_PER_SHOT;
-const double SHOTGUN_SHOT_DELAY_SEC = 0.8;
+const double SHOTGUN_SHOT_DELAY_SEC = 1.5;
 const double SHOTGUN_SHOT_DELAY = SHOTGUN_SHOT_DELAY_SEC*SCREEN_FPS;
 const double SHOTGUN_PROJECTILE_SPEED_PS = 500;
 const double SHOTGUN_PROJECTILE_SPEED = SHOTGUN_PROJECTILE_SPEED_PS / SCREEN_FPS;
@@ -315,8 +352,8 @@ const double SCREEN_TICKRATE = 1000.0 / SCREEN_FPS; // duration of each frame on
 
 const int SCREEN_FULLSCREEN = true; // whether the screen should be fullscreen
 
-const int SCREEN_WIDTH_DEFAULT = 1350; // width of screen to scale against
-const int SCREEN_HEIGHT_DEFAULT = 650; // height of screen to scale against
+const int SCREEN_WIDTH_DEFAULT = 1366; // width of screen to scale against
+const int SCREEN_HEIGHT_DEFAULT = 768; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
 const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen when no value is in the config file
@@ -324,7 +361,7 @@ const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 
 
 // Gamespace parameters
-const int GAMESPACE_WIDTH = SCREEN_HEIGHT_DEFAULT*1.6; // the gameplay space takes a square on the far right
+const int GAMESPACE_WIDTH = SCREEN_WIDTH_DEFAULT*0.76; // the gameplay space takes a square on the far right
 const int GAMESPACE_HEIGHT = SCREEN_HEIGHT_DEFAULT;
 const int GAMESPACE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT - GAMESPACE_WIDTH;
 const int GAMESPACE_TOPLEFT_Y = 0;
@@ -341,10 +378,7 @@ const int UI_CURSOR_HEIGHT = 24;
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
                                         // multiplier on the primary color used in determining background color
-const double UI_BACKGROUND_MULTIPLIER = 1 - (double)UI_BACKGROUND_ADDITION / UI_COLOR_MAX_VALUE;
-const int UI_BACKGROUND_COLOR_RED = 100;
-const int UI_BACKGROUND_COLOR_GREEN = 160;
-const int UI_BACKGROUND_COLOR_BLUE = 255;
+const double UI_BACKGROUND_MULTIPLIER = 1 - (double)UI_BACKGROUND_ADDITION*1.3 / UI_COLOR_MAX_VALUE;
 
 const int UI_BACKGROUND_PATTERN_WIDTH = 50;
 const int UI_BACKGROUND_PATTERN_HEIGHT = 50;
@@ -355,9 +389,61 @@ const string UI_BACKGROUND_PATTERN_PREFIX = "images/pattern";
 const string UI_BACKGROUND_PATTERN_TYPE = ".png";
 const int UI_BACKGROUND_PATTERN_ALPHA = 20;
 
-const int UI_SHADOW_COLOR_RED = 10;
-const int UI_SHADOW_COLOR_GREEN = 10;
-const int UI_SHADOW_COLOR_BLUE = 50;
+const int UI_RESOLUTION_NUM = 5;
+const double UI_RESOLUTION_MULTIPLIER = (double)1366/768; // multiplier on a resolution height to get its length
+
+const int UI_RESOLUTIONS[] = {
+    350,
+    525,
+    650,
+    900,
+    1200,
+};
+
+
+
+const int MENU_NONE = 0;
+const int MENU_QUIT = 1;
+const int MENU_LAUNCH = 2;
+const int MENU_SET_MAIN = 3;
+const int MENU_SET_OPTIONS = 4;
+const int MENU_SET_LOBBY = 5;
+
+enum BUTTON_TYPE {
+    BUTTON_MENU,
+    BUTTON_RADIO
+};
+const int BUTTON_OUTLINE_WIDTH = 10;
+
+const int BUTTON_BACK_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.05;
+const int BUTTON_BACK_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.85;
+const int BUTTON_BACK_WIDTH = SCREEN_WIDTH_DEFAULT*0.14;
+const int BUTTON_BACK_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+
+const int BUTTON_FULL_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.4;
+const int BUTTON_FULL_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.25;
+const int BUTTON_FULL_WIDTH = SCREEN_WIDTH_DEFAULT*0.08;
+const int BUTTON_FULL_HEIGHT = BUTTON_FULL_WIDTH;
+
+const double BUTTON_MENU_COLOR_MULTIPLIER = 0.7;
+
+const int BUTTON_COLOR_WIDTH = SCREEN_HEIGHT_DEFAULT*0.07;
+const int BUTTON_COLOR_GAP = SCREEN_HEIGHT_DEFAULT*0.04;
+
+const int BUTTON_COLOR_PRIM_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.75;
+const int BUTTON_COLOR_PRIM_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.09;
+
+const int BUTTON_COLOR_SEC_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.75;
+const int BUTTON_COLOR_SEC_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.59;
+
+const double BUTTON_COLOR_SEC_MULTIPLIER = 0.8;
+
+const int BUTTON_RES_WIDTH = SCREEN_HEIGHT_DEFAULT*0.4;
+const int BUTTON_RES_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+const int BUTTON_RES_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.06;
+const int BUTTON_RES_TOPLEFT_Y = SCREEN_WIDTH_DEFAULT*0.05;
+const int BUTTON_RES_GAP = SCREEN_HEIGHT_DEFAULT*0.06;
+
 
 // Constants related to map generation
 const int MAPBOX_START_ITERATIONS = 4;
@@ -442,6 +528,18 @@ const int HUD_HEALTH_DIVIDE_RED = 100;
 const int HUD_HEALTH_DIVIDE_GREEN = 0;
 const int HUD_HEALTH_DIVIDE_BLUE = 0;
 
+// constants used in using the config file
+// location of the config file
+const string CONFIG_FILE_LOCATION = "config.gabisbad";
+const string CONFIG_SWIDTH = "swidth";
+const string CONFIG_SHEIGHT = "sheight";
+const string CONFIG_FULLSCREEN = "fullscreen";
+const string CONFIG_ISHOST = "ishost";
+const string CONFIG_HOSTIP = "hostip";
+const string CONFIG_HOSTPORT = "hostport";
+const string CONFIG_CLIENTPORT = "clientport";
+const string CONFIG_PRIMCOLOR = "primaryColor";
+const string CONFIG_SECCOLOR = "secondaryColor";
 
 
 // constants used in netcode
@@ -479,7 +577,7 @@ const int DEBUG_WEAPONARC_RADIUS = 500;
 const int DEBUG_NUM_PLAYERS = 4;
 const int DEBUG_MAX_INPUTS_PF = 5;
 
-const bool DEBUG_IS_HOST = false;
+const bool DEBUG_IS_HOST = true;
 const Uint16 DEBUG_HOST_PORT = 2880;
 const Uint16 DEBUG_CLIENT_PORT = 2881;
 const string DEBUG_HOST_IP = "127.0.0.1";
@@ -494,6 +592,10 @@ typedef char charbuff[CHARBUFF_LENGTH];
 
 // declarations of different classes
 class Game;
+class Menu;
+class MainPage;
+class OptionPage;
+class Button;
 class Player;
 class DeathObject;
 class Weapon;
@@ -512,7 +614,9 @@ protected:
     forward_list<coordSet>* spawnPoints;
     forward_list<Projectile*>* projectileList;
     forward_list<BulletExplosion*>* explosionList;
+
     SDL_Renderer** gameRenderer;
+    SDL_Window** gameWindow;
 
     forward_list<BulletExplosion*> explosionsToSend;
 
@@ -535,18 +639,25 @@ protected:
 
 
     colorSet primaryColor;
+    string primary;
     colorSet secondaryColor;
+    string secondary;
 
     SDL_Texture* patterns[UI_BACKGROUND_PATTERN_COUNT];
     int patternBoard[UI_BACKGROUND_PATTERN_ROW][UI_BACKGROUND_PATTERN_COL];
 
+    // store the player set resolution
     int swidth;
     int sheight;
+    // store the actual resolution (changes in fullscreen mode)
+    int swidthActual;
+    int sheightActual;
     bool fullscreen;
 public:
     Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
         forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
-        forward_list<BulletExplosion*>* explList, SDL_Renderer** renderer);
+        forward_list<BulletExplosion*>* explList, SDL_Renderer** renderer,
+        SDL_Window** window);
     ~Game(void);
 
     void setPatterns(void);
@@ -582,24 +693,117 @@ public:
     forward_list<coordSet>* spawns(void) { return spawnPoints; }
     forward_list<Projectile*>* projectiles(void) { return projectileList; }
     SDL_Renderer* renderer(void) { return *gameRenderer; }
+
     SDL_Texture* pattern(int x, int y) { return patterns[patternBoard[x][y]]; }
-    int screenWidth(void) {return swidth;}
-    int screenHeight(void) {return sheight;}
+    int configScreenWidth(void) {return swidth;}
+    int configScreenHeight(void) {return sheight;}
+    int screenWidth(void) {return swidthActual;}
+    int screenHeight(void) {return sheightActual;}
     int isFullscreen(void) {return fullscreen;}
+
     string hIP(void) {return hostIp;}
     Uint16 hPort(void) {return hostPort;}
     Uint16 cPort(void) {return clientPort;}
     bool isConnected(void) {return connected;}
     bool hosting(void) {return isHost;}
-    int getID(void) {return myID;}
     userAction getActions(int clientID) {return clientActions[clientID];}
+
+    int getID(void) {return myID;}
 
     colorSet primaryColors(void) {return primaryColor;}
     colorSet secondaryColors(void) {return secondaryColor;}
+    string primColor(void) {return primary;}
+    string secColor(void) {return secondary;}
 
-    void setSize(int w, int h) {swidth = w; sheight = h;}
+    void updatePrimColors(string newColor);
+    void updateSecColors(string newColor);
+    void updateWindow(int w, int h, bool full);
+
+    void setSize(int w, int h) {swidthActual = w; sheightActual = h;}
     void setID(int newID) {myID = newID;}
 };
+
+
+
+
+
+
+class Menu {
+protected:
+    enum MENU_TYPES {
+        MENU_MAIN,
+        MENU_LOBBY,
+        MENU_OPTIONS
+    };
+    int currMenu;
+
+    bool mouseDown;
+
+    MainPage* mainMenu;
+    OptionPage* optionMenu;
+public:
+    Menu(Game* game);
+    ~Menu(void);
+    int update(Game* game);
+    void render(Game* game);
+};
+
+class MainPage {
+protected:
+    Button* playButton;
+    Button* optionButton;
+    Button* quitButton;
+public:
+    MainPage(Game* game);
+    ~MainPage(void);
+
+    int update(int x, int y, bool press);
+    void render(Game* game);
+};
+
+class OptionPage {
+protected:
+    Button* backButton;
+    Button* fullscreenButton;
+
+    Button* primSelector[COLOR_NUM];
+    Button* secSelector[COLOR_NUM];
+    Button* resSelector[UI_RESOLUTION_NUM];
+public:
+    OptionPage(Game* game);
+    ~OptionPage(void);
+
+    int update(int x, int y, bool press, Game* game);
+    void updateGame(Game* game);
+    void render(Game* game);
+};
+
+class Button {
+protected:
+    SDL_Rect location;
+
+    bool fixedColor; // stores whether the button uses a certain color, or the games color settings
+    colorSet colorPrim;
+    colorSet colorSec;
+
+    bool selected;
+    int buttonType;
+
+    string id;
+public:
+    Button(int x, int y, int w, int h, bool useFixed, const colorSet prim, const colorSet sec, int type, string name);
+    ~Button(void);
+    bool mouseHover(int x, int y);
+    void render(Game* game);
+
+    void setActive(bool active) {selected = active;}
+    bool getActive(void) {return selected;}
+
+    string getID(void) {return id;}
+};
+
+
+
 
 
 // Class to represent all player controlled characters
@@ -946,7 +1150,6 @@ int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the 
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
 direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
-void renderMenu(Game* game); // draws the menu
 void renderGameSpace(Game* game, forward_list<BulletExplosion*> explosionList,
     int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(Game* game, Player* userCharacter,

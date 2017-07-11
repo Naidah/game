@@ -5,8 +5,8 @@
 /*
 MAJOR:
 -- Comment current work
---- NETCODE
--- redo characters, projectiles, etc to be called by reference
+-- menu reset
+
 */
 
 
@@ -72,7 +72,8 @@ int main(int argc, char const *argv[]) {
     forward_list<Projectile*> projectileList; // stores the current set of projectiles
     forward_list<BulletExplosion*> explosionList; // stores explosions created by projectile collisions
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints,
-     &projectileList, &explosionList, &renderer);
+     &projectileList, &explosionList, &renderer, &window);
+    Menu* menu = new Menu(game);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
 
@@ -99,14 +100,6 @@ int main(int argc, char const *argv[]) {
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
                 gameRunning = false;
             }
-            else if (eventHandler.type == SDL_KEYDOWN) {
-                if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
-                    gameRunning = false;
-                } else if (eventHandler.key.keysym.sym == SDLK_SPACE && game->hosting() == true) {
-                    inMenu = false;
-                    game->initialize();
-                }
-            }
         }
 
         if (game->hosting() == false) {
@@ -120,8 +113,11 @@ int main(int argc, char const *argv[]) {
             }
         }
 
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
+        SDL_RenderClear(renderer); // clear the previous frame
 
         if (inMenu == true) {
+            int menuAction;
             if (game->hosting() == true) {
                 game->recieveConnection();
             } else {
@@ -129,7 +125,14 @@ int main(int argc, char const *argv[]) {
                     game->attemptConnection();
                 }
             }
-            renderMenu(game);
+            menuAction = menu->update(game);
+            menu->render(game);
+            if (menuAction == MENU_QUIT) {
+                gameRunning = false;
+            } else if (menuAction == MENU_LAUNCH) {
+                inMenu = false;
+                game->initialize();
+            }
         } else {
             if (game->hosting() == true) {
                 bool haveMessage = true;
@@ -189,9 +192,6 @@ int main(int argc, char const *argv[]) {
             }
             explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
-
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
-            SDL_RenderClear(renderer); // clear the previous frame
             renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
                 if ((*character)->getID() == game->getID()) {
@@ -434,13 +434,6 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
         SDL_FreeSurface(surfaceAtPath); // remove the surface now that it is no longer needed
     }
     return output;
-}
-
-void renderMenu(Game* game) {
-    SDL_Rect background = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
-    SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
-     game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
-    SDL_RenderFillRect(game->renderer(), &background);
 }
 
 void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
@@ -841,8 +834,9 @@ int sizeOfProj(forward_list<Projectile*>* list) {
 // Function definitions for each class
 
 Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
-    forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
-    forward_list<BulletExplosion*>* explList, SDL_Renderer** renderer) {
+     forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
+     forward_list<BulletExplosion*>* explList, SDL_Renderer** renderer,
+     SDL_Window** window) {
     // initializes the Game object
 
     // set all the parameters to their required values from input
@@ -852,6 +846,7 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
     projectileList = projSet;
     explosionList = explList;
     gameRenderer = renderer;
+    gameWindow = window;
 
     // generate the pattern board
     for (int x = 0; x < UI_BACKGROUND_PATTERN_ROW; x++) {
@@ -880,178 +875,79 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
 
     // for each setting needed from the config file, set its value to that found. If none was found, set it to the default
     // value in the constants file
-    if (configElements["swidth"] != "") {
-        swidth = stoi(configElements["swidth"]);
+    if (configElements[CONFIG_SWIDTH] != "") {
+        swidth = stoi(configElements[CONFIG_SWIDTH]);
+        swidthActual = stoi(configElements[CONFIG_SWIDTH]);
     } else {
         swidth = SCREEN_WIDTH;
+        swidthActual = SCREEN_WIDTH;
     }
 
-    if (configElements["sheight"] != "") {
-        sheight = stoi(configElements["sheight"]);
+    if (configElements[CONFIG_SHEIGHT] != "") {
+        sheight = stoi(configElements[CONFIG_SHEIGHT]);
+        sheightActual = stoi(configElements[CONFIG_SHEIGHT]);
     } else {
         sheight = SCREEN_HEIGHT;
+        sheightActual = SCREEN_HEIGHT;
     }
 
-    if (configElements["fullscreen"] != "") {
-        fullscreen = stoi(configElements["fullscreen"]);
+    if (configElements[CONFIG_FULLSCREEN] != "") {
+        fullscreen = stoi(configElements[CONFIG_FULLSCREEN]);
     } else {
         fullscreen = SCREEN_FULLSCREEN;
     }
 
-    if (configElements["ishost"] != "") {
-        if (configElements["ishost"] == "true") {
-            isHost = true;
-        } else {
-            isHost = false;
-        }
+    if (configElements[CONFIG_ISHOST] != "") {
+        isHost = stoi(configElements[CONFIG_ISHOST]);
     } else {
         isHost = DEBUG_IS_HOST;
     }
 
-    if (configElements["hostip"] != "") {
-        hostIp = configElements["hostip"];
+    if (configElements[CONFIG_HOSTIP] != "") {
+        hostIp = configElements[CONFIG_HOSTIP];
     } else {
         hostIp = DEBUG_HOST_IP;
     }
 
-    if (configElements["hostport"] != "") {
-        hostPort = stoi(configElements["hostport"]);
+    if (configElements[CONFIG_HOSTPORT] != "") {
+        hostPort = stoi(configElements[CONFIG_HOSTPORT]);
     } else {
         hostPort = DEBUG_HOST_PORT;
     }
 
-    if (configElements["clientport"] != "") {
-        clientPort = stoi(configElements["clientport"]);
+    if (configElements[CONFIG_CLIENTPORT] != "") {
+        clientPort = stoi(configElements[CONFIG_CLIENTPORT]);
     } else {
         clientPort = DEBUG_CLIENT_PORT;
     }
 
-    string primColor = configElements["primaryColor"];
+    string primColor = configElements[CONFIG_PRIMCOLOR];
     if (primColor != "") {
-        if (primColor == "red") {
-            primaryColor.red = COLOR_RED_RED;
-            primaryColor.blue = COLOR_RED_BLUE;
-            primaryColor.green = COLOR_RED_GREEN;
+        if (COLOR_VALUES[primColor] != COLOR_NONE) {
+            primaryColor = COLOR_VALUES[primColor];
+            primary = primColor;
+        } else {
+            primaryColor = COLOR_VALUES[COLOR_BLUE_NAME];
+            primary = COLOR_BLUE_NAME;
         }
-        else if (primColor == "green") {
-            primaryColor.red = COLOR_GREEN_RED;
-            primaryColor.blue = COLOR_GREEN_BLUE;
-            primaryColor.green = COLOR_GREEN_GREEN;
-        }
-        else if (primColor == "blue") {
-            primaryColor.red = COLOR_BLUE_RED;
-            primaryColor.blue = COLOR_BLUE_BLUE;
-            primaryColor.green = COLOR_BLUE_GREEN;
-        }
-        else if (primColor == "purple") {
-            primaryColor.red = COLOR_PURPLE_RED;
-            primaryColor.blue = COLOR_PURPLE_BLUE;
-            primaryColor.green = COLOR_PURPLE_GREEN;
-        }
-        else if (primColor == "yellow") {
-            primaryColor.red = COLOR_YELLOW_RED;
-            primaryColor.blue = COLOR_YELLOW_BLUE;
-            primaryColor.green = COLOR_YELLOW_GREEN;
-        }
-        else if (primColor == "cyan") {
-            primaryColor.red = COLOR_CYAN_RED;
-            primaryColor.blue = COLOR_CYAN_BLUE;
-            primaryColor.green = COLOR_CYAN_GREEN;
-        }
-        else if (primColor == "pink") {
-            primaryColor.red = COLOR_PINK_RED;
-            primaryColor.blue = COLOR_PINK_BLUE;
-            primaryColor.green = COLOR_PINK_GREEN;
-        }
-        else if (primColor == "orange") {
-            primaryColor.red = COLOR_ORANGE_RED;
-            primaryColor.blue = COLOR_ORANGE_BLUE;
-            primaryColor.green = COLOR_ORANGE_GREEN;
-        }
-        else if (primColor == "white") {
-            primaryColor.red = COLOR_WHITE_RED;
-            primaryColor.blue = COLOR_WHITE_BLUE;
-            primaryColor.green = COLOR_WHITE_GREEN;
-        }
-        else if (primColor == "grey") {
-            primaryColor.red = COLOR_GREY_RED;
-            primaryColor.blue = COLOR_GREY_BLUE;
-            primaryColor.green = COLOR_GREY_GREEN;
-        }
-        else {
-            primaryColor.red = COLOR_BLUE_RED;
-            primaryColor.blue = COLOR_BLUE_BLUE;
-            primaryColor.green = COLOR_BLUE_GREEN;
-        }
-    }
-    else {
-        primaryColor.red = COLOR_BLUE_RED;
-        primaryColor.blue = COLOR_BLUE_BLUE;
-        primaryColor.green = COLOR_BLUE_GREEN;
+    } else {
+        primaryColor = COLOR_VALUES[COLOR_BLUE_NAME];
+        primary = COLOR_BLUE_NAME;
     }
 
-    string secColor = configElements["secondaryColor"];
+    string secColor = configElements[CONFIG_SECCOLOR];
     if (secColor != "") {
-        if (secColor == COLOR_RED_NAME) {
-            secondaryColor.red = COLOR_RED_RED;
-            secondaryColor.blue = COLOR_RED_BLUE;
-            secondaryColor.green = COLOR_RED_GREEN;
-        }
-        else if (secColor == COLOR_GREEN_NAME) {
-            secondaryColor.red = COLOR_GREEN_RED;
-            secondaryColor.blue = COLOR_GREEN_BLUE;
-            secondaryColor.green = COLOR_GREEN_GREEN;
-        }
-        else if (secColor == COLOR_BLUE_NAME) {
-            secondaryColor.red = COLOR_BLUE_RED;
-            secondaryColor.blue = COLOR_BLUE_BLUE;
-            secondaryColor.green = COLOR_BLUE_GREEN;
-        }
-        else if (secColor == COLOR_PURPLE_NAME) {
-            secondaryColor.red = COLOR_PURPLE_RED;
-            secondaryColor.blue = COLOR_PURPLE_BLUE;
-            secondaryColor.green = COLOR_PURPLE_GREEN;
-        }
-        else if (secColor == COLOR_YELLOW_NAME) {
-            secondaryColor.red = COLOR_YELLOW_RED;
-            secondaryColor.blue = COLOR_YELLOW_BLUE;
-            secondaryColor.green = COLOR_YELLOW_GREEN;
-        }
-        else if (secColor == COLOR_CYAN_NAME) {
-            secondaryColor.red = COLOR_CYAN_RED;
-            secondaryColor.blue = COLOR_CYAN_BLUE;
-            secondaryColor.green = COLOR_CYAN_GREEN;
-        }
-        else if (secColor == COLOR_PINK_NAME) {
-            secondaryColor.red = COLOR_PINK_RED;
-            secondaryColor.blue = COLOR_PINK_BLUE;
-            secondaryColor.green = COLOR_PINK_GREEN;
-        }
-        else if (secColor == COLOR_ORANGE_NAME) {
-            secondaryColor.red = COLOR_ORANGE_RED;
-            secondaryColor.blue = COLOR_ORANGE_BLUE;
-            secondaryColor.green = COLOR_ORANGE_GREEN;
-        }
-        else if (secColor == COLOR_WHITE_NAME) {
-            secondaryColor.red = COLOR_WHITE_RED;
-            secondaryColor.blue = COLOR_WHITE_BLUE;
-            secondaryColor.green = COLOR_WHITE_GREEN;
-        }
-        else if (secColor == COLOR_GREY_NAME) {
-            secondaryColor.red = COLOR_GREY_RED;
-            secondaryColor.blue = COLOR_GREY_BLUE;
-            secondaryColor.green = COLOR_GREY_GREEN;
-        }
-        else {
-            secondaryColor.red = COLOR_BLUE_RED;
-            secondaryColor.blue = COLOR_BLUE_BLUE;
-            secondaryColor.green = COLOR_BLUE_GREEN;
+        if (COLOR_VALUES[secColor] != COLOR_NONE) {
+            secondaryColor = COLOR_VALUES[secColor];
+            secondary = secColor;
+        } else {
+            secondaryColor = COLOR_VALUES[COLOR_RED_NAME];
+            secondary = COLOR_RED_NAME;
         }
     }
     else {
-        secondaryColor.red = COLOR_BLUE_RED;
-        secondaryColor.blue = COLOR_BLUE_BLUE;
-        secondaryColor.green = COLOR_BLUE_GREEN;
+        secondaryColor = COLOR_VALUES[COLOR_RED_NAME];
+        secondary = COLOR_RED_NAME;
     }
     configFile.close();
 }
@@ -1475,6 +1371,408 @@ void Game::setPatterns(void) {
         }
     }
 }
+
+void Game::updatePrimColors(string newColor) {
+    primary = newColor;
+    primaryColor = COLOR_VALUES[newColor];
+}
+
+void Game::updateSecColors(string newColor) {
+    secondary = newColor;
+    secondaryColor = COLOR_VALUES[newColor];
+}
+
+void Game::updateWindow(int w, int h, bool full) {
+    SDL_SetWindowSize(*gameWindow, w, h);
+    swidth = w;
+    sheight = h;
+    if (fullscreen != full) {
+        SDL_SetWindowFullscreen(*gameWindow, full);
+        fullscreen = full;
+    }
+    SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
+}
+
+
+
+
+
+Menu::Menu(Game* game) {
+    currMenu = MENU_MAIN;
+    mainMenu = new MainPage(game);
+    optionMenu = new OptionPage(game);
+    mouseDown = false;
+}
+
+Menu::~Menu(void) {
+    delete mainMenu;
+    delete optionMenu;
+}
+
+int Menu::update(Game* game) {
+    int action = MENU_NONE;
+    int x, y;
+
+    // get mouse coordinates, and check whether the LMB is pressed this frame
+    bool mousePress = SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT);
+
+    // scale the mouse coordinates to the natural size from the scaled size (the size of the window)
+    double ratio;
+    if ((double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT <
+        (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT) {
+        ratio = (double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT;
+    }
+    else {
+        ratio = (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT;
+    }
+    x /= ratio;
+    y /= ratio;
+
+    // check whether the mouse was pressed this frame
+    bool press = false;
+    if (mousePress == true && mouseDown == false) {
+        press = true;
+    }
+    mouseDown = mousePress;
+
+
+    if (currMenu == MENU_MAIN) {
+        action = mainMenu->update(x, y, press);
+    } else if (currMenu == MENU_OPTIONS) {
+        action = optionMenu->update(x, y, press, game);
+    }
+
+    if (currMenu == MENU_OPTIONS && action != MENU_NONE) {
+        optionMenu->updateGame(game);
+    }
+
+    if (action == MENU_SET_MAIN) {
+        currMenu = MENU_MAIN;
+    } else if (action == MENU_SET_OPTIONS) {
+        currMenu = MENU_OPTIONS;
+    }
+
+    return action;
+}
+
+void Menu::render(Game* game) {
+    // while in the menu, have the cursor visible (no custom image)
+    SDL_ShowCursor(SDL_ENABLE);
+
+    // draw a background
+    SDL_SetRenderDrawColor(game->renderer(),
+        game->primaryColors().red*UI_BACKGROUND_MULTIPLIER + UI_BACKGROUND_ADDITION,
+        game->primaryColors().green*UI_BACKGROUND_MULTIPLIER + UI_BACKGROUND_ADDITION,
+        game->primaryColors().blue*UI_BACKGROUND_MULTIPLIER + UI_BACKGROUND_ADDITION,
+        UI_COLOR_MAX_VALUE);
+    SDL_Rect background = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
+    SDL_RenderSetViewport(game->renderer(), &background);
+    SDL_RenderFillRect(game->renderer(), &background);
+
+    // render the menu currently in use
+    if (currMenu == MENU_MAIN) {
+        mainMenu->render(game);
+    } else if (currMenu == MENU_OPTIONS) {
+        optionMenu->render(game);
+    }
+}
+
+
+MainPage::MainPage(Game* game) {
+    playButton = new Button(100, 100, 200, 50, false,
+     {0,0,0}, {0,0,0}, BUTTON_MENU, "play");
+    optionButton = new Button(100, 200, 200, 50, false,
+     {0,0,0}, {0,0,0}, BUTTON_MENU, "options");
+    quitButton = new Button(100, 300, 200, 50, false,
+     {0,0,0}, {0,0,0}, BUTTON_RADIO, "quit");
+
+    // ADD
+    /*
+    - Weapon selector
+    - Name?
+    - Host/client
+    */
+}
+
+MainPage::~MainPage(void) {
+    delete playButton;
+    delete optionButton;
+    delete quitButton;
+}
+
+int MainPage::update(int x, int y, bool press) {
+    int action = MENU_NONE;
+    if (playButton->mouseHover(x, y) == true && press == true) {
+        playButton->setActive(true);
+        action = MENU_LAUNCH;
+    } else {
+        playButton->setActive(false);
+    }
+    if (optionButton->mouseHover(x, y) == true && press == true) {
+        optionButton->setActive(true);
+        action = MENU_SET_OPTIONS;
+    } else {
+        optionButton->setActive(false);
+    }
+    if (quitButton->mouseHover(x, y) == true && press == true) {
+        quitButton->setActive(true);
+        action = MENU_QUIT;
+    } else {
+        quitButton->setActive(false);
+    }
+    return action;
+}
+
+void MainPage::render(Game* game) {
+    playButton->render(game);
+    optionButton->render(game);
+    quitButton->render(game);
+}
+
+OptionPage::OptionPage(Game* game) {
+    backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
+     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_MENU, "back");
+
+    fullscreenButton = new Button(BUTTON_FULL_TOPLEFT_X, BUTTON_FULL_TOPLEFT_Y,
+     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO, "fullscreen");
+    fullscreenButton->setActive(game->isFullscreen());
+
+    int shiftX;
+    int shiftY;
+    for (int i = 0; i < COLOR_NUM; i++) {
+        shiftX = (i%3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        shiftY = (i/3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        colorSet primary = COLOR_VALUES[COLOR_NAMES[i]];
+        colorSet secondary = COLOR_VALUES[COLOR_NAMES[i]]*BUTTON_COLOR_SEC_MULTIPLIER;
+        primSelector[i] = new Button(BUTTON_COLOR_PRIM_TOPLEFT_X+shiftX,
+         BUTTON_COLOR_PRIM_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
+        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[i]);
+
+        if (COLOR_NAMES[i] == game->primColor()) {
+            primSelector[i]->setActive(true);
+        }
+    }
+
+    for (int j = 0; j < COLOR_NUM; j++) {
+        int shiftX = (j%3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        int shiftY = (j/3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        colorSet primary = COLOR_VALUES[COLOR_NAMES[j]];
+        colorSet secondary = COLOR_VALUES[COLOR_NAMES[j]]*BUTTON_COLOR_SEC_MULTIPLIER;
+        secSelector[j] = new Button(BUTTON_COLOR_SEC_TOPLEFT_X+shiftX,
+         BUTTON_COLOR_SEC_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
+        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[j]);
+
+        if (COLOR_NAMES[j] == game->secColor()) {
+            secSelector[j]->setActive(true);
+        }
+    }
+
+    for (int k = 0; k < UI_RESOLUTION_NUM; k++) {
+        int shiftY = k*(BUTTON_RES_GAP+BUTTON_RES_HEIGHT);
+        resSelector[k] = new Button(BUTTON_RES_TOPLEFT_X, BUTTON_RES_TOPLEFT_Y+shiftY,
+         BUTTON_RES_WIDTH, BUTTON_RES_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO,
+         to_string(UI_RESOLUTIONS[k]));
+
+        if (UI_RESOLUTIONS[k] == game->configScreenHeight()) {
+            resSelector[k]->setActive(true);
+        }
+    }
+}
+
+OptionPage::~OptionPage(void) {
+    delete backButton;
+    for (int i = 0; i < COLOR_NUM; i++) {
+        delete primSelector[i];
+        delete secSelector[i];
+    }
+}
+
+int OptionPage::update(int x, int y, bool press, Game* game) {
+    int action = MENU_NONE;
+    if (backButton->mouseHover(x, y) == true && press == true) {
+        backButton->setActive(true);
+        action = MENU_SET_MAIN;
+    } else {
+        backButton->setActive(false);
+    }
+
+    if (fullscreenButton->mouseHover(x, y) == true && press == true) {
+        fullscreenButton->setActive(!fullscreenButton->getActive());
+    }
+
+    int selection = -1;
+    for (int i = 0; i < COLOR_NUM; i++) {
+        if (primSelector[i]->mouseHover(x, y) == true && press == true) {
+            selection = i;
+        }
+    }
+    if (selection >= 0) {
+        for (int i = 0; i < COLOR_NUM; i++) {
+            if (i == selection) {
+                primSelector[i]->setActive(true);
+            } else {
+                primSelector[i]->setActive(false);
+            }
+        }
+    }
+
+    selection = -1;
+    for (int i = 0; i < COLOR_NUM; i++) {
+        if (secSelector[i]->mouseHover(x, y) == true && press == true) {
+            selection = i;
+        }
+    }
+    if (selection >= 0) {
+        for (int i = 0; i < COLOR_NUM; i++) {
+            if (i == selection) {
+                secSelector[i]->setActive(true);
+            } else {
+                secSelector[i]->setActive(false);
+            }
+        }
+    }
+
+    selection = -1;
+    for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
+        if (resSelector[i]->mouseHover(x, y) == true && press == true) {
+            selection = i;
+        }
+    }
+    if (selection >= 0) {
+        for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
+            if (i == selection) {
+                resSelector[i]->setActive(true);
+            } else {
+                resSelector[i]->setActive(false);
+            }
+        }
+    }
+
+    return action;
+}
+
+void OptionPage::updateGame(Game* game) {
+    for (int i = 0; i < COLOR_NUM; i++) {
+        if (primSelector[i]->getActive() == true) {
+            game->updatePrimColors(primSelector[i]->getID());
+        }
+    }
+
+    for (int i = 0; i < COLOR_NUM; i++) {
+        if (secSelector[i]->getActive() == true) {
+            game->updateSecColors(secSelector[i]->getID());
+        }
+    }
+
+    int w = game->configScreenWidth();
+    int h = game->configScreenHeight();
+    for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
+        if (resSelector[i]->getActive() == true) {
+            h = stoi(resSelector[i]->getID());
+            w = h*UI_RESOLUTION_MULTIPLIER;
+        }
+    }
+
+    bool fullscreen = fullscreenButton->getActive();
+    game->updateWindow(w, h, fullscreen);
+
+    ofstream configFile;
+    configFile.open(CONFIG_FILE_LOCATION);
+    configFile << CONFIG_SWIDTH << "=" << game->configScreenWidth() << "\n";
+    configFile << CONFIG_SHEIGHT << "=" << game->configScreenHeight() << "\n";
+    configFile << CONFIG_FULLSCREEN << "=" << game->isFullscreen() << "\n";
+    configFile << CONFIG_PRIMCOLOR << "=" << game->primColor() << "\n";
+    configFile << CONFIG_SECCOLOR << "=" << game->secColor() << "\n";
+    configFile.close();
+}
+
+void OptionPage::render(Game* game) {
+    backButton->render(game);
+    fullscreenButton->render(game);
+
+    for (int i = 0; i < COLOR_NUM; i++) {
+        primSelector[i]->render(game);
+    }
+
+    for (int j = 0; j < COLOR_NUM; j++) {
+        secSelector[j]->render(game);
+    }
+
+    for (int k = 0; k < UI_RESOLUTION_NUM; k++) {
+        resSelector[k]->render(game);
+    }
+}
+
+
+
+Button::Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
+ const colorSet sec, int type, const string name) {
+    location.x = x;
+    location.y = y;
+    location.w = w;
+    location.h = h;
+
+    fixedColor = useFixed;
+    colorPrim = prim;
+    colorSec = sec;
+    selected = false;
+
+    buttonType = type;
+    id = name;
+}
+
+Button::~Button(void) {
+
+}
+
+bool Button::mouseHover(int x, int y) {
+    return location.x < x &&
+        location.x + location.w > x &&
+        location.y < y && 
+        location.y + location.h > y;
+}
+
+void Button::render(Game* game) {
+    colorSet prim;
+    colorSet sec;
+    if (fixedColor == true) {
+        prim = colorPrim;
+        sec = colorSec;
+    } else {
+        prim = game->primaryColors();
+        sec = game->secondaryColors();
+    }
+    if (buttonType == BUTTON_MENU) {   
+        prim = prim * BUTTON_MENU_COLOR_MULTIPLIER;
+        sec = sec * BUTTON_MENU_COLOR_MULTIPLIER;
+        if (selected == false) {
+            SDL_SetRenderDrawColor(game->renderer(), prim.red,
+             prim.green, prim.blue, UI_COLOR_MAX_VALUE);
+        } else {
+            SDL_SetRenderDrawColor(game->renderer(), sec.red,
+             sec.green, sec.blue, UI_COLOR_MAX_VALUE);
+        }
+        SDL_RenderFillRect(game->renderer(), &location);
+    } else if (buttonType == BUTTON_RADIO) {
+        if (selected == true) {
+            SDL_Rect outlineRect;
+            outlineRect.x = location.x - BUTTON_OUTLINE_WIDTH;
+            outlineRect.y = location.y - BUTTON_OUTLINE_WIDTH;
+            outlineRect.w = location.w + 2*BUTTON_OUTLINE_WIDTH;
+            outlineRect.h = location.h + 2*BUTTON_OUTLINE_WIDTH;
+            SDL_SetRenderDrawColor(game->renderer(), sec.red,
+             sec.green, sec.blue, UI_COLOR_MAX_VALUE);
+            SDL_RenderFillRect(game->renderer(), &outlineRect);
+        }
+        SDL_SetRenderDrawColor(game->renderer(), prim.red,
+         prim.green, prim.blue, UI_COLOR_MAX_VALUE);
+        SDL_RenderFillRect(game->renderer(), &location);
+    }
+}
+
+
+
+
 
 // Functions related to the player class
 Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
