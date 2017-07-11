@@ -1,10 +1,10 @@
 swidth=675
 sheight=325
 fullscreen=0
-primaryColor=green
+primaryColor=purple
 secondaryColor=blue
 ishost=true
 hostip=127.0.0.1
-hostport=2880
-clientport=2881
+hostport=3456
+clientport=6543
 gabisbad=12

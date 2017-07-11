@@ -37,8 +37,6 @@ MAJOR:
 
 using namespace std;
 
-
-
 int main(int argc, char const *argv[]) {
     if (DEBUG_ENABLE_DRIVERS == true) {
         testDistBetweenPoints();
@@ -72,13 +70,14 @@ int main(int argc, char const *argv[]) {
     forward_list<coordSet> spawnPoints; // stores spawn point locations
     forward_list<Player*> playerList; // stores the players
     forward_list<Projectile*> projectileList; // stores the current set of projectiles
-    forward_list<BulletExplosion> explosionList; // stores explosions created by projectile collisions
+    forward_list<BulletExplosion*> explosionList; // stores explosions created by projectile collisions
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints,
      &projectileList, &explosionList, &renderer);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
 
     game->setPatterns();
+    game->setSockets();
 
     // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
@@ -89,7 +88,7 @@ int main(int argc, char const *argv[]) {
 
 
     forward_list<Projectile*> newList; // temporarily store projectiles that have not collided
-    forward_list<BulletExplosion> explosionUpdated; // temporary store for active projectiles
+    forward_list<BulletExplosion*> explosionUpdated; // temporary store for active projectiles
 
 
     while (gameRunning == true) { // begin game loop
@@ -130,16 +129,23 @@ int main(int argc, char const *argv[]) {
                     game->attemptConnection();
                 }
             }
-
-
+            renderMenu(game);
         } else {
             if (game->hosting() == true) {
+                bool haveMessage = true;
+                while (haveMessage == true) {
+                    haveMessage = game->getClientAction();
+                }
                 // update the state of the controlled character
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                    (*character)->updateState(&eventHandler, game);
+                    if ((*character)->getID() == game->getID()) {
+                        (*character)->updateState(&eventHandler, game);
+                    } else {
+                        (*character)->updateState(game->getActions((*character)->getID()), game);
+                    }
                 }
 
-                                                  // move all players and projectiles
+                // move all players and projectiles
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
                     (*character)->move(game->walls());
                 }
@@ -151,7 +157,7 @@ int main(int argc, char const *argv[]) {
                         newList.push_front(*bullet);
                     }
                     else { // delete and replace with explosions those that have collided
-                        BulletExplosion newExplosion = BulletExplosion(renderer,
+                        BulletExplosion* newExplosion = new BulletExplosion(renderer,
                          (*bullet)->getLocation(), (*bullet)->getColors(), (*bullet)->getOwner());
                         explosionList.push_front(newExplosion);
                         game->addNewExplosion(newExplosion);
@@ -160,6 +166,8 @@ int main(int argc, char const *argv[]) {
                 }
                 projectileList = newList; // store remaining projectiles
                 game->sendUpdate();
+            } else {
+                game->sendUserActions();
             }
 
             for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
@@ -172,8 +180,8 @@ int main(int argc, char const *argv[]) {
             // update the explosion effects from bullets
             explosionUpdated.clear();
             for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-                if (explosion->updateState() == true) { // delete explosions that have decayed, and store ones that have not
-                    explosion->deleteObject();
+                if ((*explosion)->updateState() == true) { // delete explosions that have decayed, and store ones that have not
+                    delete *explosion;
                 }
                 else {
                     explosionUpdated.push_front(*explosion);
@@ -220,6 +228,14 @@ int main(int argc, char const *argv[]) {
         }
     }
 
+    if (game->isConnected() == true) {
+        if (game->hosting() == true) {
+            game->endSession();
+        } else {
+            game->leaveMatch();
+        }
+    }
+
     quitGame(window, game); // quit the game when the session finishes
 
     return EXIT_SUCCESS; // return success if the program terminates correctly
@@ -228,6 +244,9 @@ int main(int argc, char const *argv[]) {
 
 UDPConnectionClient::UDPConnectionClient(Game* game) {
     socket = SDLNet_UDP_Open(game->cPort());
+    if (!socket) {
+        cout << "SDLNet_UDP_open: " << SDLNet_GetError() << "\n";
+    }
     if (SDLNet_ResolveHost(&connectionIp, game->hIP().c_str(), game->hPort()) == -1) {
         cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
     }
@@ -309,11 +328,18 @@ bool UDPConnectionServer::send(string msg, connection target) {
     return success;
 }
 
-connection UDPConnectionServer::recieve(void) {
-    connection sender = {0,0};
+connection UDPConnectionServer::recieve(string* field) {
+    connection sender = {0,0,0};
+    stringstream output;
     if (SDLNet_UDP_Recv(socket, packetIn)) {
+        for (int i = 0; i < packetIn->len; i++) {
+            output << packetIn->data[i];
+        }
         sender.ip = packetIn->address.host;
         sender.port = packetIn->address.port;
+    }
+    if (field != NULL) {
+        *field = output.str();
     }
     return sender;
 }
@@ -369,9 +395,6 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
                 success = false;
             }
             else {
-                if (DEBUG_SHOW_CURSOR == false) {
-                    SDL_ShowCursor(SDL_DISABLE);
-                }
                 SDL_SetRenderDrawColor(*renderer, UI_COLOR_MAX_VALUE,
                     UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE, UI_COLOR_MAX_VALUE); // Give the renderer a default white state
                 SDL_RenderSetLogicalSize(*renderer, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT);
@@ -413,8 +436,18 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
     return output;
 }
 
-void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
+void renderMenu(Game* game) {
+    SDL_Rect background = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
+    SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
+     game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
+    SDL_RenderFillRect(game->renderer(), &background);
+}
+
+void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
     int playerMainX, int playerMainY) {
+    if (DEBUG_SHOW_CURSOR == false) {
+        SDL_ShowCursor(SDL_DISABLE);
+    }
     // renders the main area of the game
 
     /*
@@ -478,7 +511,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion> explosionList,
     }
 
     for (auto explosion = explosionList.begin(); explosion != explosionList.end(); explosion++) {
-        explosion->render(game->renderer());
+        (*explosion)->render(game->renderer());
     }
 
     if (DEBUG_DRAW_SPAWN_POINTS == true) { // if enabled in debug settings, draw points indicating spawpoints
@@ -809,7 +842,7 @@ int sizeOfProj(forward_list<Projectile*>* list) {
 
 Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
     forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
-    forward_list<BulletExplosion>* explList, SDL_Renderer** renderer) {
+    forward_list<BulletExplosion*>* explList, SDL_Renderer** renderer) {
     // initializes the Game object
 
     // set all the parameters to their required values from input
@@ -849,22 +882,19 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
     // value in the constants file
     if (configElements["swidth"] != "") {
         swidth = stoi(configElements["swidth"]);
-    }
-    else {
+    } else {
         swidth = SCREEN_WIDTH;
     }
 
     if (configElements["sheight"] != "") {
         sheight = stoi(configElements["sheight"]);
-    }
-    else {
+    } else {
         sheight = SCREEN_HEIGHT;
     }
 
     if (configElements["fullscreen"] != "") {
         fullscreen = stoi(configElements["fullscreen"]);
-    }
-    else {
+    } else {
         fullscreen = SCREEN_FULLSCREEN;
     }
 
@@ -1023,15 +1053,6 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
         secondaryColor.blue = COLOR_BLUE_BLUE;
         secondaryColor.green = COLOR_BLUE_GREEN;
     }
-
-    numPlayers = 0;
-    if (isHost == true) {
-        myID = CHARACTER_MAIN_ID;
-        nextID = myID + 1;
-        server = new UDPConnectionServer(this);
-    } else {
-        client = new UDPConnectionClient(this);
-    }
     configFile.close();
 }
 
@@ -1042,9 +1063,21 @@ Game::~Game(void) {
     delete server;
 }
 
+void Game::setSockets(void) {
+    numPlayers = 0;
+    if (isHost == true) {
+        myID = CHARACTER_MAIN_ID;
+        nextID = myID + 1;
+        server = new UDPConnectionServer(this);
+    }
+    else {
+        client = new UDPConnectionClient(this);
+    }
+}
+
 void Game::recieveConnection(void) {
     if (numPlayers < GAME_MAX_PLAYERS-1) {
-        connection inboundConnection = server->recieve();
+        connection inboundConnection = server->recieve(NULL);
         if (inboundConnection.ip != 0) {
             bool match = false;
             for (int i = 0; i < numPlayers; i++) {
@@ -1053,8 +1086,8 @@ void Game::recieveConnection(void) {
                 }
             }
             if (match == false) {
-                cout << "New Connection Recieved\n";
                 currPlayers[numPlayers] = inboundConnection;
+                currPlayers[numPlayers].id = nextID;
                 numPlayers++;
                 stringstream message;
                 message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
@@ -1069,12 +1102,60 @@ void Game::attemptConnection(void) {
     client->send(to_string(MESSAGE_CONF_CONNECTION));
 }
 
+void Game::endSession(void) {
+    // tell clients that the host is no longer playing
+    server->send(to_string(MESSAGE_QUIT), currPlayers, numPlayers);
+    numPlayers = 0;
+    connected = false;
+
+    for (auto player = playerList->begin(); player != playerList->end(); player++) {
+        delete *player;
+    }
+    for (auto bullet = projectileList->begin(); bullet != projectileList->end(); bullet++) {
+        delete *bullet;
+    }
+    for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
+        delete *wall;
+    }
+    for (auto expl = explosionList->begin(); expl != explosionList->end(); expl++) {
+        delete *expl;
+    }
+    playerList->clear();
+    projectileList->clear();
+    wallContainer->clear();
+    explosionList->clear();
+    spawnPoints->clear();
+}
+
+void Game::leaveMatch(void) {
+    client->send(to_string(MESSAGE_QUIT));
+    connected = false;
+
+    for (auto player = playerList->begin(); player != playerList->end(); player++) {
+        delete *player;
+    }
+    for (auto bullet = projectileList->begin(); bullet != projectileList->end(); bullet++) {
+        delete *bullet;
+    }
+    for (auto wall = wallContainer->begin(); wall != wallContainer->end(); wall++) {
+        delete *wall;
+    }
+    for (auto expl = explosionList->begin(); expl != explosionList->end(); expl++) {
+        delete *expl;
+    }
+    playerList->clear();
+    projectileList->clear();
+    wallContainer->clear();
+    explosionList->clear();
+    spawnPoints->clear();
+}
+
 void Game::initialize(void) {
     // starts a new game instance
     generateMap(wallContainer, spawnPoints); // generate a random set of walls and spawn points for the game
     coordSet initSpawn; // temporarily stores spawn points for each player
     playerList->clear();
-    for (int i = 0; i<DEBUG_NUM_PLAYERS; i++) {
+    for (int i = 0; i<numPlayers+1; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
         playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
         if (initSpawn.x == 0) {
@@ -1092,8 +1173,75 @@ void Game::sendUpdate(void) {
     server->send(getExplosionString(), currPlayers, numPlayers);
 }
 
-void Game::addNewExplosion(BulletExplosion newExplosion) {
+void Game::addNewExplosion(BulletExplosion* newExplosion) {
     explosionsToSend.push_front(newExplosion);
+}
+
+void Game::sendUserActions(void) {
+    direction currDirection = getDirections();
+    int x, y;
+    double ratio;
+    bool mouseDown = SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT);
+    if ((double)sheight / SCREEN_HEIGHT_DEFAULT < (double)swidth / SCREEN_WIDTH_DEFAULT) {
+        ratio = (double)sheight / SCREEN_HEIGHT_DEFAULT;
+    }
+    else {
+        ratio = (double)swidth / SCREEN_WIDTH_DEFAULT;
+    }
+    x -= GAMESPACE_TOPLEFT_X*ratio;
+    x /= ratio;
+    y /= ratio;
+
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    const Uint8* keyboard = SDL_GetKeyboardState(NULL);
+    bool rDown = keyboard[SDL_SCANCODE_R];
+    bool shiftDown = keyboard[SDL_SCANCODE_LSHIFT];
+
+    stringstream toServer;
+    toServer << MESSAGE_CLIENT_ACTION;
+    toServer << strOfLen(myID, MESSAGE_ID_CHAR);
+    toServer << strOfLen(x, MESSAGE_LOC_CHAR) << strOfLen(y, MESSAGE_LOC_CHAR);
+    toServer << mouseDown << rDown << shiftDown;
+    toServer << currDirection.x + 2 << currDirection.y + 2;
+
+    client->send(toServer.str());
+}
+
+bool Game::getClientAction(void) {
+    bool message = false;
+    string serverString;
+    connection msg = server->recieve(&serverString);
+    if (msg.ip != 0) {
+        int messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
+        if (messageType == MESSAGE_CLIENT_ACTION) {
+            // update the action map
+            userAction action;
+            int id = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
+            action.mouseX = stoi(serverString.substr(1+MESSAGE_ID_CHAR, MESSAGE_LOC_CHAR));
+            action.mouseY = stoi(serverString.substr(1+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR,
+             MESSAGE_LOC_CHAR));
+            action.mouseDown = stoi(serverString.substr(1+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
+             1));
+            action.rDown = stoi(serverString.substr(2+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
+             1));
+            action.shiftDown = stoi(serverString.substr(3+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
+             1));
+            action.moveHor = stoi(serverString.substr(4+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
+             1))-2;
+            action.moveVert = stoi(serverString.substr(5+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
+             1))-2;
+            clientActions[id] = action;
+            message = true;
+        } else if (messageType == MESSAGE_QUIT) {
+            removePlayer(msg.ip);
+        }
+    }
+    return message;
 }
 
 int Game::getInput(void) {
@@ -1103,7 +1251,6 @@ int Game::getInput(void) {
     if (msg.ip != 0) {
         messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
         connected = true;
-        cout << messageType << "\n";
         if (messageType == MESSAGE_CONF_CONNECTION) {
             myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
             cout << "Connection established as player " << myID << "\n";
@@ -1118,6 +1265,33 @@ int Game::getInput(void) {
         }
     }
     return messageType;
+}
+
+void Game::removePlayer(int playerip) {
+    int playerID = -1;
+    for (int i = 0; i < GAME_MAX_PLAYERS-1; i++) {
+        if (playerID >= 0) {
+            if (i < GAME_MAX_PLAYERS-1) {
+                currPlayers[i] = currPlayers[i+1];
+            }
+        } else if (currPlayers[i].ip == playerip) {
+            playerID = currPlayers[i].id;
+            numPlayers--;
+        }
+    }
+
+    if (playerID >= 0) {
+        forward_list<Player*> playerTemp = *playerList;
+        playerList->clear();
+        for (auto player = playerTemp.begin(); player != playerTemp.end(); player++) {
+            if ((*player)->getID() == playerID) {
+                delete *player;
+            } else {
+                playerList->push_front(*player);
+            }
+        }
+        cout << "Player " << playerID << " quit\n";
+    }
 }
 
 void Game::updateMap(string serverString) {
@@ -1161,17 +1335,26 @@ void Game::updatePlayers(string serverString) {
         currIndex += MESSAGE_FRAMES_CHAR;
         currState.alive = stoi(serverString.substr(currIndex, 1));
         currIndex++;
+        currState.health = stoi(serverString.substr(currIndex, MESSAGE_STAT_CHAR));
+        currIndex += MESSAGE_STAT_CHAR;
+
         currState.deathFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
         currIndex += MESSAGE_FRAMES_CHAR;
-
         currState.dmX = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
         currIndex += MESSAGE_LOC_CHAR;
         currState.dmY = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
         currIndex += MESSAGE_LOC_CHAR;
+
         currState.id = stoi(serverString.substr(currIndex, 1));
         currIndex++;
         currState.weapID = stoi(serverString.substr(currIndex, 1));
         currIndex++;
+        currState.ammo = stoi(serverString.substr(currIndex, MESSAGE_STAT_CHAR));
+        currIndex += MESSAGE_STAT_CHAR;
+        currState.reloadFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
+        currIndex += MESSAGE_FRAMES_CHAR;
+        currState.cooldownFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
+        currIndex += MESSAGE_FRAMES_CHAR;
 
         found = false;
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1228,7 +1411,7 @@ void Game::updateExplosions(string serverString) {
         x = stoi(serverString.substr(1+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_LOC_CHAR));
         y = stoi(serverString.substr(1+MESSAGE_LOC_CHAR+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_LOC_CHAR));
         id = stoi(serverString.substr(1+MESSAGE_LOC_CHAR*2+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_ID_CHAR));
-        explosionList->push_front(BulletExplosion(this, x, y, id));
+        explosionList->push_front(new BulletExplosion(this, x, y, id));
     }
 }
 
@@ -1268,7 +1451,7 @@ string Game::getExplosionString(void) {
     explosionString << MESSAGE_EXPLOSION;
     for (auto explosion = explosionsToSend.begin();
      explosion != explosionsToSend.end(); explosion++) {
-        explosionString << explosion->getStateString();
+        explosionString << (*explosion)->getStateString();
     }
     explosionsToSend.clear();
     return explosionString.str();
@@ -1391,79 +1574,77 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
         int mouseX = 0;
         int mouseY = 0;
         double ratio;
-        if (id == game->getID()) { // only move the player related to the partiicular game instance
-            direction = getDirections(); // get the direction of movement for the player at the current frame
-            if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
-                && rollCooldown == 0 && direction != MOVE_NONE) { // if the player presses the roll key while they can start rolling
-                rolling = true;
-                rollFrames = CHARACTER_ROLL_DURATION;
-                rollDirection = direction;
+        direction = getDirections(); // get the direction of movement for the player at the current frame
+        if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
+            && rollCooldown == 0 && direction != MOVE_NONE) { // if the player presses the roll key while they can start rolling
+            rolling = true;
+            rollFrames = CHARACTER_ROLL_DURATION;
+            rollDirection = direction;
+        }
+        if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) { // reload when r is pressed
+            weapon->beginReload();
+        }
+
+        if (keyboardState[SDL_SCANCODE_K] && DEBUG_KILL_PLAYER == true) { // if enabled in debug settings, kill the player on command
+            killPlayer();
+        }
+        if (rolling == true) {
+            // while rolling, move the player in the initial direction of the roll, and remove the state if they finish
+            rollFrames--;
+            if (rollDirection == MOVE_UP || rollDirection == MOVE_LEFT ||
+                rollDirection == MOVE_DOWN || rollDirection == MOVE_RIGHT) {
+                velx = rollDirection.x*CHARACTER_ROLL_SPEED;
+                vely = rollDirection.y*CHARACTER_ROLL_SPEED;
             }
-            if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) { // reload when r is pressed
-                weapon->beginReload();
+            else {
+                velx = rollDirection.x*CHARACTER_ROLL_SPEED / sqrt(2);
+                vely = rollDirection.y*CHARACTER_ROLL_SPEED / sqrt(2);
+            }
+            if (rollFrames == 0) {
+                rolling = false;
+                rollDirection = MOVE_NONE;
+                rollCooldown = CHARACTER_ROLL_COOLDOWN;
+            }
+        }
+        else { // if not rolling, resort to standard movement
+               // directional movement
+               // increment the velocity in each direction according to the movement direction
+            velx += direction.x*CHARACTER_ACCEL_PER_FRAME;
+            vely += direction.y*CHARACTER_ACCEL_PER_FRAME;
+
+            if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
+                // if the player has no movement in the x direction, reduce speed along that axis
+                if (velx > 0) { // decrease toward 0 if the player is moving right 
+                    velx -= CHARACTER_DECEL_PER_FRAME;
+                }
+                else if (velx < 0) { // increase toward 0 if the player is moving left
+                    velx += CHARACTER_DECEL_PER_FRAME;
+                }
+                if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
+                    velx = 0; // if the velocity would wrap the other way next frame, set it to 0
+                }
+            }
+            if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
+                if (vely > 0) {
+                    vely -= CHARACTER_DECEL_PER_FRAME;
+                }
+                else if (vely < 0) {
+                    vely += CHARACTER_DECEL_PER_FRAME;
+                }
+                if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
+                    vely = 0; // if the velocity would wrap the other way next frame, set it to 0
+                }
             }
 
-            if (keyboardState[SDL_SCANCODE_K] && DEBUG_KILL_PLAYER == true) { // if enabled in debug settings, kill the player on command
-                killPlayer();
+            double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
+            if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
+                                                 // scale x and y down so they are at the correct speed
+                vely *= CHARACTER_VEL_MAX / currSpeed;
+                velx *= CHARACTER_VEL_MAX / currSpeed;
             }
-            if (rolling == true) {
-                // while rolling, move the player in the initial direction of the roll, and remove the state if they finish
-                rollFrames--;
-                if (direction == MOVE_UP || direction == MOVE_LEFT ||
-                    direction == MOVE_DOWN || direction == MOVE_RIGHT) {
-                    velx = rollDirection.x*CHARACTER_ROLL_SPEED;
-                    vely = rollDirection.y*CHARACTER_ROLL_SPEED;
-                }
-                else {
-                    velx = rollDirection.x*CHARACTER_ROLL_SPEED / sqrt(2);
-                    vely = rollDirection.y*CHARACTER_ROLL_SPEED / sqrt(2);
-                }
-                if (rollFrames == 0) {
-                    rolling = false;
-                    rollDirection = MOVE_NONE;
-                    rollCooldown = CHARACTER_ROLL_COOLDOWN;
-                }
-            }
-            else { // if not rolling, resort to standard movement
-                   // directional movement
-                   // increment the velocity in each direction according to the movement direction
-                velx += direction.x*CHARACTER_ACCEL_PER_FRAME;
-                vely += direction.y*CHARACTER_ACCEL_PER_FRAME;
 
-                if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
-                    // if the player has no movement in the x direction, reduce speed along that axis
-                    if (velx > 0) { // decrease toward 0 if the player is moving right 
-                        velx -= CHARACTER_DECEL_PER_FRAME;
-                    }
-                    else if (velx < 0) { // increase toward 0 if the player is moving left
-                        velx += CHARACTER_DECEL_PER_FRAME;
-                    }
-                    if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
-                        velx = 0; // if the velocity would wrap the other way next frame, set it to 0
-                    }
-                }
-                if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
-                    if (vely > 0) {
-                        vely -= CHARACTER_DECEL_PER_FRAME;
-                    }
-                    else if (vely < 0) {
-                        vely += CHARACTER_DECEL_PER_FRAME;
-                    }
-                    if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
-                        vely = 0; // if the velocity would wrap the other way next frame, set it to 0
-                    }
-                }
-
-                double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
-                if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
-                                                     // scale x and y down so they are at the correct speed
-                    vely *= CHARACTER_VEL_MAX / currSpeed;
-                    velx *= CHARACTER_VEL_MAX / currSpeed;
-                }
-
-                if (rollCooldown > 0) { // if roll is on cooldown, reduce the time remaining
-                    rollCooldown--;
-                }
+            if (rollCooldown > 0) { // if roll is on cooldown, reduce the time remaining
+                rollCooldown--;
             }
 
             // rotate the player to look toward the mouse
@@ -1505,20 +1686,127 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
     }
 }
 
+void Player::updateState(userAction userInput, Game* game) {
+    if (alive == true) {
+        // get the keyboard state containing which keys are actively pressed
+        direction direction = {userInput.moveHor, userInput.moveVert};
+
+        if (userInput.shiftDown == true && rolling == false
+            && rollCooldown == 0 && direction != MOVE_NONE) { // if the player presses the roll key while they can start rolling
+            rolling = true;
+            rollFrames = CHARACTER_ROLL_DURATION;
+            rollDirection = direction;
+        }
+        if (userInput.rDown == true && weapon->isReloading() == false) { // reload when r is pressed
+            weapon->beginReload();
+        }
+        if (rolling == true) {
+            // while rolling, move the player in the initial direction of the roll, and remove the state if they finish
+            rollFrames--;
+            if (direction == MOVE_UP || direction == MOVE_LEFT ||
+                direction == MOVE_DOWN || direction == MOVE_RIGHT) {
+                velx = rollDirection.x*CHARACTER_ROLL_SPEED;
+                vely = rollDirection.y*CHARACTER_ROLL_SPEED;
+            }
+            else {
+                velx = rollDirection.x*CHARACTER_ROLL_SPEED / sqrt(2);
+                vely = rollDirection.y*CHARACTER_ROLL_SPEED / sqrt(2);
+            }
+            if (rollFrames == 0) {
+                rolling = false;
+                rollDirection = MOVE_NONE;
+                rollCooldown = CHARACTER_ROLL_COOLDOWN;
+            }
+        }
+        else { // if not rolling, resort to standard movement
+               // directional movement
+               // increment the velocity in each direction according to the movement direction
+            velx += direction.x*CHARACTER_ACCEL_PER_FRAME;
+            vely += direction.y*CHARACTER_ACCEL_PER_FRAME;
+
+            if (direction == MOVE_UP || direction == MOVE_DOWN || direction == MOVE_NONE) {
+                // if the player has no movement in the x direction, reduce speed along that axis
+                if (velx > 0) { // decrease toward 0 if the player is moving right 
+                    velx -= CHARACTER_DECEL_PER_FRAME;
+                }
+                else if (velx < 0) { // increase toward 0 if the player is moving left
+                    velx += CHARACTER_DECEL_PER_FRAME;
+                }
+                if (-CHARACTER_DECEL_PER_FRAME < velx && velx < CHARACTER_DECEL_PER_FRAME) {
+                    velx = 0; // if the velocity would wrap the other way next frame, set it to 0
+                }
+            }
+            if (direction == MOVE_LEFT || direction == MOVE_RIGHT || direction == MOVE_NONE) {
+                if (vely > 0) {
+                    vely -= CHARACTER_DECEL_PER_FRAME;
+                }
+                else if (vely < 0) {
+                    vely += CHARACTER_DECEL_PER_FRAME;
+                }
+                if (-CHARACTER_DECEL_PER_FRAME < vely && vely < CHARACTER_DECEL_PER_FRAME) {
+                    vely = 0; // if the velocity would wrap the other way next frame, set it to 0
+                }
+            }
+
+            double currSpeed = sqrt(pow(vely, 2) + pow(velx, 2)); // find the player current speed
+            if (currSpeed > CHARACTER_VEL_MAX) { // if the player is moving to fast
+                                                 // scale x and y down so they are at the correct speed
+                vely *= CHARACTER_VEL_MAX / currSpeed;
+                velx *= CHARACTER_VEL_MAX / currSpeed;
+            }
+
+            if (rollCooldown > 0) { // if roll is on cooldown, reduce the time remaining
+                rollCooldown--;
+            }
+
+            // rotate the player to look toward the mouse
+            // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
+            angle = atan2((double)(centreY - userInput.mouseY),
+                (double)(centreX - userInput.mouseX))*180.0 / M_PI; // find the angle between the character and the mouse
+
+            
+            weapon->takeShot(game, this, userInput); // have the player shoot a projectile
+        }
+        if (invulnFrames > 0) { // if invulnerable, take a frame off the counter
+            invulnFrames--;
+        }
+        else { // otherwise remove invulnerability
+            invulnerable = false;
+        }
+    }
+    else { // if the player is dead, remove a frame and check if they should respawn
+        deathFrames--;
+        if (deathFrames <= 0) {
+            respawn(game->spawns(), game->players());
+        }
+        else {
+            deathMarker->updateState();
+        }
+    }
+}
+
 void Player::updateState(playerState newState) {
     playerRect.x = newState.x;
     playerRect.y = newState.y;
     setPlayerCentre();
     angle = newState.angle;
+
     rolling = newState.rolling;
     rollFrames = newState.rollFrames;
     rollDirection.x = newState.rollX;
     rollDirection.y = newState.rollY;
+
     invulnerable = newState.invuln;
     invulnFrames = newState.invulnFrames;
     alive = newState.alive;
+    health = newState.health;
+
     deathFrames = newState.deathFrames;
     deathMarker->updateState(deathFrames, newState.dmX, newState.dmY);
+
+    weapon->setAmmo(newState.ammo);
+    weapon->setReloadFrames(newState.reloadFrames);
+    rollCooldown = newState.cooldownFrames;
 }
 
 void Player::move(forward_list<Wall*>* wallContainer) {
@@ -1660,25 +1948,35 @@ string Player::getStateString(void) {
     // gets a string representing the players variables for sending throuhg the network
     /* format:
     x, y, angle, rolling state, roll frames, roll dirx, roll diry, invuln state, invuln frames,
-     alive state, death frames, deathmarkerX, deathmarkerY, id, weapon type
+     alive state, health, death frames, deathmarkerX, deathmarkerY, id, weapon type, reload frames, cooldown frames
     NEED TO ADD WEAPON
     */
     stringstream statestring;
     statestring << strOfLen(playerRect.x, MESSAGE_LOC_CHAR);
     statestring << strOfLen(playerRect.y, MESSAGE_LOC_CHAR);
     statestring << strOfLen(angle+360, MESSAGE_ANGLE_CHAR);
+
     statestring << rolling;
     statestring << strOfLen(rollFrames, MESSAGE_FRAMES_CHAR);
     statestring << rollDirection.x+2; // shift the roll values to avoid negative numbers during sending
     statestring << rollDirection.y+2;
+
     statestring << invulnerable;
     statestring << strOfLen(invulnFrames, MESSAGE_FRAMES_CHAR);
     statestring << alive;
+    statestring << strOfLen(health, MESSAGE_STAT_CHAR);
+
+
     statestring << strOfLen(deathFrames, MESSAGE_FRAMES_CHAR);
     statestring << strOfLen(deathMarker->getX(), MESSAGE_LOC_CHAR);
     statestring << strOfLen(deathMarker->getY(), MESSAGE_LOC_CHAR);
+
     statestring << id;
     statestring << weapID;
+    statestring << strOfLen(weapon->getCurrAmmo(), MESSAGE_STAT_CHAR);
+    statestring << strOfLen(weapon->getReloadFrames(), MESSAGE_FRAMES_CHAR);
+    statestring << strOfLen(rollCooldown, MESSAGE_FRAMES_CHAR);
+
     return statestring.str();
 }
 
@@ -1748,6 +2046,26 @@ AssaultRifle::~AssaultRifle(void) {
 void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
         mouseDown = true;
+    } else {
+        mouseDown = false;
+    }
+    double projectileAngle = player->getAngle() + generateRandDouble(-AR_MAX_BULLET_SPREAD / 2, AR_MAX_BULLET_SPREAD / 2);
+    if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
+        if (currAmmo > 0) {
+            game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
+                projectileAngle, AR_PROJECTILE_SPEED, game, player->getID()));
+            shotDelay = AR_SHOT_DELAY;
+            currAmmo--;
+        }
+    }
+    if (currAmmo == 0 && reloadFramesLeft == 0) {
+        beginReload();
+    }
+}
+
+void AssaultRifle::takeShot(Game* game, Player* player, userAction userInput) {
+    if (userInput.mouseDown) {
+        mouseDown = true;
     }
     else {
         mouseDown = false;
@@ -1783,6 +2101,15 @@ void AssaultRifle::updateGun(void) {
             reloading = false;
             currAmmo = AR_CLIP_SIZE;
         }
+    }
+}
+
+void AssaultRifle::setReloadFrames(int frames) {
+    reloadFramesLeft = frames;
+    if (frames != 0) {
+        reloading = true;
+    } else {
+        reloading = false;
     }
 }
 
@@ -1827,8 +2154,27 @@ void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
                     projectileAngle, PISTOL_PROJECTILE_SPEED, game, player->getID()));
             }
         }
+    } else {
+        mouseDown = false;
     }
-    else {
+    if (currAmmo == 0 && reloadFramesLeft == 0) {
+        beginReload();
+    }
+}
+
+void Pistol::takeShot(Game* game, Player* player, userAction userInput) {
+    double projectileAngle = player->getAngle() + generateRandDouble(-currRecoil / 2, currRecoil / 2);
+    if (userInput.mouseDown == true) {
+        if (mouseDown != true && reloadFramesLeft == 0) {
+            if (currAmmo > 0) {
+                mouseDown = true;
+                currAmmo--;
+                currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
+                game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
+                    projectileAngle, PISTOL_PROJECTILE_SPEED, game, player->getID()));
+            }
+        }
+    } else {
         mouseDown = false;
     }
     if (currAmmo == 0 && reloadFramesLeft == 0) {
@@ -1840,6 +2186,15 @@ void Pistol::beginReload(void) {
     if (currAmmo < PISTOL_CLIP_SIZE) {
         reloading = true;
         reloadFramesLeft = PISTOL_RELOAD_FRAMES;
+    }
+}
+
+void Pistol::setReloadFrames(int frames) {
+    reloadFramesLeft = frames;
+    if (frames != 0) {
+        reloading = true;
+    } else {
+        reloading = false;
     }
 }
 
@@ -1896,6 +2251,26 @@ void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
     double projectileAngle = player->getAngle() - SHOTGUN_SPREAD_RANGE / 2;
     double shotAngle;
     if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
+        if (mouseDown != true && shotDelay == 0) {
+            mouseDown = true;
+            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
+                shotAngle = generateRandDouble(projectileAngle, projectileAngle + SHOTGUN_PROJECTILE_SPREAD);
+                game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
+                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
+                projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
+            }
+            shotDelay = SHOTGUN_SHOT_DELAY;
+        }
+    }
+    else {
+        mouseDown = false;
+    }
+}
+
+void Shotgun::takeShot(Game* game, Player* player, userAction userInput) {
+    double projectileAngle = player->getAngle() - SHOTGUN_SPREAD_RANGE / 2;
+    double shotAngle;
+    if (userInput.mouseDown) {
         if (mouseDown != true && shotDelay == 0) {
             mouseDown = true;
             for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
@@ -2227,6 +2602,10 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, i
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
 }
 
+Projectile::~Projectile(void) {
+    SDL_DestroyTexture(projectileImage);
+}
+
 Projectile::Projectile(int x, int y, Game* game, int id) {
     // set the location of the projectile
     currPosX = x;
@@ -2358,11 +2737,6 @@ void Projectile::render(SDL_Renderer* renderer) {
         angle, NULL, SDL_FLIP_NONE);// draw the projectile to the window
 }
 
-void Projectile::deleteObject(void) {
-    // clears any memory used  by the projectile
-    SDL_DestroyTexture(projectileImage);
-}
-
 BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLocation,
     colorSet projectileColors, int id) {
     explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, renderer);
@@ -2404,7 +2778,7 @@ BulletExplosion::BulletExplosion(Game* game, int x, int y, int id) {
     ownerID = id;
 }
 
-void BulletExplosion::deleteObject(void) {
+BulletExplosion::~BulletExplosion(void) {
     SDL_DestroyTexture(explosionImage);
 }
 

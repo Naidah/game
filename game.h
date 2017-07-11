@@ -5,8 +5,8 @@ using namespace std;
 
 
 typedef struct _direction {
-    double x;
-    double y;
+    int x;
+    int y;
 } direction;
 
 bool operator==(const direction lhs, const direction rhs) {
@@ -20,6 +20,7 @@ bool operator!=(const direction lhs, const direction rhs) {
 typedef struct _connection {
     Uint16 port;
     Uint32 ip;
+    int id;
 } connection;
 
 bool operator==(const connection lhs, const connection rhs) {
@@ -54,12 +55,26 @@ typedef struct _playerState {
     bool invuln;
     int invulnFrames;
     bool alive;
+    int health;
     int deathFrames;
     int dmX;
     int dmY;
     int id;
     int weapID;
+    int ammo;
+    int reloadFrames;
+    int cooldownFrames;
 } playerState;
+
+typedef struct _userAction {
+    int mouseX;
+    int mouseY;
+    bool mouseDown;
+    bool rDown;
+    bool shiftDown;
+    int moveHor;
+    int moveVert;
+} userAction;
 
 /*------------- All program constants defined here ------------------*/
 
@@ -70,8 +85,8 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 // constants used in setting up the game instance
 const int GAME_MAX_PLAYERS = 4;
 
-                           // values of the different colour schemes that can be used
-                           // red
+// values of the different colour schemes that can be used
+// red
 const string COLOR_RED_NAME = "red";
 const int COLOR_RED_RED = 255;
 const int COLOR_RED_GREEN = 0;
@@ -225,12 +240,12 @@ const double PISTOL_PROJECTILE_SPEED_PS = 1100;
 const double PISTOL_PROJECTILE_SPEED = PISTOL_PROJECTILE_SPEED_PS / SCREEN_FPS;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
-const double SHOTGUN_SPREAD_RANGE = 40;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 4;
+const double SHOTGUN_SPREAD_RANGE = 35;
 const double SHOTGUN_PROJECTILE_SPREAD = SHOTGUN_SPREAD_RANGE / SHOTGUN_PROJECTILES_PER_SHOT;
-const double SHOTGUN_SHOT_DELAY_SEC = 0.6;
+const double SHOTGUN_SHOT_DELAY_SEC = 0.8;
 const double SHOTGUN_SHOT_DELAY = SHOTGUN_SHOT_DELAY_SEC*SCREEN_FPS;
-const double SHOTGUN_PROJECTILE_SPEED_PS = 600;
+const double SHOTGUN_PROJECTILE_SPEED_PS = 500;
 const double SHOTGUN_PROJECTILE_SPEED = SHOTGUN_PROJECTILE_SPEED_PS / SCREEN_FPS;
 
 
@@ -321,8 +336,8 @@ const int GAMESPACE_MARGIN = 100; // margin within the gamespace where no walls 
 const int UI_COLOR_MAX_VALUE = 255;
 const string UI_GAME_CURSOR_LOCATION = "images/gameCursor.png";
 
-const int UI_CURSOR_WIDTH = 16;
-const int UI_CURSOR_HEIGHT = 16;
+const int UI_CURSOR_WIDTH = 24;
+const int UI_CURSOR_HEIGHT = 24;
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
                                         // multiplier on the primary color used in determining background color
@@ -437,14 +452,17 @@ const int MESSAGE_WALL = 2;
 const int MESSAGE_PLAYER = 3;
 const int MESSAGE_PROJECTILE = 4;
 const int MESSAGE_EXPLOSION = 5;
+const int MESSAGE_CLIENT_ACTION = 6;
+const int MESSAGE_QUIT = 7;
 
-const int MESSAGE_PLAYER_LEN = 41;
+const int MESSAGE_PLAYER_LEN = 55;
 
 // amounts of characters used to represent different variables types in networking strings
 const int MESSAGE_ID_CHAR = 2;
 const int MESSAGE_LOC_CHAR = 4;
 const int MESSAGE_ANGLE_CHAR = 3;
 const int MESSAGE_FRAMES_CHAR = 5;
+const int MESSAGE_STAT_CHAR = 2;
 
 
 
@@ -464,7 +482,7 @@ const int DEBUG_MAX_INPUTS_PF = 5;
 const bool DEBUG_IS_HOST = false;
 const Uint16 DEBUG_HOST_PORT = 2880;
 const Uint16 DEBUG_CLIENT_PORT = 2881;
-const string DEBUG_HOST_IP = "192.168.1.25";
+const string DEBUG_HOST_IP = "127.0.0.1";
 
 /*-------------------------- Typedefs ------------------------------*/
 
@@ -493,12 +511,16 @@ protected:
     forward_list<Wall*>* wallContainer;
     forward_list<coordSet>* spawnPoints;
     forward_list<Projectile*>* projectileList;
-    forward_list<BulletExplosion>* explosionList;
+    forward_list<BulletExplosion*>* explosionList;
     SDL_Renderer** gameRenderer;
+
+    forward_list<BulletExplosion*> explosionsToSend;
 
     string hostIp;
     Uint16 hostPort;
     Uint16 clientPort;
+
+    map<int, userAction> clientActions;
 
     int myID;
     int nextID;
@@ -511,7 +533,6 @@ protected:
     UDPConnectionClient* client;
     bool connected;
 
-    forward_list<BulletExplosion> explosionsToSend;
 
     colorSet primaryColor;
     colorSet secondaryColor;
@@ -525,28 +546,36 @@ protected:
 public:
     Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
         forward_list<coordSet>* spawnSet, forward_list<Projectile*>* projSet,
-        forward_list<BulletExplosion>* explList, SDL_Renderer** renderer);
+        forward_list<BulletExplosion*>* explList, SDL_Renderer** renderer);
     ~Game(void);
 
     void setPatterns(void);
+    void setSockets(void);
 
     void initialize(void);
     void recieveConnection(void);
     void attemptConnection(void);
+
+    void endSession(void);
+    void leaveMatch(void);
 
     string getMapString(void);
     string getPlayerString(void);
     string getProjectileString(void);
     string getExplosionString(void);
 
+    void removePlayer(int playerip);
+
     int getInput(void);
+    void sendUserActions(void);
+    bool getClientAction(void);
     void sendUpdate(void);
     void updateMap(string serverString);
     void updatePlayers(string serverString);
     void updateProjectiles(string serverString);
     void updateExplosions(string serverString);
 
-    void addNewExplosion(BulletExplosion newExplosion);
+    void addNewExplosion(BulletExplosion* newExplosion);
 
     forward_list<Player*>* players(void) { return playerList; }
     forward_list<Wall*>* walls(void) { return wallContainer; }
@@ -554,20 +583,21 @@ public:
     forward_list<Projectile*>* projectiles(void) { return projectileList; }
     SDL_Renderer* renderer(void) { return *gameRenderer; }
     SDL_Texture* pattern(int x, int y) { return patterns[patternBoard[x][y]]; }
-    int screenWidth(void) { return swidth; }
-    int screenHeight(void) { return sheight; }
-    int isFullscreen(void) { return fullscreen; }
+    int screenWidth(void) {return swidth;}
+    int screenHeight(void) {return sheight;}
+    int isFullscreen(void) {return fullscreen;}
     string hIP(void) {return hostIp;}
     Uint16 hPort(void) {return hostPort;}
     Uint16 cPort(void) {return clientPort;}
     bool isConnected(void) {return connected;}
     bool hosting(void) {return isHost;}
     int getID(void) {return myID;}
+    userAction getActions(int clientID) {return clientActions[clientID];}
 
-    colorSet primaryColors(void) { return primaryColor; }
-    colorSet secondaryColors(void) { return secondaryColor; }
+    colorSet primaryColors(void) {return primaryColor;}
+    colorSet secondaryColors(void) {return secondaryColor;}
 
-    void setSize(int w, int h) { swidth = w; sheight = h; }
+    void setSize(int w, int h) {swidth = w; sheight = h;}
     void setID(int newID) {myID = newID;}
 };
 
@@ -602,8 +632,7 @@ protected:
     Weapon* weapon; // address of the player's weapon object
     int weapID; // type of weapon used by the player
 
-                    // life values of the player
-    int health;
+    int health; // life values of the player
     bool alive;
     int deathFrames; // counter containing how long the player remains dead
 
@@ -638,6 +667,7 @@ public:
 
     // functions to update the players state
     void updateState(SDL_Event* eventHandler, Game* game);
+    void updateState(userAction userInput, Game* game);
     void updateState(playerState newState);
     void move(forward_list<Wall*>* wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
@@ -681,7 +711,11 @@ public:
     virtual int getMaxReloadFrames(void) = 0;
     virtual bool isReloading(void) = 0;
 
+    virtual void setAmmo(int ammo) = 0;
+    virtual void setReloadFrames(int frames) = 0;
+
     virtual void takeShot(Game* game, Player* player, SDL_Event* eventHandler) = 0;
+    virtual void takeShot(Game* game, Player* player, userAction userInput) = 0;
     virtual void beginReload(void) = 0;
     virtual void updateGun() = 0;
     virtual void resetGun() = 0;
@@ -704,7 +738,11 @@ public:
     int getMaxReloadFrames(void) { return AR_RELOAD_FRAMES; }
     bool isReloading(void) { return reloading; }
 
+    void setAmmo(int ammo) {currAmmo = ammo;};
+    void setReloadFrames(int frames);
+
     void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player, userAction userInput);
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
@@ -725,7 +763,11 @@ public:
     int getMaxReloadFrames(void) { return PISTOL_RELOAD_FRAMES; }
     bool isReloading(void) { return reloading; }
 
+    void setAmmo(int ammo) {currAmmo = ammo;}
+    void setReloadFrames(int frames);
+
     void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player, userAction userInput);
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
@@ -746,7 +788,11 @@ public:
     int getMaxReloadFrames(void) { return SHOTGUN_SHOT_DELAY; }
     bool isReloading(void) { return true; } // treat shot delay as reloading
 
+    void setAmmo(int ammo) {}
+    void setReloadFrames(int frames) {shotDelay = frames;}
+
     void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player, userAction userInput);
     void beginReload(void);
     void updateGun(void);
     void resetGun(void);
@@ -802,6 +848,7 @@ private:
 public:
     Projectile(int x, int y, double a, const double speed, Game* game, int id);
     Projectile(int x, int y, Game* game, int id);
+    ~Projectile(void);
 
     SDL_Rect getLocation(void) { return projectileRect; }
     colorSet getColors(void) { return projectileColors; }
@@ -813,7 +860,6 @@ public:
     void updateState(int x, int y, Game* game, int id);
     void setProjectileCentre(void);
     void render(SDL_Renderer* renderer);
-    void deleteObject(void);
 };
 
 class BulletExplosion {
@@ -826,7 +872,7 @@ protected:
 public:
     BulletExplosion(SDL_Renderer* render, SDL_Rect projectileLocation, colorSet projectileColors, int id);
     BulletExplosion(Game* game, int x, int y, int id);
-    void deleteObject(void);
+    ~BulletExplosion(void);
     bool updateState(void);
     string getStateString(void);
     void render(SDL_Renderer* renderer);
@@ -887,7 +933,7 @@ public:
     ~UDPConnectionServer(void);
     bool send(string msg, connection* ips, int numIps);
     bool send(string msg, connection target);
-    connection recieve(void);
+    connection recieve(string* field);
 };
 
 /*--------------------- Function definitions -------------------------*/
@@ -900,7 +946,8 @@ int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the 
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
 direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
-void renderGameSpace(Game* game, forward_list<BulletExplosion> explosionList,
+void renderMenu(Game* game); // draws the menu
+void renderGameSpace(Game* game, forward_list<BulletExplosion*> explosionList,
     int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(Game* game, Player* userCharacter,
     hudInfo hudInfoContainer); // render the HUD area of the screen
