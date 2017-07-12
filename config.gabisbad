@@ -1,5 +1,6 @@
 swidth=1156
 sheight=650
 fullscreen=0
-primaryColor=cyan
-secondaryColor=pink
+ishost=1
+primaryColor=white
+secondaryColor=blue

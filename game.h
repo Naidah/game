@@ -372,9 +372,14 @@ const int GAMESPACE_MARGIN = 100; // margin within the gamespace where no walls 
                                   // Game UI parameters
 const int UI_COLOR_MAX_VALUE = 255;
 const string UI_GAME_CURSOR_LOCATION = "images/gameCursor.png";
+const string UI_FONT_LOCATION = "images/ethnocentric.ttf";
 
 const int UI_CURSOR_WIDTH = 24;
 const int UI_CURSOR_HEIGHT = 24;
+
+const int UI_FONT_SIZE = 120; // affects detail and size of the text loaded
+const double UI_FONT_HEIGHT_TO_WIDTH = 0.6;
+
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
                                         // multiplier on the primary color used in determining background color
@@ -420,9 +425,9 @@ const int BUTTON_BACK_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.85;
 const int BUTTON_BACK_WIDTH = SCREEN_WIDTH_DEFAULT*0.14;
 const int BUTTON_BACK_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
 
-const int BUTTON_FULL_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.4;
-const int BUTTON_FULL_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.25;
-const int BUTTON_FULL_WIDTH = SCREEN_WIDTH_DEFAULT*0.08;
+const int BUTTON_FULL_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.3;
+const int BUTTON_FULL_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.82;
+const int BUTTON_FULL_WIDTH = SCREEN_HEIGHT_DEFAULT*0.15;
 const int BUTTON_FULL_HEIGHT = BUTTON_FULL_WIDTH;
 
 const double BUTTON_MENU_COLOR_MULTIPLIER = 0.7;
@@ -431,18 +436,49 @@ const int BUTTON_COLOR_WIDTH = SCREEN_HEIGHT_DEFAULT*0.07;
 const int BUTTON_COLOR_GAP = SCREEN_HEIGHT_DEFAULT*0.04;
 
 const int BUTTON_COLOR_PRIM_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.75;
-const int BUTTON_COLOR_PRIM_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.09;
+const int BUTTON_COLOR_PRIM_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.23;
 
-const int BUTTON_COLOR_SEC_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.75;
-const int BUTTON_COLOR_SEC_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.59;
+const int BUTTON_COLOR_SEC_TOPLEFT_X = BUTTON_COLOR_PRIM_TOPLEFT_X;
+const int BUTTON_COLOR_SEC_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.62;
 
 const double BUTTON_COLOR_SEC_MULTIPLIER = 0.8;
 
-const int BUTTON_RES_WIDTH = SCREEN_HEIGHT_DEFAULT*0.4;
-const int BUTTON_RES_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
-const int BUTTON_RES_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.06;
-const int BUTTON_RES_TOPLEFT_Y = SCREEN_WIDTH_DEFAULT*0.05;
-const int BUTTON_RES_GAP = SCREEN_HEIGHT_DEFAULT*0.06;
+const int BUTTON_RES_WIDTH = SCREEN_HEIGHT_DEFAULT*0.5;
+const int BUTTON_RES_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.075;
+const int BUTTON_RES_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.12;
+const int BUTTON_RES_TOPLEFT_Y = SCREEN_WIDTH_DEFAULT*0.15;
+const int BUTTON_RES_GAP = SCREEN_HEIGHT_DEFAULT*0.035;
+
+
+const string OPTIONS_HEADER = "Options";
+const int OPTIONS_HEADER_LEN = OPTIONS_HEADER.length();
+const int OPTIONS_HEADER_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.14;
+const int OPTIONS_HEADER_WIDTH = OPTIONS_HEADER_LEN*OPTIONS_HEADER_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int OPTIONS_HEADER_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-OPTIONS_HEADER_WIDTH)/2;
+const int OPTIONS_HEADER_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.03;
+
+const string OPTIONS_RESNAME = "Resolution:";
+const int OPTIONS_RESNAME_LEN = OPTIONS_HEADER.length();
+const int OPTIONS_RESNAME_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+const int OPTIONS_RESNAME_WIDTH = OPTIONS_RESNAME_LEN*OPTIONS_RESNAME_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int OPTIONS_RESNAME_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.05;
+const int OPTIONS_RESNAME_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.17;
+
+const string OPTIONS_PRIMTEXT = "Primary:";
+const int OPTIONS_PRIMTEXT_LEN = OPTIONS_PRIMTEXT.length();
+const int OPTIONS_PRIMTEXT_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.06;
+const int OPTIONS_PRIMTEXT_WIDTH = OPTIONS_PRIMTEXT_LEN*OPTIONS_PRIMTEXT_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int OPTIONS_PRIMTEXT_TOPLEFT_X = BUTTON_COLOR_PRIM_TOPLEFT_X - (OPTIONS_PRIMTEXT_WIDTH+SCREEN_WIDTH_DEFAULT*0.03);
+const int OPTIONS_PRIMTEXT_TOPLEFT_Y = BUTTON_COLOR_PRIM_TOPLEFT_Y
+ + (3*BUTTON_COLOR_WIDTH + 2*BUTTON_COLOR_GAP)/2 - OPTIONS_PRIMTEXT_HEIGHT/2;
+
+const string OPTIONS_SECTEXT = "Secondary:";
+const int OPTIONS_SECTEXT_LEN = OPTIONS_SECTEXT.length();
+const int OPTIONS_SECTEXT_HEIGHT = OPTIONS_PRIMTEXT_HEIGHT;
+const int OPTIONS_SECTEXT_WIDTH = OPTIONS_SECTEXT_LEN*OPTIONS_SECTEXT_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int OPTIONS_SECTEXT_TOPLEFT_X = BUTTON_COLOR_SEC_TOPLEFT_X - (OPTIONS_SECTEXT_WIDTH+SCREEN_WIDTH_DEFAULT*0.03);
+const int OPTIONS_SECTEXT_TOPLEFT_Y = BUTTON_COLOR_SEC_TOPLEFT_Y
+ + (3*BUTTON_COLOR_WIDTH + 2*BUTTON_COLOR_GAP)/2 - OPTIONS_SECTEXT_HEIGHT/2;
 
 
 // Constants related to map generation
@@ -750,6 +786,8 @@ public:
 
 class MainPage {
 protected:
+    SDL_Texture* heading;
+
     Button* playButton;
     Button* optionButton;
     Button* quitButton;
@@ -763,6 +801,12 @@ public:
 
 class OptionPage {
 protected:
+    SDL_Texture* heading;
+    SDL_Texture* resTitle;
+
+    SDL_Texture* primText;
+    SDL_Texture* secText;
+
     Button* backButton;
     Button* fullscreenButton;
 
@@ -790,8 +834,12 @@ protected:
     int buttonType;
 
     string id;
+
+    int textLen;
+    SDL_Texture* displayText;
 public:
-    Button(int x, int y, int w, int h, bool useFixed, const colorSet prim, const colorSet sec, int type, string name);
+    Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
+     const colorSet sec, int type, string name, string text, Game* game);
     ~Button(void);
     bool mouseHover(int x, int y);
     void render(Game* game);

@@ -17,6 +17,7 @@ MAJOR:
 #include <SDL.h> // sdl library for graphics features
 #undef main
 #include <SDL_image.h> // sdl library for using PNGs and other image formats
+#include <SDL_ttf.h>
 #include <SDL_net.h> // sdl library used for multi computer networking
 #include <SDL2_gfxPrimitives.h> // contains library for drawing arbitrary polygons
 
@@ -73,10 +74,11 @@ int main(int argc, char const *argv[]) {
     forward_list<BulletExplosion*> explosionList; // stores explosions created by projectile collisions
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints,
      &projectileList, &explosionList, &renderer, &window);
-    Menu* menu = new Menu(game);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
 
+
+    Menu* menu = new Menu(game);
     game->setPatterns();
     game->setSockets();
 
@@ -409,6 +411,11 @@ bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initial
                     if (SDLNet_Init() < 0) { // initialize SDL_net, returning an error on failure
                         cout << "Error initializing SDLNet: " << SDLNet_GetError() << "\n";
                         success = false;
+                    } else {
+                        if (TTF_Init() < 0) {
+                            cout << "Error initializing TTF: " << TTF_GetError() << "\n";
+                            success = false;
+                        }
                     }
                 }
             }
@@ -435,6 +442,21 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
     }
     return output;
 }
+
+SDL_Texture* loadText(string content, int size, SDL_Renderer* renderer) {
+    // creates a texture of text content from the games font at text size size
+    SDL_Texture* output = NULL;
+    TTF_Font* font = TTF_OpenFont(UI_FONT_LOCATION.c_str(), size);
+    if (font == NULL) {
+        cout << "Error opening font: " << TTF_GetError() << "\n";
+    } 
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, content.c_str(), {0,0,0});
+    output = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    TTF_CloseFont(font);
+    return output;
+}
+
 
 void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
     int playerMainX, int playerMainY) {
@@ -972,23 +994,28 @@ void Game::setSockets(void) {
 }
 
 void Game::recieveConnection(void) {
+    int messageType;
+    string inboundString;
     if (numPlayers < GAME_MAX_PLAYERS-1) {
-        connection inboundConnection = server->recieve(NULL);
+        connection inboundConnection = server->recieve(&inboundString);
         if (inboundConnection.ip != 0) {
-            bool match = false;
-            for (int i = 0; i < numPlayers; i++) {
-                if (inboundConnection == currPlayers[i]) {
-                    match = true;
+            messageType = inboundString[0] - '0';
+            if (messageType == MESSAGE_CONF_CONNECTION) {
+                bool match = false;
+                for (int i = 0; i < numPlayers; i++) {
+                    if (inboundConnection == currPlayers[i]) {
+                        match = true;
+                    }
                 }
-            }
-            if (match == false) {
-                currPlayers[numPlayers] = inboundConnection;
-                currPlayers[numPlayers].id = nextID;
-                numPlayers++;
-                stringstream message;
-                message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
-                server->send(message.str(), inboundConnection);
-                nextID++;
+                if (match == false) {
+                    currPlayers[numPlayers] = inboundConnection;
+                    currPlayers[numPlayers].id = nextID;
+                    numPlayers++;
+                    stringstream message;
+                    message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
+                    server->send(message.str(), inboundConnection);
+                    nextID++;
+                }
             }
         }
     }
@@ -1383,13 +1410,13 @@ void Game::updateSecColors(string newColor) {
 }
 
 void Game::updateWindow(int w, int h, bool full) {
-    SDL_SetWindowSize(*gameWindow, w, h);
-    swidth = w;
-    sheight = h;
     if (fullscreen != full) {
         SDL_SetWindowFullscreen(*gameWindow, full);
         fullscreen = full;
     }
+    SDL_SetWindowSize(*gameWindow, w, h);
+    swidth = w;
+    sheight = h;
     SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
 }
 
@@ -1479,12 +1506,14 @@ void Menu::render(Game* game) {
 
 
 MainPage::MainPage(Game* game) {
+    heading = loadText("Game", UI_FONT_SIZE, game->renderer());
+
     playButton = new Button(100, 100, 200, 50, false,
-     {0,0,0}, {0,0,0}, BUTTON_MENU, "play");
+     {0,0,0}, {0,0,0}, BUTTON_MENU, "play", "Play", game);
     optionButton = new Button(100, 200, 200, 50, false,
-     {0,0,0}, {0,0,0}, BUTTON_MENU, "options");
+     {0,0,0}, {0,0,0}, BUTTON_MENU, "options", "Options", game);
     quitButton = new Button(100, 300, 200, 50, false,
-     {0,0,0}, {0,0,0}, BUTTON_RADIO, "quit");
+     {0,0,0}, {0,0,0}, BUTTON_RADIO, "quit", "Quit Game", game);
 
     // ADD
     /*
@@ -1524,17 +1553,29 @@ int MainPage::update(int x, int y, bool press) {
 }
 
 void MainPage::render(Game* game) {
+    SDL_SetTextureColorMod(heading, game->primaryColors().red, 0,
+     0);
+    SDL_Rect header = {25, 25, 200, 50};
+    SDL_RenderCopy(game->renderer(), heading, NULL, &header);
+
+
     playButton->render(game);
     optionButton->render(game);
     quitButton->render(game);
 }
 
 OptionPage::OptionPage(Game* game) {
+    heading = loadText(OPTIONS_HEADER, UI_FONT_SIZE, game->renderer());
+    resTitle = loadText(OPTIONS_RESNAME, UI_FONT_SIZE, game->renderer());
+
+    primText = loadText(OPTIONS_PRIMTEXT, UI_FONT_SIZE, game->renderer());
+    secText = loadText(OPTIONS_SECTEXT, UI_FONT_SIZE, game->renderer());
+
     backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
-     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_MENU, "back");
+     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_MENU, "back", "Back", game);
 
     fullscreenButton = new Button(BUTTON_FULL_TOPLEFT_X, BUTTON_FULL_TOPLEFT_Y,
-     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO, "fullscreen");
+     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO, "fullscreen", "", game);
     fullscreenButton->setActive(game->isFullscreen());
 
     int shiftX;
@@ -1546,7 +1587,7 @@ OptionPage::OptionPage(Game* game) {
         colorSet secondary = COLOR_VALUES[COLOR_NAMES[i]]*BUTTON_COLOR_SEC_MULTIPLIER;
         primSelector[i] = new Button(BUTTON_COLOR_PRIM_TOPLEFT_X+shiftX,
          BUTTON_COLOR_PRIM_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
-        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[i]);
+        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[i], "", game);
 
         if (COLOR_NAMES[i] == game->primColor()) {
             primSelector[i]->setActive(true);
@@ -1560,18 +1601,21 @@ OptionPage::OptionPage(Game* game) {
         colorSet secondary = COLOR_VALUES[COLOR_NAMES[j]]*BUTTON_COLOR_SEC_MULTIPLIER;
         secSelector[j] = new Button(BUTTON_COLOR_SEC_TOPLEFT_X+shiftX,
          BUTTON_COLOR_SEC_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
-        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[j]);
+        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[j], "", game);
 
         if (COLOR_NAMES[j] == game->secColor()) {
             secSelector[j]->setActive(true);
         }
     }
 
+    stringstream text;
     for (int k = 0; k < UI_RESOLUTION_NUM; k++) {
+        text.str("");
+        text << to_string(UI_RESOLUTIONS[k]) << " X " << to_string((int)(UI_RESOLUTIONS[k]*UI_RESOLUTION_MULTIPLIER));
         int shiftY = k*(BUTTON_RES_GAP+BUTTON_RES_HEIGHT);
         resSelector[k] = new Button(BUTTON_RES_TOPLEFT_X, BUTTON_RES_TOPLEFT_Y+shiftY,
          BUTTON_RES_WIDTH, BUTTON_RES_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO,
-         to_string(UI_RESOLUTIONS[k]));
+         to_string(UI_RESOLUTIONS[k]), text.str(), game);
 
         if (UI_RESOLUTIONS[k] == game->configScreenHeight()) {
             resSelector[k]->setActive(true);
@@ -1687,6 +1731,22 @@ void OptionPage::updateGame(Game* game) {
 }
 
 void OptionPage::render(Game* game) {
+    SDL_Rect header = {OPTIONS_HEADER_TOPLEFT_X, OPTIONS_HEADER_TOPLEFT_Y,
+     OPTIONS_HEADER_WIDTH, OPTIONS_HEADER_HEIGHT};
+    SDL_RenderCopy(game->renderer(), heading, NULL, &header);
+
+    SDL_Rect resBox = {OPTIONS_RESNAME_TOPLEFT_X, OPTIONS_RESNAME_TOPLEFT_Y,
+     OPTIONS_RESNAME_WIDTH, OPTIONS_RESNAME_HEIGHT};
+    SDL_RenderCopy(game->renderer(), resTitle, NULL, &resBox);
+
+    SDL_Rect primBox = {OPTIONS_PRIMTEXT_TOPLEFT_X, OPTIONS_PRIMTEXT_TOPLEFT_Y,
+     OPTIONS_PRIMTEXT_WIDTH, OPTIONS_PRIMTEXT_HEIGHT};
+    SDL_RenderCopy(game->renderer(), primText, NULL, &primBox);
+
+    SDL_Rect secBox = {OPTIONS_SECTEXT_TOPLEFT_X, OPTIONS_SECTEXT_TOPLEFT_Y,
+     OPTIONS_SECTEXT_WIDTH, OPTIONS_SECTEXT_HEIGHT};
+    SDL_RenderCopy(game->renderer(), secText, NULL, &secBox);
+
     backButton->render(game);
     fullscreenButton->render(game);
 
@@ -1706,7 +1766,7 @@ void OptionPage::render(Game* game) {
 
 
 Button::Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
- const colorSet sec, int type, const string name) {
+ const colorSet sec, int type, const string name, string text, Game* game) {
     location.x = x;
     location.y = y;
     location.w = w;
@@ -1719,6 +1779,14 @@ Button::Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
 
     buttonType = type;
     id = name;
+
+    if (text != "") {
+        displayText = loadText(text.c_str(), UI_FONT_SIZE, game->renderer());
+        textLen = text.length();
+    } else {
+        displayText = NULL;
+        textLen = 0;
+    }
 }
 
 Button::~Button(void) {
@@ -1767,6 +1835,15 @@ void Button::render(Game* game) {
         SDL_SetRenderDrawColor(game->renderer(), prim.red,
          prim.green, prim.blue, UI_COLOR_MAX_VALUE);
         SDL_RenderFillRect(game->renderer(), &location);
+    }
+
+    if (displayText != NULL) {
+        SDL_Rect textBox;
+        textBox.h = location.h*0.8;
+        textBox.w = textLen*textBox.h*UI_FONT_HEIGHT_TO_WIDTH;
+        textBox.y = location.y+(location.h-textBox.h)/2;
+        textBox.x = location.x+(location.w-textBox.w)/2;
+        SDL_RenderCopy(game->renderer(), displayText, NULL, &textBox);
     }
 }
 
@@ -2214,7 +2291,7 @@ void Player::render(Game* game) {
             SDL_SetTextureAlphaMod(invulnImage, CHARACTER_INVULN_ALPHA);
             SDL_RenderCopy(renderer, invulnImage, NULL, &invulnRect);
         }
-        //cout << playerRect.x << "\n";
+        
         SDL_SetTextureColorMod(playerImage, playerColors.red,
             playerColors.green, playerColors.blue); // modulates the color based on the players settings
         SDL_RenderCopyEx(renderer, playerImage, NULL, &playerRect,
