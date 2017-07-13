@@ -6,6 +6,9 @@
 MAJOR:
 -- Comment current work
 -- menu reset
+-- add lobby
+-- add tutorial
+-- add scoring
 
 */
 
@@ -54,6 +57,9 @@ int main(int argc, char const *argv[]) {
                        // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
     bool inMenu = true;
+    bool paused = false;
+    bool mousePressed = false;
+    bool gameOver = false;
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
@@ -85,6 +91,13 @@ int main(int argc, char const *argv[]) {
     // load images needed for HUD drawing
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
     hudInfoContainer.cooldownIcon = loadImage(HUD_COOLDOWN_ICON_LOCATION, renderer);
+    hudInfoContainer.pauseText = loadText(UI_PAUSE_TEXT, UI_FONT_SIZE, renderer);
+
+    hudInfoContainer.resume = new Button(BUTTON_RESUME_TOPLEFT_X, BUTTON_RESUME_TOPLEFT_Y,
+     BUTTON_RESUME_WIDTH, BUTTON_RESUME_HEIGHT, BUTTON_MENU, "resume", false, "Resume Game", game);
+    hudInfoContainer.quit = new Button(BUTTON_QUIT_TOPLEFT_X, BUTTON_QUIT_TOPLEFT_Y,
+     BUTTON_QUIT_WIDTH, BUTTON_QUIT_HEIGHT, BUTTON_MENU, "quit", false, "Quit Game", game);
+
     SDL_Texture* gameCursor = loadImage(UI_GAME_CURSOR_LOCATION, renderer);
 
 
@@ -101,6 +114,10 @@ int main(int argc, char const *argv[]) {
         while (SDL_PollEvent(&eventHandler) != 0) { // check each event instance to ensure the game is not quit
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
                 gameRunning = false;
+            } else if (eventHandler.type == SDL_KEYDOWN) {
+                if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
+                    paused = true;
+                }
             }
         }
 
@@ -110,6 +127,7 @@ int main(int argc, char const *argv[]) {
                 messageType = game->getInput();
                 if (messageType != MESSAGE_CONF_CONNECTION && messageType != MESSAGE_NONE) {
                     inMenu = false;
+                    menu->reset();
                 }
                 inputs++;
             }
@@ -133,6 +151,7 @@ int main(int argc, char const *argv[]) {
                 gameRunning = false;
             } else if (menuAction == MENU_LAUNCH) {
                 inMenu = false;
+                menu->reset();
                 game->initialize();
             }
         } else {
@@ -144,7 +163,42 @@ int main(int argc, char const *argv[]) {
                 // update the state of the controlled character
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
                     if ((*character)->getID() == game->getID()) {
-                        (*character)->updateState(&eventHandler, game);
+                        if (paused == false) {
+                            mousePressed = false;
+                            (*character)->updateState(&eventHandler, game);
+                        } else {
+                            coordSet mouseCoords = getMouseCoordinates(game);
+                            int mX = mouseCoords.x;
+                            int mY = mouseCoords.y;
+                            bool press;
+                            bool mDown = SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT);
+                            if (mDown == true && mousePressed == false) {
+                                press = true;
+                            } else {
+                                press = false;
+                            }
+                            mousePressed = mDown;
+                            if (mDown == true && mousePressed == false);
+                            if (hudInfoContainer.resume->mouseHover(mX, mY) == true) {
+                                hudInfoContainer.resume->setActive(true);
+                                if (press == true) {
+                                    paused = false;
+                                }
+                            } else {
+                                hudInfoContainer.resume->setActive(false);
+                            }
+
+                            if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
+                                hudInfoContainer.quit->setActive(true);
+                                if (press == true) {
+                                    paused = false;
+                                    inMenu = true;
+                                    gameOver = true;
+                                }
+                            } else {
+                                hudInfoContainer.quit->setActive(false);
+                            }
+                        }
                     } else {
                         (*character)->updateState(game->getActions((*character)->getID()), game);
                     }
@@ -171,8 +225,40 @@ int main(int argc, char const *argv[]) {
                 }
                 projectileList = newList; // store remaining projectiles
                 game->sendUpdate();
-            } else {
+            } else if (paused == false) {
                 game->sendUserActions();
+            } else {
+                coordSet mouseCoords = getMouseCoordinates(game);
+                int mX = mouseCoords.x;
+                int mY = mouseCoords.y;
+                bool press;
+                bool mDown = SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT);
+                if (mDown == true && mousePressed == false) {
+                    press = true;
+                } else {
+                    press = false;
+                }
+                mousePressed = mDown;
+                if (mDown == true && mousePressed == false);
+                if (hudInfoContainer.resume->mouseHover(mX, mY) == true) {
+                    hudInfoContainer.resume->setActive(true);
+                    if (press == true) {
+                        paused = false;
+                    }
+                } else {
+                    hudInfoContainer.resume->setActive(false);
+                }
+
+                if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
+                    hudInfoContainer.quit->setActive(true);
+                    if (press == true) {
+                        paused = false;
+                        inMenu = true;
+                        gameOver = true;
+                    }
+                } else {
+                    hudInfoContainer.quit->setActive(false);
+                }
             }
 
             for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
@@ -197,25 +283,18 @@ int main(int argc, char const *argv[]) {
             renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
                 if ((*character)->getID() == game->getID()) {
-                    renderGameUI(game, *character, hudInfoContainer); // draw the HUD
+                    renderGameUI(game, *character, hudInfoContainer, paused); // draw the HUD
                 }
             }
 
             // draw the cursor to the screen
             SDL_Rect screen = { 0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT };
             SDL_RenderSetViewport(game->renderer(), &screen);
-            double ratio;
-            if ((double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT <
-                (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT) {
-                ratio = (double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT;
-            }
-            else {
-                ratio = (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT;
-            }
-            int x, y;
-            SDL_GetMouseState(&x, &y);
-            x /= ratio;
-            y /= ratio;
+            
+            coordSet mouseCoords = getMouseCoordinates(game);
+            int x = mouseCoords.x;
+            int y = mouseCoords.y;
+            
             SDL_Rect cursorRect = { x - UI_CURSOR_WIDTH / 2, y - UI_CURSOR_HEIGHT / 2, UI_CURSOR_WIDTH, UI_CURSOR_HEIGHT };
             SDL_SetTextureColorMod(gameCursor, game->secondaryColors().red,
                 game->secondaryColors().green, game->secondaryColors().blue);
@@ -223,6 +302,15 @@ int main(int argc, char const *argv[]) {
         }
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
+
+        if (gameOver == true) {
+            gameOver = false;
+            if (game->hosting() == true) {
+                game->endSession();
+            } else {
+                game->leaveMatch(); 
+            }
+        }
 
         frameEnd = SDL_GetTicks();
         if (frameEnd - frameStart < SCREEN_TICKRATE) {
@@ -238,7 +326,7 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    quitGame(window, game); // quit the game when the session finishes
+    quitGame(window, game, hudInfoContainer); // quit the game when the session finishes
 
     return EXIT_SUCCESS; // return success if the program terminates correctly
 }
@@ -349,7 +437,7 @@ connection UDPConnectionServer::recieve(string* field) {
 
 /* -------------------------- FUNCTIONS ------------------------- */
 
-void quitGame(SDL_Window* window, Game* game) {
+void quitGame(SDL_Window* window, Game* game, hudInfo hudInfoContainer) {
     SDL_DestroyWindow(window); // destroy the window
                                // go through all game objects, clearing any memory used and destroying them
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
@@ -361,6 +449,11 @@ void quitGame(SDL_Window* window, Game* game) {
     for (auto wall = game->walls()->begin(); wall != game->walls()->end(); wall++) {
         delete *wall;
     }
+
+    delete hudInfoContainer.resume;
+    delete hudInfoContainer.quit;
+    SDL_DestroyTexture(hudInfoContainer.pauseText);
+
     delete game;
     SDL_Quit();
     SDLNet_Quit();
@@ -438,6 +531,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
         if (output == NULL) { // check the image converted correctly
             cout << "Surface failed conversion to texture.\nSDL_Error " << SDL_GetError();
         }
+        SDL_SetTextureBlendMode(output, SDL_BLENDMODE_BLEND);
         SDL_FreeSurface(surfaceAtPath); // remove the surface now that it is no longer needed
     }
     return output;
@@ -565,7 +659,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
 
 }
 
-void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer) {
+void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, bool paused) {
     // draw the game HUD to the screen
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
 
@@ -688,6 +782,21 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer) {
     for (int i = 1; i<CHARACTER_MAX_HP; i++) {
         elementRect.x = ((double)HUD_HEALTH_WIDTH / CHARACTER_MAX_HP)*i - ((double)elementRect.w / 2.0);
         SDL_RenderFillRect(game->renderer(), &elementRect);
+    }
+
+    if (paused == true) {
+        SDL_Rect pauseMenu = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
+        SDL_RenderSetViewport(game->renderer(), &pauseMenu);
+        SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red*UI_PAUSE_COLOR_MUL,
+         game->secondaryColors().green*UI_PAUSE_COLOR_MUL,
+         game->secondaryColors().blue*UI_PAUSE_COLOR_MUL, UI_PAUSE_ALPHA);
+        SDL_SetRenderDrawBlendMode(game->renderer(), SDL_BLENDMODE_BLEND);
+        SDL_RenderFillRect(game->renderer(), &pauseMenu);
+
+        SDL_Rect pauseText = {UI_PAUSE_TOPLEFT_X, UI_PAUSE_TOPLEFT_Y, UI_PAUSE_WIDTH, UI_PAUSE_HEIGHT};
+        SDL_RenderCopy(game->renderer(), hudInfoContainer.pauseText, NULL, &pauseText);
+        hudInfoContainer.resume->render(game);
+        hudInfoContainer.quit->render(game);
     }
 }
 
@@ -850,6 +959,22 @@ int sizeOfProj(forward_list<Projectile*>* list) {
     return size;
 }
 
+coordSet getMouseCoordinates(Game* game) {
+    coordSet coords;
+    SDL_GetMouseState(&coords.x, &coords.y);
+    double ratio;
+    if ((double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT <
+        (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT) {
+        ratio = (double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT;
+    }
+    else {
+        ratio = (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT;
+    }
+    coords.x /= ratio;
+    coords.y /= ratio;
+    return coords;
+}
+
 /* -------------------------- CLASSES --------------------------- */
 
 
@@ -983,6 +1108,7 @@ Game::~Game(void) {
 
 void Game::setSockets(void) {
     numPlayers = 0;
+    nextID = 1;
     if (isHost == true) {
         myID = CHARACTER_MAIN_ID;
         nextID = myID + 1;
@@ -1029,6 +1155,7 @@ void Game::endSession(void) {
     // tell clients that the host is no longer playing
     server->send(to_string(MESSAGE_QUIT), currPlayers, numPlayers);
     numPlayers = 0;
+    nextID = 1;
     connected = false;
 
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1268,8 +1395,8 @@ void Game::updatePlayers(string serverString) {
         currState.dmY = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
         currIndex += MESSAGE_LOC_CHAR;
 
-        currState.id = stoi(serverString.substr(currIndex, 1));
-        currIndex++;
+        currState.id = stoi(serverString.substr(currIndex, MESSAGE_ID_CHAR));
+        currIndex += MESSAGE_ID_CHAR;
         currState.weapID = stoi(serverString.substr(currIndex, 1));
         currIndex++;
         currState.ammo = stoi(serverString.substr(currIndex, MESSAGE_STAT_CHAR));
@@ -1410,14 +1537,24 @@ void Game::updateSecColors(string newColor) {
 }
 
 void Game::updateWindow(int w, int h, bool full) {
-    if (fullscreen != full) {
-        SDL_SetWindowFullscreen(*gameWindow, full);
-        fullscreen = full;
-    }
+    cout << fullscreen << " " << full << "\n";
     SDL_SetWindowSize(*gameWindow, w, h);
     swidth = w;
     sheight = h;
-    SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
+    if (full == true) {
+        SDL_SetWindowFullscreen(*gameWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    } else {
+        SDL_SetWindowFullscreen(*gameWindow, 0);
+    }
+    if (full == true) {
+        SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
+    } else {
+        swidthActual = w;
+        sheightActual = h;
+    }
+    fullscreen = full;
+    //SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
+    cout << swidth << " " << swidthActual << "\n";
 }
 
 
@@ -1428,32 +1565,32 @@ Menu::Menu(Game* game) {
     currMenu = MENU_MAIN;
     mainMenu = new MainPage(game);
     optionMenu = new OptionPage(game);
+    tutorial = new TutorialPage(game);
     mouseDown = false;
 }
 
 Menu::~Menu(void) {
     delete mainMenu;
     delete optionMenu;
+    delete tutorial;
+}
+
+void Menu::reset(void) {
+    currMenu = MENU_MAIN;
+    mainMenu->reset();
+    optionMenu->reset();
+    tutorial->reset();
+    mouseDown = true;
 }
 
 int Menu::update(Game* game) {
     int action = MENU_NONE;
-    int x, y;
+    coordSet mouseCoords = getMouseCoordinates(game);
+    int x = mouseCoords.x;
+    int y = mouseCoords.y;
 
     // get mouse coordinates, and check whether the LMB is pressed this frame
-    bool mousePress = SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT);
-
-    // scale the mouse coordinates to the natural size from the scaled size (the size of the window)
-    double ratio;
-    if ((double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT <
-        (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT) {
-        ratio = (double)game->screenHeight() / SCREEN_HEIGHT_DEFAULT;
-    }
-    else {
-        ratio = (double)game->screenWidth() / SCREEN_WIDTH_DEFAULT;
-    }
-    x /= ratio;
-    y /= ratio;
+    bool mousePress = SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT);
 
     // check whether the mouse was pressed this frame
     bool press = false;
@@ -1467,6 +1604,8 @@ int Menu::update(Game* game) {
         action = mainMenu->update(x, y, press);
     } else if (currMenu == MENU_OPTIONS) {
         action = optionMenu->update(x, y, press, game);
+    } else if (currMenu == MENU_CONTROLS) {
+        action = tutorial->update(x, y, press);
     }
 
     if (currMenu == MENU_OPTIONS && action != MENU_NONE) {
@@ -1477,6 +1616,8 @@ int Menu::update(Game* game) {
         currMenu = MENU_MAIN;
     } else if (action == MENU_SET_OPTIONS) {
         currMenu = MENU_OPTIONS;
+    } else if (action == MENU_SET_CONTROLS) {
+        currMenu = MENU_CONTROLS;
     }
 
     return action;
@@ -1501,6 +1642,8 @@ void Menu::render(Game* game) {
         mainMenu->render(game);
     } else if (currMenu == MENU_OPTIONS) {
         optionMenu->render(game);
+    } else if (currMenu == MENU_CONTROLS) {
+        tutorial->render(game);
     }
 }
 
@@ -1508,12 +1651,34 @@ void Menu::render(Game* game) {
 MainPage::MainPage(Game* game) {
     heading = loadText("Game", UI_FONT_SIZE, game->renderer());
 
-    playButton = new Button(100, 100, 200, 50, false,
-     {0,0,0}, {0,0,0}, BUTTON_MENU, "play", "Play", game);
-    optionButton = new Button(100, 200, 200, 50, false,
-     {0,0,0}, {0,0,0}, BUTTON_MENU, "options", "Options", game);
-    quitButton = new Button(100, 300, 200, 50, false,
-     {0,0,0}, {0,0,0}, BUTTON_RADIO, "quit", "Quit Game", game);
+    playButton = new Button(BUTTON_MAIN_TOPLEFT_X, BUTTON_MAIN_TOPLEFT_Y, BUTTON_MAIN_WIDTH,
+     BUTTON_MAIN_HEIGHT, BUTTON_MENU, "play", false, "Play", game);
+    optionButton = new Button(BUTTON_MAIN_TOPLEFT_X,
+     BUTTON_MAIN_TOPLEFT_Y+BUTTON_MAIN_HEIGHT+BUTTON_MAIN_GAP, BUTTON_MAIN_WIDTH,
+     BUTTON_MAIN_HEIGHT, BUTTON_MENU, "options", false, "Options", game);
+    controlButton = new Button(BUTTON_MAIN_TOPLEFT_X,
+     BUTTON_MAIN_TOPLEFT_Y+(BUTTON_MAIN_HEIGHT+BUTTON_MAIN_GAP)*2, BUTTON_MAIN_WIDTH,
+     BUTTON_MAIN_HEIGHT, BUTTON_MENU, "control", false, "Controls", game);
+    quitButton = new Button(BUTTON_MAIN_TOPLEFT_X,
+     BUTTON_MAIN_TOPLEFT_Y+(BUTTON_MAIN_HEIGHT+BUTTON_MAIN_GAP)*3, BUTTON_MAIN_WIDTH,
+     BUTTON_MAIN_HEIGHT, BUTTON_MENU, "quit", false, "Quit Game", game);
+
+
+    hostInfo = loadText(UI_HOST, UI_FONT_SIZE, game->renderer());
+    hostSelect = new Button(BUTTON_HOST_TOPLEFT_X, BUTTON_HOST_TOPLEFT_Y,
+     BUTTON_HOST_WIDTH, BUTTON_HOST_HEIGHT, BUTTON_RADIO, "host", true, "", game);
+    clientSelect = new Button(BUTTON_CLIENT_TOPLEFT_X, BUTTON_CLIENT_TOPLEFT_Y,
+     BUTTON_CLIENT_WIDTH, BUTTON_CLIENT_HEIGHT, BUTTON_RADIO, "client", true, "", game);
+    hostSelect->setActive(true);
+
+    weaponInfo = loadText(UI_WEAPON, UI_FONT_SIZE, game->renderer());
+    pistolSelect = new Button(BUTTON_PISTOL_TOPLEFT_X, BUTTON_PISTOL_TOPLEFT_Y,
+     BUTTON_PISTOL_WIDTH, BUTTON_PISTOL_HEIGHT, BUTTON_RADIO, "pistol", true, "", game);
+    rifleSelect = new Button(BUTTON_AR_TOPLEFT_X, BUTTON_AR_TOPLEFT_Y,
+     BUTTON_AR_WIDTH, BUTTON_AR_HEIGHT, BUTTON_RADIO, "rifle", true, "", game);
+    shotgunSelect = new Button(BUTTON_SHOTGUN_TOPLEFT_X, BUTTON_SHOTGUN_TOPLEFT_Y,
+     BUTTON_SHOTGUN_WIDTH, BUTTON_SHOTGUN_HEIGHT, BUTTON_RADIO, "shotgun", true, "", game);
+    pistolSelect->setActive(true);
 
     // ADD
     /*
@@ -1526,42 +1691,109 @@ MainPage::MainPage(Game* game) {
 MainPage::~MainPage(void) {
     delete playButton;
     delete optionButton;
+    delete controlButton;
     delete quitButton;
+}
+
+void MainPage::reset(void) {
+    playButton->setActive(false);
+    optionButton->setActive(false);
+    controlButton->setActive(false);
+    quitButton->setActive(false);
 }
 
 int MainPage::update(int x, int y, bool press) {
     int action = MENU_NONE;
-    if (playButton->mouseHover(x, y) == true && press == true) {
+    if (playButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_LAUNCH;
+        }
         playButton->setActive(true);
-        action = MENU_LAUNCH;
     } else {
         playButton->setActive(false);
     }
-    if (optionButton->mouseHover(x, y) == true && press == true) {
+
+    if (optionButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_SET_OPTIONS;
+        }
         optionButton->setActive(true);
-        action = MENU_SET_OPTIONS;
     } else {
         optionButton->setActive(false);
     }
-    if (quitButton->mouseHover(x, y) == true && press == true) {
+
+    if (controlButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_SET_CONTROLS;
+        }
+        controlButton->setActive(true);
+    } else {
+        controlButton->setActive(false);
+    }
+
+    if (quitButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_QUIT;
+        }
         quitButton->setActive(true);
-        action = MENU_QUIT;
     } else {
         quitButton->setActive(false);
     }
+
+    if (hostSelect->mouseHover(x, y) == true && press == true) {
+        hostSelect->setActive(true);
+        clientSelect->setActive(false);
+    } else if (clientSelect->mouseHover(x, y) == true && press == true) {
+        hostSelect->setActive(false);
+        clientSelect->setActive(true);
+    }
+
+    if (pistolSelect->mouseHover(x, y) == true && press == true) {
+        pistolSelect->setActive(true);
+        rifleSelect->setActive(false);
+        shotgunSelect->setActive(false);
+    } else if (rifleSelect->mouseHover(x, y) == true && press == true) {
+        pistolSelect->setActive(false);
+        rifleSelect->setActive(true);
+        shotgunSelect->setActive(false);
+    } else if (shotgunSelect->mouseHover(x, y) == true && press == true) {
+        pistolSelect->setActive(false);
+        rifleSelect->setActive(false);
+        shotgunSelect->setActive(true);
+    }
+
     return action;
 }
 
 void MainPage::render(Game* game) {
-    SDL_SetTextureColorMod(heading, game->primaryColors().red, 0,
-     0);
-    SDL_Rect header = {25, 25, 200, 50};
+    // draw the banner
+    SDL_Rect header = {MAIN_HEADER_TOPLEFT_X, MAIN_HEADER_TOPLEFT_Y,
+     MAIN_HEADER_WIDTH, MAIN_HEADER_HEIGHT};
     SDL_RenderCopy(game->renderer(), heading, NULL, &header);
 
-
+    // draw the navigation buttons
     playButton->render(game);
     optionButton->render(game);
+    controlButton->render(game);
     quitButton->render(game);
+
+
+    // draw the host/client selector
+    SDL_Rect hcSelector = {UI_HOST_TOPLEFT_X, UI_HOST_TOPLEFT_Y,
+     UI_HOST_WIDTH, UI_HOST_HEIGHT};
+    SDL_RenderCopy(game->renderer(), hostInfo, NULL, &hcSelector);
+
+    hostSelect->render(game);
+    clientSelect->render(game);
+
+    // draw the weapon selector
+    SDL_Rect weapSelector = {UI_WEAPON_TOPLEFT_X, UI_WEAPON_TOPLEFT_Y,
+     UI_WEAPON_WIDTH, UI_WEAPON_HEIGHT};
+    SDL_RenderCopy(game->renderer(), weaponInfo, NULL, &weapSelector);
+
+    pistolSelect->render(game);
+    rifleSelect->render(game);
+    shotgunSelect->render(game);
 }
 
 OptionPage::OptionPage(Game* game) {
@@ -1572,10 +1804,10 @@ OptionPage::OptionPage(Game* game) {
     secText = loadText(OPTIONS_SECTEXT, UI_FONT_SIZE, game->renderer());
 
     backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
-     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_MENU, "back", "Back", game);
+     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
 
     fullscreenButton = new Button(BUTTON_FULL_TOPLEFT_X, BUTTON_FULL_TOPLEFT_Y,
-     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO, "fullscreen", "", game);
+     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, BUTTON_RADIO, "fullscreen", false, "", game);
     fullscreenButton->setActive(game->isFullscreen());
 
     int shiftX;
@@ -1587,7 +1819,7 @@ OptionPage::OptionPage(Game* game) {
         colorSet secondary = COLOR_VALUES[COLOR_NAMES[i]]*BUTTON_COLOR_SEC_MULTIPLIER;
         primSelector[i] = new Button(BUTTON_COLOR_PRIM_TOPLEFT_X+shiftX,
          BUTTON_COLOR_PRIM_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
-        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[i], "", game);
+        BUTTON_COLOR_WIDTH, primary, secondary, BUTTON_RADIO, COLOR_NAMES[i]);
 
         if (COLOR_NAMES[i] == game->primColor()) {
             primSelector[i]->setActive(true);
@@ -1601,7 +1833,7 @@ OptionPage::OptionPage(Game* game) {
         colorSet secondary = COLOR_VALUES[COLOR_NAMES[j]]*BUTTON_COLOR_SEC_MULTIPLIER;
         secSelector[j] = new Button(BUTTON_COLOR_SEC_TOPLEFT_X+shiftX,
          BUTTON_COLOR_SEC_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
-        BUTTON_COLOR_WIDTH, true, primary, secondary, BUTTON_RADIO, COLOR_NAMES[j], "", game);
+        BUTTON_COLOR_WIDTH, primary, secondary, BUTTON_RADIO, COLOR_NAMES[j]);
 
         if (COLOR_NAMES[j] == game->secColor()) {
             secSelector[j]->setActive(true);
@@ -1614,8 +1846,8 @@ OptionPage::OptionPage(Game* game) {
         text << to_string(UI_RESOLUTIONS[k]) << " X " << to_string((int)(UI_RESOLUTIONS[k]*UI_RESOLUTION_MULTIPLIER));
         int shiftY = k*(BUTTON_RES_GAP+BUTTON_RES_HEIGHT);
         resSelector[k] = new Button(BUTTON_RES_TOPLEFT_X, BUTTON_RES_TOPLEFT_Y+shiftY,
-         BUTTON_RES_WIDTH, BUTTON_RES_HEIGHT, false, {0,0,0}, {0,0,0}, BUTTON_RADIO,
-         to_string(UI_RESOLUTIONS[k]), text.str(), game);
+         BUTTON_RES_WIDTH, BUTTON_RES_HEIGHT, BUTTON_RADIO,
+         to_string(UI_RESOLUTIONS[k]), false, text.str(), game);
 
         if (UI_RESOLUTIONS[k] == game->configScreenHeight()) {
             resSelector[k]->setActive(true);
@@ -1631,11 +1863,17 @@ OptionPage::~OptionPage(void) {
     }
 }
 
+void OptionPage::reset(void) {
+    backButton->setActive(false);
+}
+
 int OptionPage::update(int x, int y, bool press, Game* game) {
     int action = MENU_NONE;
-    if (backButton->mouseHover(x, y) == true && press == true) {
+    if (backButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_SET_MAIN;
+        }
         backButton->setActive(true);
-        action = MENU_SET_MAIN;
     } else {
         backButton->setActive(false);
     }
@@ -1763,16 +2001,45 @@ void OptionPage::render(Game* game) {
     }
 }
 
+TutorialPage::TutorialPage(Game* game) {
+    backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
+     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
+}
+
+TutorialPage::~TutorialPage(void) {
+    delete backButton;
+}
+
+void TutorialPage::reset(void) {
+    backButton->setActive(false);
+}
+
+int TutorialPage::update(int x, int y, bool press) {
+    int action = MENU_NONE;
+    if (backButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_SET_MAIN;
+        }
+        backButton->setActive(true);
+    } else {
+        backButton->setActive(false);
+    }
+    return action;
+}
+
+void TutorialPage::render(Game* game) {
+    backButton->render(game);
+}
 
 
-Button::Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
- const colorSet sec, int type, const string name, string text, Game* game) {
+Button::Button(int x, int y, int w, int h, const colorSet prim,
+ const colorSet sec, int type, const string name) {
     location.x = x;
     location.y = y;
     location.w = w;
     location.h = h;
 
-    fixedColor = useFixed;
+    fixedColor = true;
     colorPrim = prim;
     colorSec = sec;
     selected = false;
@@ -1780,9 +2047,33 @@ Button::Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
     buttonType = type;
     id = name;
 
+    displayText = NULL;
+    textLen = 0;
+}
+
+Button::Button(int x, int y, int w, int h, int type, const string name,
+ bool useImg, string text, Game* game) {
+    location.x = x;
+    location.y = y;
+    location.w = w;
+    location.h = h;
+
+    fixedColor = false;
+    colorPrim = {0,0,0};
+    colorSec = {0,0,0};
+    selected = false;
+
+    buttonType = type;
+    id = name;
+
     if (text != "") {
-        displayText = loadText(text.c_str(), UI_FONT_SIZE, game->renderer());
-        textLen = text.length();
+        if (useImg == false) {
+            displayText = loadText(text, UI_FONT_SIZE, game->renderer());
+            textLen = text.length();
+        } else {
+            displayText = NULL;
+            textLen = 0;
+        }
     } else {
         displayText = NULL;
         textLen = 0;
@@ -1810,7 +2101,7 @@ void Button::render(Game* game) {
         prim = game->primaryColors();
         sec = game->secondaryColors();
     }
-    if (buttonType == BUTTON_MENU) {   
+    if (buttonType == BUTTON_MENU) {
         prim = prim * BUTTON_MENU_COLOR_MULTIPLIER;
         sec = sec * BUTTON_MENU_COLOR_MULTIPLIER;
         if (selected == false) {
@@ -2346,7 +2637,7 @@ string Player::getStateString(void) {
     statestring << strOfLen(deathMarker->getX(), MESSAGE_LOC_CHAR);
     statestring << strOfLen(deathMarker->getY(), MESSAGE_LOC_CHAR);
 
-    statestring << id;
+    statestring << strOfLen(id, MESSAGE_ID_CHAR);
     statestring << weapID;
     statestring << strOfLen(weapon->getCurrAmmo(), MESSAGE_STAT_CHAR);
     statestring << strOfLen(weapon->getReloadFrames(), MESSAGE_FRAMES_CHAR);

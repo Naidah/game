@@ -1,6 +1,5 @@
-swidth=1156
-sheight=650
-fullscreen=0
-ishost=1
-primaryColor=white
-secondaryColor=blue
+swidth=622
+sheight=350
+fullscreen=1
+primaryColor=orange
+secondaryColor=white

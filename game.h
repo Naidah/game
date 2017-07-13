@@ -3,6 +3,23 @@
 
 using namespace std;
 
+// declarations of different classes
+class Game;
+class Menu;
+class MainPage;
+class OptionPage;
+class TutorialPage;
+class Button;
+class Player;
+class DeathObject;
+class Weapon;
+class Wall;
+class Projectile;
+class BulletExplosion;
+class MapBox;
+class UDPConnectionServer;
+class UDPConnectionClient;
+
 
 typedef struct _direction {
     int x;
@@ -30,6 +47,9 @@ bool operator==(const connection lhs, const connection rhs) {
 typedef struct _hudInfo {
     SDL_Texture* ammoIcon;
     SDL_Texture* cooldownIcon;
+    SDL_Texture* pauseText;
+    Button* resume;
+    Button* quit;
 } hudInfo;
 
 typedef struct _colorSet {
@@ -109,7 +129,7 @@ const int COLOR_RED_BLUE = 0;
 // green
 const string COLOR_GREEN_NAME = "green";
 const int COLOR_GREEN_RED = 0;
-const int COLOR_GREEN_GREEN = 255;
+const int COLOR_GREEN_GREEN = 200;
 const int COLOR_GREEN_BLUE = 0;
 
 // blue
@@ -378,7 +398,31 @@ const int UI_CURSOR_WIDTH = 24;
 const int UI_CURSOR_HEIGHT = 24;
 
 const int UI_FONT_SIZE = 120; // affects detail and size of the text loaded
-const double UI_FONT_HEIGHT_TO_WIDTH = 0.6;
+const double UI_FONT_HEIGHT_TO_WIDTH = 0.5;
+
+const int UI_PAUSE_ALPHA = 175;
+const double UI_PAUSE_COLOR_MUL = 0.4;
+
+const string UI_HOST = "Host:";
+const int UI_HOST_LEN = UI_HOST.length();
+const int UI_HOST_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+const int UI_HOST_WIDTH = UI_HOST_LEN*UI_HOST_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int UI_HOST_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7;
+const int UI_HOST_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.25;
+
+const string UI_WEAPON = "Weapon:";
+const int UI_WEAPON_LEN = UI_WEAPON.length();
+const int UI_WEAPON_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+const int UI_WEAPON_WIDTH = UI_WEAPON_LEN*UI_WEAPON_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int UI_WEAPON_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7;
+const int UI_WEAPON_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.55;
+
+const string UI_PAUSE_TEXT = "Game Paused";
+const int UI_PAUSE_LEN = UI_PAUSE_TEXT.length();
+const int UI_PAUSE_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.25;
+const int UI_PAUSE_WIDTH = UI_PAUSE_LEN*UI_PAUSE_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int UI_PAUSE_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-UI_PAUSE_WIDTH)/2;
+const int UI_PAUSE_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.03;
 
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
@@ -413,12 +457,47 @@ const int MENU_LAUNCH = 2;
 const int MENU_SET_MAIN = 3;
 const int MENU_SET_OPTIONS = 4;
 const int MENU_SET_LOBBY = 5;
+const int MENU_SET_LOBBY_HOST = 6;
+const int MENU_SET_CONTROLS = 7;
 
 enum BUTTON_TYPE {
     BUTTON_MENU,
     BUTTON_RADIO
 };
 const int BUTTON_OUTLINE_WIDTH = 10;
+
+const int BUTTON_MAIN_WIDTH = SCREEN_WIDTH_DEFAULT*0.4;
+const int BUTTON_MAIN_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.11;
+const int BUTTON_MAIN_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-BUTTON_MAIN_WIDTH)/2-SCREEN_WIDTH_DEFAULT*0.1;
+const int BUTTON_MAIN_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.3;
+const int BUTTON_MAIN_GAP = SCREEN_HEIGHT_DEFAULT*0.04;
+
+const int BUTTON_HOST_WIDTH = SCREEN_WIDTH_DEFAULT*0.08;
+const int BUTTON_HOST_HEIGHT = BUTTON_HOST_WIDTH;
+const int BUTTON_HOST_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7;
+const int BUTTON_HOST_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.35;
+
+const int BUTTON_CLIENT_WIDTH = BUTTON_HOST_WIDTH;
+const int BUTTON_CLIENT_HEIGHT = BUTTON_HOST_HEIGHT;
+const int BUTTON_CLIENT_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7+BUTTON_HOST_WIDTH+SCREEN_WIDTH_DEFAULT*0.05;
+const int BUTTON_CLIENT_TOPLEFT_Y = BUTTON_HOST_TOPLEFT_Y;
+
+const int BUTTON_PISTOL_WIDTH = SCREEN_WIDTH_DEFAULT*0.06;
+const int BUTTON_PISTOL_HEIGHT = BUTTON_PISTOL_WIDTH;
+const int BUTTON_PISTOL_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7;
+const int BUTTON_PISTOL_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.65;
+
+const int BUTTON_AR_WIDTH = BUTTON_PISTOL_WIDTH;
+const int BUTTON_AR_HEIGHT = BUTTON_PISTOL_HEIGHT;
+const int BUTTON_AR_TOPLEFT_X = BUTTON_PISTOL_TOPLEFT_X+BUTTON_PISTOL_WIDTH+SCREEN_WIDTH_DEFAULT*0.03;
+const int BUTTON_AR_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.65;
+
+const int BUTTON_SHOTGUN_WIDTH = BUTTON_PISTOL_WIDTH;
+const int BUTTON_SHOTGUN_HEIGHT = BUTTON_PISTOL_HEIGHT;
+const int BUTTON_SHOTGUN_TOPLEFT_X = BUTTON_AR_TOPLEFT_X+BUTTON_AR_WIDTH+SCREEN_WIDTH_DEFAULT*0.03;
+const int BUTTON_SHOTGUN_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.65;
+
+
 
 const int BUTTON_BACK_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.05;
 const int BUTTON_BACK_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.85;
@@ -448,6 +527,26 @@ const int BUTTON_RES_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.075;
 const int BUTTON_RES_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.12;
 const int BUTTON_RES_TOPLEFT_Y = SCREEN_WIDTH_DEFAULT*0.15;
 const int BUTTON_RES_GAP = SCREEN_HEIGHT_DEFAULT*0.035;
+
+
+const int BUTTON_RESUME_WIDTH = SCREEN_WIDTH_DEFAULT*0.6;
+const int BUTTON_RESUME_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.175;
+const int BUTTON_RESUME_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-BUTTON_RESUME_WIDTH)/2;
+const int BUTTON_RESUME_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.45;
+
+const int BUTTON_QUIT_WIDTH = BUTTON_RESUME_WIDTH;
+const int BUTTON_QUIT_HEIGHT = BUTTON_RESUME_HEIGHT;
+const int BUTTON_QUIT_TOPLEFT_X = BUTTON_RESUME_TOPLEFT_X;
+const int BUTTON_QUIT_TOPLEFT_Y = BUTTON_RESUME_TOPLEFT_Y+BUTTON_RESUME_HEIGHT+SCREEN_HEIGHT_DEFAULT*0.05;
+
+
+const string MAIN_HEADER = "Game";
+const int MAIN_HEADER_LEN = MAIN_HEADER.length();
+const int MAIN_HEADER_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.25;
+const int MAIN_HEADER_WIDTH = MAIN_HEADER_LEN*MAIN_HEADER_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int MAIN_HEADER_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-MAIN_HEADER_WIDTH)/2;
+const int MAIN_HEADER_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.03;
+
 
 
 const string OPTIONS_HEADER = "Options";
@@ -589,10 +688,10 @@ const int MESSAGE_EXPLOSION = 5;
 const int MESSAGE_CLIENT_ACTION = 6;
 const int MESSAGE_QUIT = 7;
 
-const int MESSAGE_PLAYER_LEN = 55;
+const int MESSAGE_PLAYER_LEN = 57;
 
 // amounts of characters used to represent different variables types in networking strings
-const int MESSAGE_ID_CHAR = 2;
+const int MESSAGE_ID_CHAR = 3;
 const int MESSAGE_LOC_CHAR = 4;
 const int MESSAGE_ANGLE_CHAR = 3;
 const int MESSAGE_FRAMES_CHAR = 5;
@@ -625,22 +724,6 @@ typedef char charbuff[CHARBUFF_LENGTH];
 
 
 /*-------------------------- Class Definitions -------------------------*/
-
-// declarations of different classes
-class Game;
-class Menu;
-class MainPage;
-class OptionPage;
-class Button;
-class Player;
-class DeathObject;
-class Weapon;
-class Wall;
-class Projectile;
-class BulletExplosion;
-class MapBox;
-class UDPConnectionServer;
-class UDPConnectionClient;
 
 // Class definitions
 class Game {
@@ -769,7 +852,8 @@ protected:
     enum MENU_TYPES {
         MENU_MAIN,
         MENU_LOBBY,
-        MENU_OPTIONS
+        MENU_OPTIONS,
+        MENU_CONTROLS
     };
     int currMenu;
 
@@ -777,9 +861,11 @@ protected:
 
     MainPage* mainMenu;
     OptionPage* optionMenu;
+    TutorialPage* tutorial;
 public:
     Menu(Game* game);
     ~Menu(void);
+    void reset(void);
     int update(Game* game);
     void render(Game* game);
 };
@@ -790,11 +876,22 @@ protected:
 
     Button* playButton;
     Button* optionButton;
+    Button* controlButton;
     Button* quitButton;
+
+    SDL_Texture* hostInfo;
+    Button* hostSelect;
+    Button* clientSelect;
+
+    SDL_Texture* weaponInfo;
+    Button* pistolSelect;
+    Button* rifleSelect;
+    Button* shotgunSelect;
 public:
     MainPage(Game* game);
     ~MainPage(void);
 
+    void reset(void);
     int update(int x, int y, bool press);
     void render(Game* game);
 };
@@ -817,8 +914,21 @@ public:
     OptionPage(Game* game);
     ~OptionPage(void);
 
+    void reset(void);
     int update(int x, int y, bool press, Game* game);
     void updateGame(Game* game);
+    void render(Game* game);
+};
+
+class TutorialPage {
+protected:
+    Button* backButton;
+public:
+    TutorialPage(Game* game);
+    ~TutorialPage(void);
+
+    void reset(void);
+    int update(int x, int y, bool press);
     void render(Game* game);
 };
 
@@ -838,8 +948,10 @@ protected:
     int textLen;
     SDL_Texture* displayText;
 public:
-    Button(int x, int y, int w, int h, bool useFixed, const colorSet prim,
-     const colorSet sec, int type, string name, string text, Game* game);
+    Button(int x, int y, int w, int h, const colorSet prim,
+     const colorSet sec, int type, const string name);
+    Button(int x, int y, int w, int h, int type, const string name,
+     bool useImg, string text, Game* game);
     ~Button(void);
     bool mouseHover(int x, int y);
     void render(Game* game);
@@ -1190,9 +1302,10 @@ public:
 
 /*--------------------- Function definitions -------------------------*/
 
-void quitGame(SDL_Window* window, Game* game); // frees any used memory at the end of runtime
+void quitGame(SDL_Window* window, Game* game, hudInfo hudInfoContainer); // frees any used memory at the end of runtime
 bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game); // initializes the same (including SDL)
 SDL_Texture* loadImage(string path, SDL_Renderer* renderer); // loads a image from path path and return the pointer to it
+SDL_Texture* loadText(string content, int size, SDL_Renderer* renderer);
 double distBetweenPoints(int x1, int y1, int x2, int y2); // finds the distance between (x1, y1) and (x2,  y2)
 int getInterceptX(int x1, int y1, int x2, int y2, int interceptY); // finds the x-intercept of a line between (x1, y1) and (x2,  y2) at the y point interceptY
 int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the y-intercept of a line between (x1, y1) and (x2,  y2) at the x point interceptX
@@ -1201,7 +1314,7 @@ bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius 
 void renderGameSpace(Game* game, forward_list<BulletExplosion*> explosionList,
     int playerMainX, int playerMainY); // render the gameplay area of the screen
 void renderGameUI(Game* game, Player* userCharacter,
-    hudInfo hudInfoContainer); // render the HUD area of the screen
+    hudInfo hudInfoContainer, bool paused); // render the HUD area of the screen
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
 int generateRandInt(int min, int max);
 double generateRandDouble(double min, double max);
@@ -1210,6 +1323,7 @@ coordSet getSpawnPoint(forward_list<coordSet>* spawnPoints, forward_list<Player*
 string strOfLen(int number, int len);
 int getLength(int number);
 int sizeOfProj(forward_list<Projectile*>* list);
+coordSet getMouseCoordinates(Game* game);
 
 //drivers
 void testDistBetweenPoints(void);
