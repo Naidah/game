@@ -1,5 +1,5 @@
 swidth=622
 sheight=350
-fullscreen=1
-primaryColor=orange
-secondaryColor=white
+fullscreen=0
+primaryColor=yellow
+secondaryColor=red

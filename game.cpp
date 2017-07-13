@@ -9,7 +9,6 @@ MAJOR:
 -- add lobby
 -- add tutorial
 -- add scoring
-
 */
 
 
@@ -57,9 +56,11 @@ int main(int argc, char const *argv[]) {
                        // control/important variables for throughout the program
     bool gameRunning = true; // variable to control the game loop
     bool inMenu = true;
+    bool inLobby = false;
     bool paused = false;
     bool mousePressed = false;
     bool gameOver = false;
+
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
@@ -116,7 +117,11 @@ int main(int argc, char const *argv[]) {
                 gameRunning = false;
             } else if (eventHandler.type == SDL_KEYDOWN) {
                 if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
-                    paused = true;
+                    if (paused == true) {
+                        paused = false;
+                    } else {
+                        paused = true;
+                    }
                 }
             }
         }
@@ -125,8 +130,11 @@ int main(int argc, char const *argv[]) {
             int inputs = 0;
             while (messageType > 0 && inputs < DEBUG_MAX_INPUTS_PF) {
                 messageType = game->getInput();
-                if (messageType != MESSAGE_CONF_CONNECTION && messageType != MESSAGE_NONE) {
+                if (messageType == MESSAGE_QUIT) {
+                    inMenu = true;
+                } else if (messageType == MESSAGE_WALL) {
                     inMenu = false;
+                    inLobby = false;
                     menu->reset();
                 }
                 inputs++;
@@ -136,13 +144,18 @@ int main(int argc, char const *argv[]) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
         SDL_RenderClear(renderer); // clear the previous frame
 
+        cout << game->getID() << "\n";
         if (inMenu == true) {
-            int menuAction;
-            if (game->hosting() == true) {
-                game->recieveConnection();
-            } else {
-                if (game->isConnected() == false) {
-                    game->attemptConnection();
+            int menuAction = MENU_NONE;
+            if (inLobby == true) {
+                if (game->hosting() == true) {
+                    game->recieveConnection();
+                    game->sendLobby();
+                    cout << game->getNumPlayers() << "\n";
+                } else {
+                    if (game->isConnected() == false) {
+                        game->attemptConnection();
+                    }
                 }
             }
             menuAction = menu->update(game);
@@ -151,8 +164,20 @@ int main(int argc, char const *argv[]) {
                 gameRunning = false;
             } else if (menuAction == MENU_LAUNCH) {
                 inMenu = false;
+                inLobby = false;
                 menu->reset();
                 game->initialize();
+            } else if (menuAction == MENU_SET_LOBBY_CLIENT || menuAction == MENU_SET_LOBBY_HOST) {
+                inLobby = true;
+            }
+
+            if (inLobby == true && menuAction == MENU_SET_MAIN) {
+                inLobby = false;
+                if (game->hosting() == true) {
+                    game->endSession();
+                } else if (game->isConnected() == true) {
+                    game->leaveMatch();
+                }
             }
         } else {
             if (game->hosting() == true) {
@@ -1096,6 +1121,14 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
         secondaryColor = COLOR_VALUES[COLOR_RED_NAME];
         secondary = COLOR_RED_NAME;
     }
+
+    string usrname = configElements[CONFIG_USERNAME];
+    if (usrname != "") {
+        username = configElements[CONFIG_USERNAME];
+    } else {
+        username = GAME_DEFAULT_USERNAME;
+    }
+
     configFile.close();
 }
 
@@ -1120,7 +1153,7 @@ void Game::setSockets(void) {
 }
 
 void Game::recieveConnection(void) {
-    int messageType;
+    int messageType = MESSAGE_NONE;
     string inboundString;
     if (numPlayers < GAME_MAX_PLAYERS-1) {
         connection inboundConnection = server->recieve(&inboundString);
@@ -1136,19 +1169,34 @@ void Game::recieveConnection(void) {
                 if (match == false) {
                     currPlayers[numPlayers] = inboundConnection;
                     currPlayers[numPlayers].id = nextID;
+                    currPlayers[numPlayers].username = inboundString.substr(1, inboundString.length()-1);
+                    cout << currPlayers[numPlayers].username << "\n";
                     numPlayers++;
                     stringstream message;
                     message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
                     server->send(message.str(), inboundConnection);
                     nextID++;
                 }
+            } else if (messageType == MESSAGE_QUIT) {
+                removePlayer(inboundConnection.ip);
             }
         }
     }
 }
 
+void Game::sendLobby(void) {
+    stringstream players;
+    players << MESSAGE_LOBBY << strOfLen(myID, MESSAGE_ID_CHAR) << username << "|";
+    for (int i = 0; i < numPlayers; i++) {
+        players << strOfLen(currPlayers[i].id, MESSAGE_ID_CHAR) << currPlayers[i].username << "|";
+    }
+    server->send(players.str(), currPlayers, numPlayers);
+}
+
 void Game::attemptConnection(void) {
-    client->send(to_string(MESSAGE_CONF_CONNECTION));
+    stringstream message;
+    message  << to_string(MESSAGE_CONF_CONNECTION) << username;
+    client->send(message.str());
 }
 
 void Game::endSession(void) {
@@ -1207,7 +1255,7 @@ void Game::initialize(void) {
     playerList->clear();
     for (int i = 0; i<numPlayers+1; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, i, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
+        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, currPlayers[i].id, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList->front()->killPlayer();
@@ -1289,6 +1337,8 @@ bool Game::getClientAction(void) {
             message = true;
         } else if (messageType == MESSAGE_QUIT) {
             removePlayer(msg.ip);
+            cout << "player quit\n";
+            numPlayers--;
         }
     }
     return message;
@@ -1312,6 +1362,10 @@ int Game::getInput(void) {
             updateProjectiles(serverString);
         } else if (messageType == MESSAGE_EXPLOSION) {
             updateExplosions(serverString);
+        } else if (messageType == MESSAGE_QUIT) {
+            leaveMatch();
+        } else if (messageType == MESSAGE_LOBBY) {
+            updateLobby(serverString);
         }
     }
     return messageType;
@@ -1324,7 +1378,7 @@ void Game::removePlayer(int playerip) {
             if (i < GAME_MAX_PLAYERS-1) {
                 currPlayers[i] = currPlayers[i+1];
             }
-        } else if (currPlayers[i].ip == playerip) {
+        } else if (currPlayers[i].ip == playerip && i < numPlayers) {
             playerID = currPlayers[i].id;
             numPlayers--;
         }
@@ -1465,6 +1519,31 @@ void Game::updateExplosions(string serverString) {
     }
 }
 
+void Game::updateLobby(string serverString) {
+    int currIndex = 1;
+    int currId = -1;
+    stringstream name;
+    numPlayers = 0;
+    while (currIndex < serverString.length()-1) {
+        if (serverString.substr(currIndex, 1) == "|") {
+            currPlayers[numPlayers].id = currId;
+            currPlayers[numPlayers].username = name.str();
+            numPlayers++;
+
+            currId = -1;
+            name.str("");
+            currIndex++;
+
+        } else if (currId == -1) {
+            currId = stoi(serverString.substr(currIndex, MESSAGE_ID_CHAR));
+            currIndex += 3;
+        } else {
+            name << serverString.substr(currIndex, 1);
+            currIndex++;
+        }
+    }
+}
+
 string Game::getMapString(void) {
     // converts the wall objects in the game into a single stream to send to clients
     stringstream wallString;
@@ -1537,7 +1616,6 @@ void Game::updateSecColors(string newColor) {
 }
 
 void Game::updateWindow(int w, int h, bool full) {
-    cout << fullscreen << " " << full << "\n";
     SDL_SetWindowSize(*gameWindow, w, h);
     swidth = w;
     sheight = h;
@@ -1553,8 +1631,6 @@ void Game::updateWindow(int w, int h, bool full) {
         sheightActual = h;
     }
     fullscreen = full;
-    //SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
-    cout << swidth << " " << swidthActual << "\n";
 }
 
 
@@ -1564,6 +1640,7 @@ void Game::updateWindow(int w, int h, bool full) {
 Menu::Menu(Game* game) {
     currMenu = MENU_MAIN;
     mainMenu = new MainPage(game);
+    lobby = new LobbyPage(game);
     optionMenu = new OptionPage(game);
     tutorial = new TutorialPage(game);
     mouseDown = false;
@@ -1571,6 +1648,7 @@ Menu::Menu(Game* game) {
 
 Menu::~Menu(void) {
     delete mainMenu;
+    delete lobby;
     delete optionMenu;
     delete tutorial;
 }
@@ -1578,6 +1656,7 @@ Menu::~Menu(void) {
 void Menu::reset(void) {
     currMenu = MENU_MAIN;
     mainMenu->reset();
+    lobby->reset();
     optionMenu->reset();
     tutorial->reset();
     mouseDown = true;
@@ -1602,6 +1681,8 @@ int Menu::update(Game* game) {
 
     if (currMenu == MENU_MAIN) {
         action = mainMenu->update(x, y, press);
+    } else if (currMenu == MENU_LOBBY) {
+        action = lobby->update(x, y, press, game);
     } else if (currMenu == MENU_OPTIONS) {
         action = optionMenu->update(x, y, press, game);
     } else if (currMenu == MENU_CONTROLS) {
@@ -1614,6 +1695,12 @@ int Menu::update(Game* game) {
 
     if (action == MENU_SET_MAIN) {
         currMenu = MENU_MAIN;
+    } else if (action == MENU_SET_LOBBY_HOST) {
+        currMenu = MENU_LOBBY;
+        game->setHost(true);
+    } else if (action == MENU_SET_LOBBY_CLIENT) {
+        currMenu = MENU_LOBBY;
+        game->setHost(false);
     } else if (action == MENU_SET_OPTIONS) {
         currMenu = MENU_OPTIONS;
     } else if (action == MENU_SET_CONTROLS) {
@@ -1640,6 +1727,8 @@ void Menu::render(Game* game) {
     // render the menu currently in use
     if (currMenu == MENU_MAIN) {
         mainMenu->render(game);
+    } else if (currMenu == MENU_LOBBY) {
+        lobby->render(game);
     } else if (currMenu == MENU_OPTIONS) {
         optionMenu->render(game);
     } else if (currMenu == MENU_CONTROLS) {
@@ -1666,18 +1755,18 @@ MainPage::MainPage(Game* game) {
 
     hostInfo = loadText(UI_HOST, UI_FONT_SIZE, game->renderer());
     hostSelect = new Button(BUTTON_HOST_TOPLEFT_X, BUTTON_HOST_TOPLEFT_Y,
-     BUTTON_HOST_WIDTH, BUTTON_HOST_HEIGHT, BUTTON_RADIO, "host", true, "", game);
+     BUTTON_HOST_WIDTH, BUTTON_HOST_HEIGHT, BUTTON_RADIO, "host", true, "images/ammoIcon.png", game);
     clientSelect = new Button(BUTTON_CLIENT_TOPLEFT_X, BUTTON_CLIENT_TOPLEFT_Y,
-     BUTTON_CLIENT_WIDTH, BUTTON_CLIENT_HEIGHT, BUTTON_RADIO, "client", true, "", game);
+     BUTTON_CLIENT_WIDTH, BUTTON_CLIENT_HEIGHT, BUTTON_RADIO, "client", true, "images/ammoIcon.png", game);
     hostSelect->setActive(true);
 
     weaponInfo = loadText(UI_WEAPON, UI_FONT_SIZE, game->renderer());
     pistolSelect = new Button(BUTTON_PISTOL_TOPLEFT_X, BUTTON_PISTOL_TOPLEFT_Y,
-     BUTTON_PISTOL_WIDTH, BUTTON_PISTOL_HEIGHT, BUTTON_RADIO, "pistol", true, "", game);
+     BUTTON_PISTOL_WIDTH, BUTTON_PISTOL_HEIGHT, BUTTON_RADIO, "pistol", true, "images/characterPistol.png", game);
     rifleSelect = new Button(BUTTON_AR_TOPLEFT_X, BUTTON_AR_TOPLEFT_Y,
-     BUTTON_AR_WIDTH, BUTTON_AR_HEIGHT, BUTTON_RADIO, "rifle", true, "", game);
+     BUTTON_AR_WIDTH, BUTTON_AR_HEIGHT, BUTTON_RADIO, "rifle", true, "images/characterAssaultRifle.png", game);
     shotgunSelect = new Button(BUTTON_SHOTGUN_TOPLEFT_X, BUTTON_SHOTGUN_TOPLEFT_Y,
-     BUTTON_SHOTGUN_WIDTH, BUTTON_SHOTGUN_HEIGHT, BUTTON_RADIO, "shotgun", true, "", game);
+     BUTTON_SHOTGUN_WIDTH, BUTTON_SHOTGUN_HEIGHT, BUTTON_RADIO, "shotgun", true, "images/characterShotgun.png", game);
     pistolSelect->setActive(true);
 
     // ADD
@@ -1706,7 +1795,11 @@ int MainPage::update(int x, int y, bool press) {
     int action = MENU_NONE;
     if (playButton->mouseHover(x, y) == true) {
         if (press == true) {
-            action = MENU_LAUNCH;
+            if (hostSelect->getActive() == true) {
+                action = MENU_SET_LOBBY_HOST;
+            } else {
+                action = MENU_SET_LOBBY_CLIENT;
+            }
         }
         playButton->setActive(true);
     } else {
@@ -1796,6 +1889,91 @@ void MainPage::render(Game* game) {
     shotgunSelect->render(game);
 }
 
+
+
+LobbyPage::LobbyPage(Game* game) {
+    backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
+     BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
+    launchButton = new Button(BUTTON_LAUNCH_TOPLEFT_X, BUTTON_LAUNCH_TOPLEFT_Y,
+     BUTTON_LAUNCH_WIDTH, BUTTON_LAUNCH_HEIGHT, BUTTON_MENU, "launch", false, "Launch", game);
+
+    waitingText = loadText(UI_WAITING, UI_FONT_SIZE, game->renderer());
+}
+
+LobbyPage::~LobbyPage(void) {
+    delete backButton;
+
+    SDL_DestroyTexture(waitingText);
+}
+
+void LobbyPage::reset() {
+    backButton->setActive(false);
+}
+
+int LobbyPage::update(int x, int y, bool press, Game* game) {
+    int action = MENU_NONE;
+    if (backButton->mouseHover(x, y) == true) {
+        if (press == true) {
+            action = MENU_SET_MAIN;
+        }
+        backButton->setActive(true);
+    } else {
+        backButton->setActive(false);
+    }
+
+    if (launchButton->mouseHover(x, y) == true && game->getNumPlayers() > 0) {
+        if (press == true) {
+            action = MENU_LAUNCH;
+        }
+        launchButton->setActive(true);
+    } else {
+        launchButton->setActive(false);
+    }
+    return action;
+}
+
+void LobbyPage::render(Game* game) {
+    backButton->render(game);
+
+    if (game->hosting() == true) {
+        launchButton->render(game);
+    }
+
+    if (game->isConnected() == false) {
+        SDL_Rect waitRect = {UI_WAITING_TOPLEFT_X, UI_WAITING_TOPLEFT_Y,
+         UI_WAITING_WIDTH, UI_WAITING_HEIGHT};
+        SDL_RenderCopy(game->renderer(), waitingText, NULL, &waitRect);
+    } else {
+        // draw the lobby list
+        if (game->hosting() == false) {
+            SDL_Texture* currName;
+            SDL_Rect lobby = {UI_LOBBY_TOPLEFT_X, UI_LOBBY_TOPLEFT_Y, UI_LOBBY_WIDTH, UI_LOBBY_HEIGHT};
+            SDL_Rect name = {UI_LOBBY_NAME_TOPLEFT_X, lobby.y+lobby.h*0.1, 0, lobby.h*0.8};
+            for (int i = 0; i < GAME_MAX_PLAYERS; i++) {
+                SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
+                 game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
+                if (i < game->getNumPlayers()) {
+                    if (game->getCurrPlayers()[i].id == game->getID()) {
+                        SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
+                         game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
+                    }
+                    currName = loadText(game->getCurrPlayers()[i].username, UI_FONT_SIZE, game->renderer());
+                    name.w = name.h*UI_FONT_HEIGHT_TO_WIDTH*game->getCurrPlayers()[i].username.length();
+                    SDL_RenderFillRect(game->renderer(), &lobby);
+                    SDL_RenderCopy(game->renderer(), currName, NULL, &name);
+                    SDL_DestroyTexture(currName);
+                    name.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
+                } else {
+                    SDL_RenderFillRect(game->renderer(), &lobby);
+                }
+                lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
+            }
+        }
+    }
+}
+
+
+
 OptionPage::OptionPage(Game* game) {
     heading = loadText(OPTIONS_HEADER, UI_FONT_SIZE, game->renderer());
     resTitle = loadText(OPTIONS_RESNAME, UI_FONT_SIZE, game->renderer());
@@ -1807,7 +1985,7 @@ OptionPage::OptionPage(Game* game) {
      BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
 
     fullscreenButton = new Button(BUTTON_FULL_TOPLEFT_X, BUTTON_FULL_TOPLEFT_Y,
-     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, BUTTON_RADIO, "fullscreen", false, "", game);
+     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, BUTTON_RADIO, "fullscreen", true, "images/ammoIcon.png", game);
     fullscreenButton->setActive(game->isFullscreen());
 
     int shiftX;
@@ -1965,6 +2143,7 @@ void OptionPage::updateGame(Game* game) {
     configFile << CONFIG_FULLSCREEN << "=" << game->isFullscreen() << "\n";
     configFile << CONFIG_PRIMCOLOR << "=" << game->primColor() << "\n";
     configFile << CONFIG_SECCOLOR << "=" << game->secColor() << "\n";
+    configFile << CONFIG_USERNAME << "=" << game->getUsername() << "\n";
     configFile.close();
 }
 
@@ -2066,13 +2245,15 @@ Button::Button(int x, int y, int w, int h, int type, const string name,
     buttonType = type;
     id = name;
 
+    img = false;
     if (text != "") {
         if (useImg == false) {
             displayText = loadText(text, UI_FONT_SIZE, game->renderer());
             textLen = text.length();
         } else {
-            displayText = NULL;
+            displayText = loadImage(text, game->renderer());
             textLen = 0;
+            img = true;
         }
     } else {
         displayText = NULL;
@@ -2131,9 +2312,15 @@ void Button::render(Game* game) {
     if (displayText != NULL) {
         SDL_Rect textBox;
         textBox.h = location.h*0.8;
-        textBox.w = textLen*textBox.h*UI_FONT_HEIGHT_TO_WIDTH;
+        if (img == true) {
+            textBox.w = location.w*0.8;
+        } else {
+            textBox.w = textLen*textBox.h*UI_FONT_HEIGHT_TO_WIDTH;
+        }
         textBox.y = location.y+(location.h-textBox.h)/2;
         textBox.x = location.x+(location.w-textBox.w)/2;
+        SDL_SetTextureColorMod(displayText, game->secondaryColors().red,
+         game->secondaryColors().green, game->secondaryColors().blue);
         SDL_RenderCopy(game->renderer(), displayText, NULL, &textBox);
     }
 }

@@ -7,6 +7,7 @@ using namespace std;
 class Game;
 class Menu;
 class MainPage;
+class LobbyPage;
 class OptionPage;
 class TutorialPage;
 class Button;
@@ -38,6 +39,7 @@ typedef struct _connection {
     Uint16 port;
     Uint32 ip;
     int id;
+    string username;
 } connection;
 
 bool operator==(const connection lhs, const connection rhs) {
@@ -116,6 +118,7 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 
 // constants used in setting up the game instance
 const int GAME_MAX_PLAYERS = 4;
+const string GAME_DEFAULT_USERNAME = "Steve";
 
 // values of the different colour schemes that can be used
 const colorSet COLOR_NONE = {0,0,0};
@@ -417,6 +420,21 @@ const int UI_WEAPON_WIDTH = UI_WEAPON_LEN*UI_WEAPON_HEIGHT*UI_FONT_HEIGHT_TO_WID
 const int UI_WEAPON_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7;
 const int UI_WEAPON_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.55;
 
+const string UI_WAITING = "Waiting for Connection...";
+const int UI_WAITING_LEN = UI_WAITING.length();
+const int UI_WAITING_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.1;
+const int UI_WAITING_WIDTH = UI_WAITING_LEN*UI_WAITING_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
+const int UI_WAITING_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-UI_WAITING_WIDTH)/2;
+const int UI_WAITING_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.45;
+
+const int UI_LOBBY_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.15;
+const int UI_LOBBY_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.25;
+const int UI_LOBBY_WIDTH = SCREEN_WIDTH_DEFAULT*0.4;
+const int UI_LOBBY_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+const int UI_LOBBY_GAP = SCREEN_HEIGHT_DEFAULT*0.03;
+
+const int UI_LOBBY_NAME_TOPLEFT_X = UI_LOBBY_TOPLEFT_X+SCREEN_WIDTH_DEFAULT*0.01;
+
 const string UI_PAUSE_TEXT = "Game Paused";
 const int UI_PAUSE_LEN = UI_PAUSE_TEXT.length();
 const int UI_PAUSE_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.25;
@@ -456,8 +474,8 @@ const int MENU_QUIT = 1;
 const int MENU_LAUNCH = 2;
 const int MENU_SET_MAIN = 3;
 const int MENU_SET_OPTIONS = 4;
-const int MENU_SET_LOBBY = 5;
-const int MENU_SET_LOBBY_HOST = 6;
+const int MENU_SET_LOBBY_HOST = 5;
+const int MENU_SET_LOBBY_CLIENT = 6;
 const int MENU_SET_CONTROLS = 7;
 
 enum BUTTON_TYPE {
@@ -503,6 +521,11 @@ const int BUTTON_BACK_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.05;
 const int BUTTON_BACK_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.85;
 const int BUTTON_BACK_WIDTH = SCREEN_WIDTH_DEFAULT*0.14;
 const int BUTTON_BACK_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+
+const int BUTTON_LAUNCH_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.81;
+const int BUTTON_LAUNCH_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.85;
+const int BUTTON_LAUNCH_WIDTH = SCREEN_WIDTH_DEFAULT*0.14;
+const int BUTTON_LAUNCH_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
 
 const int BUTTON_FULL_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.3;
 const int BUTTON_FULL_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.82;
@@ -675,6 +698,7 @@ const string CONFIG_HOSTPORT = "hostport";
 const string CONFIG_CLIENTPORT = "clientport";
 const string CONFIG_PRIMCOLOR = "primaryColor";
 const string CONFIG_SECCOLOR = "secondaryColor";
+const string CONFIG_USERNAME = "username";
 
 
 // constants used in netcode
@@ -686,7 +710,8 @@ const int MESSAGE_PLAYER = 3;
 const int MESSAGE_PROJECTILE = 4;
 const int MESSAGE_EXPLOSION = 5;
 const int MESSAGE_CLIENT_ACTION = 6;
-const int MESSAGE_QUIT = 7;
+const int MESSAGE_LOBBY = 7;
+const int MESSAGE_QUIT = 8;
 
 const int MESSAGE_PLAYER_LEN = 57;
 
@@ -748,8 +773,9 @@ protected:
     int myID;
     int nextID;
 
+    string username;
     int numPlayers;
-    connection currPlayers[GAME_MAX_PLAYERS-1];
+    connection currPlayers[GAME_MAX_PLAYERS];
 
     bool isHost;
     UDPConnectionServer* server;
@@ -800,10 +826,12 @@ public:
     void sendUserActions(void);
     bool getClientAction(void);
     void sendUpdate(void);
+    void sendLobby(void);
     void updateMap(string serverString);
     void updatePlayers(string serverString);
     void updateProjectiles(string serverString);
     void updateExplosions(string serverString);
+    void updateLobby(string serverString);
 
     void addNewExplosion(BulletExplosion* newExplosion);
 
@@ -825,9 +853,13 @@ public:
     Uint16 cPort(void) {return clientPort;}
     bool isConnected(void) {return connected;}
     bool hosting(void) {return isHost;}
+    void setHost(bool host) {isHost = host;}
     userAction getActions(int clientID) {return clientActions[clientID];}
 
     int getID(void) {return myID;}
+    connection* getCurrPlayers(void) {return currPlayers;}
+    int getNumPlayers(void) {return numPlayers;}
+    string getUsername(void) {return username;}
 
     colorSet primaryColors(void) {return primaryColor;}
     colorSet secondaryColors(void) {return secondaryColor;}
@@ -860,6 +892,7 @@ protected:
     bool mouseDown;
 
     MainPage* mainMenu;
+    LobbyPage* lobby;
     OptionPage* optionMenu;
     TutorialPage* tutorial;
 public:
@@ -893,6 +926,21 @@ public:
 
     void reset(void);
     int update(int x, int y, bool press);
+    void render(Game* game);
+};
+
+class LobbyPage {
+protected:
+    Button* backButton;
+    Button* launchButton;
+
+    SDL_Texture* waitingText;
+public:
+    LobbyPage(Game* game);
+    ~LobbyPage(void);
+
+    void reset(void);
+    int update(int x, int y, bool press, Game* game);
     void render(Game* game);
 };
 
@@ -945,6 +993,7 @@ protected:
 
     string id;
 
+    bool img;
     int textLen;
     SDL_Texture* displayText;
 public:
