@@ -63,7 +63,7 @@ typedef struct _colorSet {
 } colorSet;
 
 colorSet operator*(const colorSet lhs, const double rhs) {
-    return {lhs.red*rhs, lhs.green*rhs, lhs.blue*rhs};
+    return {static_cast<int>(lhs.red*rhs), static_cast<int>(lhs.green*rhs), static_cast<int>(lhs.blue*rhs)};
 }
 
 bool operator==(const colorSet lhs, const colorSet rhs) {
@@ -111,6 +111,12 @@ typedef struct _userAction {
     int moveVert;
 } userAction;
 
+typedef struct _playerScore {
+    string name;
+    int score;
+    int id;
+} playerScore;
+
 /*------------- All program constants defined here ------------------*/
 
 // General Parameters
@@ -119,8 +125,13 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 
 // constants used in setting up the game instance
 const int GAME_MAX_PLAYERS = 4;
-const string GAME_DEFAULT_USERNAME = "Steve";
+const int GAME_USERNAME_MAX_LEN = 8;
+const string GAME_DEFAULT_USERNAME = "Twelve";
 const int GAME_CONNECT_WAIT = 100;
+
+const int GAME_WIN_SCORE = 3;
+const int GAME_WIN_DELAY_SEC = 3;
+const int GAME_WIN_DELAY = GAME_WIN_DELAY_SEC*SCREEN_FPS;
 
 // values of the different colour schemes that can be used
 const colorSet COLOR_NONE = {0,0,0};
@@ -443,6 +454,13 @@ const int UI_PAUSE_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.25;
 const int UI_PAUSE_WIDTH = UI_PAUSE_LEN*UI_PAUSE_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
 const int UI_PAUSE_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-UI_PAUSE_WIDTH)/2;
 const int UI_PAUSE_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.03;
+
+const int UI_SCORE_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.01;
+const int UI_SCORE_TOPLEFT_Y = SCREEN_WIDTH_DEFAULT*0.01;
+const int UI_SCORE_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.06;
+const int UI_SCORE_GAP = SCREEN_HEIGHT_DEFAULT*0.02;
+const int UI_SCORE_MARGIN = SCREEN_WIDTH_DEFAULT*0.01;
+
 
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
@@ -786,6 +804,7 @@ protected:
 
     int lastConnect;
 
+    int winner;
 
     colorSet primaryColor;
     string primary;
@@ -864,6 +883,8 @@ public:
     connection* getCurrPlayers(void) {return currPlayers;}
     int getNumPlayers(void) {return numPlayers;}
     string getUsername(void) {return username;}
+    playerScore getPlayerScore(int index);
+    int getWinner(void);
 
     colorSet primaryColors(void) {return primaryColor;}
     colorSet secondaryColors(void) {return secondaryColor;}
@@ -1058,6 +1079,7 @@ protected:
     int deathFrames; // counter containing how long the player remains dead
 
     int id; // ID number of the player object to differentiate it
+    int score; // how many kills the player has earned
 
             // the sprite sheet for the player
     SDL_Texture* playerImage;
@@ -1083,6 +1105,8 @@ public:
     int getDeathFrames(void) { return deathFrames; }
     int getHealth(void) { return health; }
     bool isAlive(void) { return alive; }
+    int getScore(void) {return score;}
+    void addPoint(void) {score += 1;}
 
     string getStateString(void);
 
@@ -1092,7 +1116,7 @@ public:
     void updateState(playerState newState);
     void move(forward_list<Wall*>* wallContainer); // moves the player based on their velocity
     void setPlayerCentre(void); // resets the players centre based on their location of the top left corner
-    void successfulShot(void); // called when the player is hit by a bullet
+    bool successfulShot(void); // called when the player is hit by a bullet
     void killPlayer(void); // kills the player
     void respawn(forward_list<coordSet>* spawnPoints, forward_list<Player*>* playerList); // respawn the player after death
 
@@ -1263,11 +1287,12 @@ private:
 
     // ID of the player who shot the projectile instance
     int ownerID;
+    Player* owner;
 
     // spritesheet of the projectile
     SDL_Texture* projectileImage;
 public:
-    Projectile(int x, int y, double a, const double speed, Game* game, int id);
+    Projectile(int x, int y, double a, const double speed, Game* game, Player* player);
     Projectile(int x, int y, Game* game, int id);
     ~Projectile(void);
 

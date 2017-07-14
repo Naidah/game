@@ -5,10 +5,7 @@
 /*
 MAJOR:
 -- Comment current work
--- menu reset
--- add lobby
 -- add tutorial
--- add scoring
 */
 
 
@@ -60,6 +57,7 @@ int main(int argc, char const *argv[]) {
     bool paused = false;
     bool mousePressed = false;
     bool gameOver = false;
+    int gameOverTimer = 0;
 
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
@@ -219,8 +217,6 @@ int main(int argc, char const *argv[]) {
                             if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
                                 hudInfoContainer.quit->setActive(true);
                                 if (press == true) {
-                                    paused = false;
-                                    inMenu = true;
                                     gameOver = true;
                                 }
                             } else {
@@ -280,8 +276,6 @@ int main(int argc, char const *argv[]) {
                 if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
                     hudInfoContainer.quit->setActive(true);
                     if (press == true) {
-                        paused = false;
-                        inMenu = true;
                         gameOver = true;
                     }
                 } else {
@@ -308,6 +302,11 @@ int main(int argc, char const *argv[]) {
             }
             explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
+            if (game->getWinner() != -1 && gameOver == false) {
+                gameOver = true;
+                gameOverTimer = GAME_WIN_DELAY;
+            }
+
             renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
                 if ((*character)->getID() == game->getID()) {
@@ -332,11 +331,17 @@ int main(int argc, char const *argv[]) {
         SDL_RenderPresent(renderer);
 
         if (gameOver == true) {
-            gameOver = false;
-            if (game->hosting() == true) {
-                game->endSession();
+            if (gameOverTimer > 0) {
+                gameOverTimer--;
             } else {
-                game->leaveMatch(); 
+                inMenu = true;
+                paused = false;
+                gameOver = false;
+                if (game->hosting() == true) {
+                    game->endSession();
+                } else {
+                    game->leaveMatch();
+                }
             }
         }
 
@@ -828,6 +833,51 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, b
         hudInfoContainer.resume->render(game);
         hudInfoContainer.quit->render(game);
     }
+
+    // render the scores
+    SDL_Rect name = {UI_SCORE_TOPLEFT_X, UI_SCORE_TOPLEFT_Y, 0, UI_SCORE_HEIGHT};
+    SDL_Rect score = {0, name.y, 0, UI_SCORE_HEIGHT};
+    SDL_Texture* currName;
+    SDL_Texture* currScore;
+    playerScore scoreboard[GAME_MAX_PLAYERS];
+    int numScores = 0;
+    scoreboard[0] = game->getPlayerScore(0);
+    for (int i=1; i < game->getNumPlayers(); i++) {
+        playerScore sortScore = game->getPlayerScore(i);
+        for (int s=numScores; s>=0; s--) {
+            if (scoreboard[s].score < sortScore.score) {
+                scoreboard[s+1] = scoreboard[s];
+                scoreboard[s] = sortScore;
+            } else {
+                scoreboard[s+1] = sortScore;
+            }
+        }
+        numScores++;
+
+    }
+    for (int i=0; i<game->getNumPlayers(); i++) {
+        playerScore scoreSet = scoreboard[i];
+        if (scoreSet.id == game->getID()) {
+            SDL_Rect scoreHighlight = {0, name.y, HUD_WIDTH, name.h};
+            SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
+             game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
+            SDL_RenderFillRect(game->renderer(), &scoreHighlight);
+        }
+
+        currName = loadText(scoreSet.name.c_str(), UI_FONT_SIZE, game->renderer());
+        name.w = UI_SCORE_HEIGHT*scoreSet.name.length()*UI_FONT_HEIGHT_TO_WIDTH;
+        SDL_RenderCopy(game->renderer(), currName, NULL, &name);
+
+        currScore = loadText(to_string(scoreSet.score).c_str(), UI_FONT_SIZE, game->renderer());
+        score.w = UI_SCORE_HEIGHT*getLength(scoreSet.score)*UI_FONT_HEIGHT_TO_WIDTH;
+        score.x = HUD_WIDTH-(score.w+UI_SCORE_MARGIN);
+        SDL_RenderCopy(game->renderer(), currScore, NULL, &score);
+
+        SDL_DestroyTexture(currName);
+        SDL_DestroyTexture(currScore);
+        name.y += UI_SCORE_HEIGHT + UI_SCORE_GAP;
+        score.y += UI_SCORE_HEIGHT + UI_SCORE_GAP;
+    }
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
@@ -1040,8 +1090,9 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
     ifstream configFile(CONFIG_FILE_LOCATION, ifstream::in); // open the config file
 
     lastConnect = 0;
+    winner = -1;
 
-    regex pattern("([a-zA-Z]+)=([a-zA-Z0-9\.]+)"); // create a regex used to extract data from each line
+    regex pattern("([a-zA-Z]+)=([a-zA-Z0-9\\.]+)"); // create a regex used to extract data from each line
     smatch matches; // datatype to store the regex matches
     map<string, string> configElements; // map used to store the value of each data item
 
@@ -1134,6 +1185,9 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
         username = configElements[CONFIG_USERNAME];
     } else {
         username = GAME_DEFAULT_USERNAME;
+    }
+    if (username.length() > GAME_USERNAME_MAX_LEN) {
+        username = username.substr(0, GAME_USERNAME_MAX_LEN);
     }
 
     configFile.close();
@@ -1653,6 +1707,29 @@ void Game::updateWindow(int w, int h, bool full) {
     fullscreen = full;
 }
 
+playerScore Game::getPlayerScore(int index) {
+    assert(index < numPlayers);
+    playerScore output;
+    output.name = currPlayers[index].username;
+    output.id = currPlayers[index].id;
+    for (auto player = playerList->begin(); player != playerList->end(); player++) {
+        if ((*player)->getID() == currPlayers[index].id) {
+            output.score = (*player)->getScore();
+        }
+    }
+    return output;
+}
+
+int Game::getWinner(void) {
+    if (winner == -1) {
+        for (auto player = playerList->begin(); player != playerList->end(); player++) {
+            if ((*player)->getScore() >= GAME_WIN_SCORE) {
+                winner = (*player)->getID();
+            }
+        }
+    }
+    return winner;
+}
 
 
 
@@ -2424,6 +2501,8 @@ Player::Player(Game* game, int startX, int startY, int idNum, int weaponID) {
         weapon = new Pistol;
     }
 
+    score = 0;
+
     // set the players default speed to 0
     velx = 0;
     vely = 0;
@@ -2760,14 +2839,17 @@ void Player::move(forward_list<Wall*>* wallContainer) {
 }
 
 
-void Player::successfulShot(void) {
+bool Player::successfulShot(void) {
     //function called when the player takes damage from a bullet
+    bool kill = false;
     if (invulnerable == false) {
         health -= 1;
     }
     if (health <= 0) { // check if the shot was a lethal blow
         killPlayer();
+        kill = true;
     }
+    return kill;
 }
 
 void Player::killPlayer(void) { // kill the player, and create a object to show their death location
@@ -2965,7 +3047,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler)
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
             game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                projectileAngle, AR_PROJECTILE_SPEED, game, player->getID()));
+                projectileAngle, AR_PROJECTILE_SPEED, game, player));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         }
@@ -2986,7 +3068,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, userAction userInput) {
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
             game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                projectileAngle, AR_PROJECTILE_SPEED, game, player->getID()));
+                projectileAngle, AR_PROJECTILE_SPEED, game, player));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         }
@@ -3063,7 +3145,7 @@ void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                    projectileAngle, PISTOL_PROJECTILE_SPEED, game, player->getID()));
+                    projectileAngle, PISTOL_PROJECTILE_SPEED, game, player));
             }
         }
     } else {
@@ -3083,7 +3165,7 @@ void Pistol::takeShot(Game* game, Player* player, userAction userInput) {
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                    projectileAngle, PISTOL_PROJECTILE_SPEED, game, player->getID()));
+                    projectileAngle, PISTOL_PROJECTILE_SPEED, game, player));
             }
         }
     } else {
@@ -3168,7 +3250,7 @@ void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
             for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
                 shotAngle = generateRandDouble(projectileAngle, projectileAngle + SHOTGUN_PROJECTILE_SPREAD);
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
+                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player));
                 projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
@@ -3188,7 +3270,7 @@ void Shotgun::takeShot(Game* game, Player* player, userAction userInput) {
             for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
                 shotAngle = generateRandDouble(projectileAngle, projectileAngle + SHOTGUN_PROJECTILE_SPREAD);
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player->getID()));
+                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player));
                 projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
             }
             shotDelay = SHOTGUN_SHOT_DELAY;
@@ -3474,7 +3556,7 @@ void Wall::renderShadow(int x, int y, Game* game) {
 
 
 // Functions related to the projectile class
-Projectile::Projectile(int x, int y, double a, const double speed, Game* game, int id) {
+Projectile::Projectile(int x, int y, double a, const double speed, Game* game, Player* player) {
     // set the location of the projectile
     currPosX = x;
     currPosY = y;
@@ -3496,7 +3578,7 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, i
     velx = -speed * cos(angle*M_PI / 180);
     vely = -speed * sin(angle*M_PI / 180);
 
-    if (id == game->getID()) {
+    if (ownerID == game->getID()) {
         projectileColors.red = game->primaryColors().red;
         projectileColors.blue = game->primaryColors().blue;
         projectileColors.green = game->primaryColors().green;
@@ -3508,7 +3590,8 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, i
     }
 
 
-    ownerID = id;
+    owner = player;
+    ownerID = player->getID();
 
     // load the spritesheet to memory
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
@@ -3569,7 +3652,9 @@ int Projectile::checkCollision(Game* game) {
         if (distBetweenPoints(centreX, centreY, (*character)->getX(),
             (*character)->getY()) < (radius + (*character)->getRadius())) { // check whether the projectile is contacting the player
             if ((*character)->getID() != ownerID && (*character)->isAlive() == true) { // check the player hit is not the one who shot the projectile and is still alive
-                (*character)->successfulShot(); // tell the player they are hit
+                if ((*character)->successfulShot() == true) { // tell the player they are hit and see if its lethal
+                    owner->addPoint();
+                } 
                 output = PROJECTILE_COLLISION_PLAYER;
             }
         }
