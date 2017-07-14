@@ -152,7 +152,7 @@ int main(int argc, char const *argv[]) {
                     game->sendLobby();
                 } else {
                     if (game->isConnected() == false) {
-                        game->attemptConnection();
+                        game->attemptConnection(menu->getWeapon());
                     }
                 }
             }
@@ -164,7 +164,7 @@ int main(int argc, char const *argv[]) {
                 inMenu = false;
                 inLobby = false;
                 menu->reset();
-                game->initialize();
+                game->initialize(menu->getWeapon());
             } else if (menuAction == MENU_SET_LOBBY_CLIENT || menuAction == MENU_SET_LOBBY_HOST) {
                 inLobby = true;
             }
@@ -182,6 +182,11 @@ int main(int argc, char const *argv[]) {
                 bool haveMessage = true;
                 while (haveMessage == true) {
                     haveMessage = game->getClientAction();
+                }
+                if (game->getNumPlayers() == 1) {
+                    cout << "All other players disconnected, exiting game\n";
+                    game->endSession();
+                    inMenu = true;
                 }
                 // update the state of the controlled character
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
@@ -418,11 +423,13 @@ bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
     memcpy(packetOut->data, msg.c_str(), msg.length()+1);
     packetOut->len = msg.length()+1;
     for (int i = 0; i < numIps; i++) {
-        packetOut->address.host = ips[i].ip;
-        packetOut->address.port = ips[i].port;
-        if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
-            cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
-            success = false;
+        if (ips[i].ip != 0) {
+            packetOut->address.host = ips[i].ip;
+            packetOut->address.port = ips[i].port;
+            if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+                cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
+                success = false;
+            }
         }
     }
     return success;
@@ -1140,7 +1147,8 @@ Game::~Game(void) {
 }
 
 void Game::setSockets(void) {
-    numPlayers = 0;
+    numPlayers = 1;
+    currPlayers[0] = {0, 0, CHARACTER_WEAPON_PISTOL, CHARACTER_MAIN_ID, username};
     nextID = 1;
     if (isHost == true) {
         myID = CHARACTER_MAIN_ID;
@@ -1155,7 +1163,7 @@ void Game::setSockets(void) {
 void Game::recieveConnection(void) {
     int messageType = MESSAGE_NONE;
     string inboundString;
-    if (numPlayers < GAME_MAX_PLAYERS-1) {
+    if (numPlayers < GAME_MAX_PLAYERS) {
         connection inboundConnection = server->recieve(&inboundString);
         if (inboundConnection.ip != 0) {
             messageType = inboundString[0] - '0';
@@ -1169,7 +1177,8 @@ void Game::recieveConnection(void) {
                 if (match == false) {
                     currPlayers[numPlayers] = inboundConnection;
                     currPlayers[numPlayers].id = nextID;
-                    currPlayers[numPlayers].username = inboundString.substr(1, inboundString.length()-1);
+                    currPlayers[numPlayers].weapon = stoi(inboundString.substr(1, 1));
+                    currPlayers[numPlayers].username = inboundString.substr(2, inboundString.length()-2);
                     numPlayers++;
                     stringstream message;
                     message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
@@ -1178,9 +1187,6 @@ void Game::recieveConnection(void) {
                 }
             } else if (messageType == MESSAGE_QUIT) {
                 removePlayer(inboundConnection.ip);
-                if (numPlayers == 0) {
-                    endSession();
-                }
             }
         }
     }
@@ -1188,17 +1194,17 @@ void Game::recieveConnection(void) {
 
 void Game::sendLobby(void) {
     stringstream players;
-    players << MESSAGE_LOBBY << strOfLen(myID, MESSAGE_ID_CHAR) << username << "|";
+    players << MESSAGE_LOBBY;
     for (int i = 0; i < numPlayers; i++) {
         players << strOfLen(currPlayers[i].id, MESSAGE_ID_CHAR) << currPlayers[i].username << "|";
     }
     server->send(players.str(), currPlayers, numPlayers);
 }
 
-void Game::attemptConnection(void) {
+void Game::attemptConnection(int weapon) {
     if (SDL_GetTicks() - lastConnect > GAME_CONNECT_WAIT) {
         stringstream message;
-        message  << to_string(MESSAGE_CONF_CONNECTION) << username;
+        message << MESSAGE_CONF_CONNECTION << weapon << username;
         client->send(message.str());
         lastConnect = SDL_GetTicks();
     }
@@ -1207,7 +1213,7 @@ void Game::attemptConnection(void) {
 void Game::endSession(void) {
     // tell clients that the host is no longer playing
     server->send(to_string(MESSAGE_QUIT), currPlayers, numPlayers);
-    numPlayers = 0;
+    numPlayers = 1;
     nextID = 1;
     connected = false;
 
@@ -1254,14 +1260,15 @@ void Game::leaveMatch(void) {
     spawnPoints->clear();
 }
 
-void Game::initialize(void) {
+void Game::initialize(int weapon) {
     // starts a new game instance
+    currPlayers[0].weapon = weapon;
     generateMap(wallContainer, spawnPoints); // generate a random set of walls and spawn points for the game
     coordSet initSpawn; // temporarily stores spawn points for each player
     playerList->clear();
-    for (int i = 0; i<numPlayers+1; i++) {
+    for (int i = 0; i<numPlayers; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, currPlayers[i].id, generateRandInt(CHARACTER_WEAPON_ASSAULT_RIFLE, CHARACTER_WEAPON_SHOTGUN)));
+        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, currPlayers[i].id, currPlayers[i].weapon));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList->front()->killPlayer();
@@ -1343,10 +1350,6 @@ bool Game::getClientAction(void) {
             message = true;
         } else if (messageType == MESSAGE_QUIT) {
             removePlayer(msg.ip);
-            numPlayers--;
-            if (numPlayers == 0) {
-                endSession();
-            }
         }
     }
     return message;
@@ -1661,6 +1664,8 @@ Menu::Menu(Game* game) {
     optionMenu = new OptionPage(game);
     tutorial = new TutorialPage(game);
     mouseDown = false;
+
+    weapon = CHARACTER_WEAPON_PISTOL;
 }
 
 Menu::~Menu(void) {
@@ -1698,6 +1703,7 @@ int Menu::update(Game* game) {
 
     if (currMenu == MENU_MAIN) {
         action = mainMenu->update(x, y, press);
+        weapon = mainMenu->getCurrWeapon();
     } else if (currMenu == MENU_LOBBY) {
         action = lobby->update(x, y, press, game);
     } else if (currMenu == MENU_OPTIONS) {
@@ -1806,6 +1812,18 @@ void MainPage::reset(void) {
     optionButton->setActive(false);
     controlButton->setActive(false);
     quitButton->setActive(false);
+}
+
+int MainPage::getCurrWeapon(void) {
+    int weapon;
+    if (pistolSelect->getActive() == true) {
+        weapon = CHARACTER_WEAPON_PISTOL;
+    } else if (rifleSelect->getActive() == true) {
+        weapon = CHARACTER_WEAPON_ASSAULT_RIFLE;
+    } else {
+        weapon = CHARACTER_WEAPON_SHOTGUN;
+    }
+    return weapon;
 }
 
 int MainPage::update(int x, int y, bool press) {
@@ -1989,18 +2007,7 @@ void LobbyPage::render(Game* game) {
         SDL_Texture* currName;
         SDL_Rect lobby = {UI_LOBBY_TOPLEFT_X, UI_LOBBY_TOPLEFT_Y, UI_LOBBY_WIDTH, UI_LOBBY_HEIGHT};
         SDL_Rect name = {UI_LOBBY_NAME_TOPLEFT_X, lobby.y+lobby.h*0.1, 0, lobby.h*0.8};
-
-        currName = loadText(game->getUsername(), UI_FONT_SIZE, game->renderer());
-        name.w = name.h*UI_FONT_HEIGHT_TO_WIDTH*game->getUsername().length();
-
-        SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
-         game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
-        SDL_RenderFillRect(game->renderer(), &lobby);
-        SDL_RenderCopy(game->renderer(), currName, NULL, &name);
-        SDL_DestroyTexture(currName);
-        name.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
-        lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
-        for (int i = 0; i < GAME_MAX_PLAYERS-1; i++) {
+        for (int i = 0; i < GAME_MAX_PLAYERS; i++) {
             SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
              game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
             if (i < game->getNumPlayers()) {

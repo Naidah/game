@@ -38,6 +38,7 @@ bool operator!=(const direction lhs, const direction rhs) {
 typedef struct _connection {
     Uint16 port;
     Uint32 ip;
+    int weapon;
     int id;
     string username;
 } connection;
@@ -256,7 +257,7 @@ const int CHARACTER_ROLL_ALPHA = 100;
 const int CHARACTER_MAIN_ID = 0; // ID number of the main character for the game instance
 
 const int CHARACTER_MAX_HP = 3; // max health a player can have
-const double CHARACTER_DEATH_DURATION_SEC = 5;
+const double CHARACTER_DEATH_DURATION_SEC = 3;
 const double CHARACTER_DEATH_DURATION = CHARACTER_DEATH_DURATION_SEC*SCREEN_FPS; // the number of frames the player remains dead for
 const int CHARACTER_MIN_RESPAWN_RANGE = CHARACTER_WIDTH * 4;
 const double CHARACTER_INVULN_SEC = 2.5;
@@ -811,9 +812,9 @@ public:
     void setPatterns(void);
     void setSockets(void);
 
-    void initialize(void);
+    void initialize(int weapon);
     void recieveConnection(void);
-    void attemptConnection(void);
+    void attemptConnection(int weapon);
 
     void endSession(void);
     void leaveMatch(void);
@@ -891,6 +892,7 @@ protected:
         MENU_CONTROLS
     };
     int currMenu;
+    int weapon;
 
     bool mouseDown;
 
@@ -904,6 +906,8 @@ public:
     void reset(void);
     int update(Game* game);
     void render(Game* game);
+
+    int getWeapon(void) {return weapon;}
 };
 
 class MainPage {
@@ -928,6 +932,7 @@ public:
     ~MainPage(void);
 
     void reset(void);
+    int getCurrWeapon(void);
     int update(int x, int y, bool press);
     void render(Game* game);
 };
