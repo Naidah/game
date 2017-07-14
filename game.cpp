@@ -128,8 +128,8 @@ int main(int argc, char const *argv[]) {
 
         if (game->hosting() == false) {
             int inputs = 0;
-            while (messageType > 0 && inputs < DEBUG_MAX_INPUTS_PF) {
-                messageType = game->getInput();
+            while (messageType > 0) {
+                messageType = game->getInput(inLobby);
                 if (messageType == MESSAGE_QUIT) {
                     inMenu = true;
                 } else if (messageType == MESSAGE_WALL) {
@@ -144,14 +144,12 @@ int main(int argc, char const *argv[]) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
         SDL_RenderClear(renderer); // clear the previous frame
 
-        cout << game->getID() << "\n";
         if (inMenu == true) {
             int menuAction = MENU_NONE;
             if (inLobby == true) {
                 if (game->hosting() == true) {
                     game->recieveConnection();
                     game->sendLobby();
-                    cout << game->getNumPlayers() << "\n";
                 } else {
                     if (game->isConnected() == false) {
                         game->attemptConnection();
@@ -1034,6 +1032,8 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
     string value;
     ifstream configFile(CONFIG_FILE_LOCATION, ifstream::in); // open the config file
 
+    lastConnect = 0;
+
     regex pattern("([a-zA-Z]+)=([a-zA-Z0-9\.]+)"); // create a regex used to extract data from each line
     smatch matches; // datatype to store the regex matches
     map<string, string> configElements; // map used to store the value of each data item
@@ -1170,7 +1170,6 @@ void Game::recieveConnection(void) {
                     currPlayers[numPlayers] = inboundConnection;
                     currPlayers[numPlayers].id = nextID;
                     currPlayers[numPlayers].username = inboundString.substr(1, inboundString.length()-1);
-                    cout << currPlayers[numPlayers].username << "\n";
                     numPlayers++;
                     stringstream message;
                     message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
@@ -1179,6 +1178,9 @@ void Game::recieveConnection(void) {
                 }
             } else if (messageType == MESSAGE_QUIT) {
                 removePlayer(inboundConnection.ip);
+                if (numPlayers == 0) {
+                    endSession();
+                }
             }
         }
     }
@@ -1194,9 +1196,12 @@ void Game::sendLobby(void) {
 }
 
 void Game::attemptConnection(void) {
-    stringstream message;
-    message  << to_string(MESSAGE_CONF_CONNECTION) << username;
-    client->send(message.str());
+    if (SDL_GetTicks() - lastConnect > GAME_CONNECT_WAIT) {
+        stringstream message;
+        message  << to_string(MESSAGE_CONF_CONNECTION) << username;
+        client->send(message.str());
+        lastConnect = SDL_GetTicks();
+    }
 }
 
 void Game::endSession(void) {
@@ -1227,6 +1232,7 @@ void Game::endSession(void) {
 
 void Game::leaveMatch(void) {
     client->send(to_string(MESSAGE_QUIT));
+    numPlayers = 0;
     connected = false;
 
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1337,14 +1343,16 @@ bool Game::getClientAction(void) {
             message = true;
         } else if (messageType == MESSAGE_QUIT) {
             removePlayer(msg.ip);
-            cout << "player quit\n";
             numPlayers--;
+            if (numPlayers == 0) {
+                endSession();
+            }
         }
     }
     return message;
 }
 
-int Game::getInput(void) {
+int Game::getInput(bool inLobby) {
     int messageType = MESSAGE_NONE;
     string serverString;
     connection msg = client->recieve(&serverString);
@@ -1352,8 +1360,13 @@ int Game::getInput(void) {
         messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
         connected = true;
         if (messageType == MESSAGE_CONF_CONNECTION) {
-            myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
-            cout << "Connection established as player " << myID << "\n";
+            if (inLobby == true) {
+                myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
+                cout << "Connection established as player " << myID << "\n";
+            } else {
+                leaveMatch();
+                connected = false;
+            }
         } else if (messageType == MESSAGE_WALL) {
             updateMap(serverString);
         } else if (messageType == MESSAGE_PLAYER) {
@@ -1365,7 +1378,11 @@ int Game::getInput(void) {
         } else if (messageType == MESSAGE_QUIT) {
             leaveMatch();
         } else if (messageType == MESSAGE_LOBBY) {
-            updateLobby(serverString);
+            if (inLobby == true) {
+                updateLobby(serverString);
+            } else {
+                connected = false;
+            }
         }
     }
     return messageType;
@@ -1938,14 +1955,13 @@ void LobbyPage::render(Game* game) {
     if (game->hosting() == true) {
         launchButton->render(game);
     }
-
-    if (game->isConnected() == false) {
-        SDL_Rect waitRect = {UI_WAITING_TOPLEFT_X, UI_WAITING_TOPLEFT_Y,
-         UI_WAITING_WIDTH, UI_WAITING_HEIGHT};
-        SDL_RenderCopy(game->renderer(), waitingText, NULL, &waitRect);
-    } else {
         // draw the lobby list
-        if (game->hosting() == false) {
+    if (game->hosting() == false) {
+        if (game->isConnected() == false) {
+            SDL_Rect waitRect = {UI_WAITING_TOPLEFT_X, UI_WAITING_TOPLEFT_Y,
+             UI_WAITING_WIDTH, UI_WAITING_HEIGHT};
+            SDL_RenderCopy(game->renderer(), waitingText, NULL, &waitRect);
+        } else {
             SDL_Texture* currName;
             SDL_Rect lobby = {UI_LOBBY_TOPLEFT_X, UI_LOBBY_TOPLEFT_Y, UI_LOBBY_WIDTH, UI_LOBBY_HEIGHT};
             SDL_Rect name = {UI_LOBBY_NAME_TOPLEFT_X, lobby.y+lobby.h*0.1, 0, lobby.h*0.8};
@@ -1968,6 +1984,40 @@ void LobbyPage::render(Game* game) {
                 }
                 lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
             }
+        }
+    } else {
+        SDL_Texture* currName;
+        SDL_Rect lobby = {UI_LOBBY_TOPLEFT_X, UI_LOBBY_TOPLEFT_Y, UI_LOBBY_WIDTH, UI_LOBBY_HEIGHT};
+        SDL_Rect name = {UI_LOBBY_NAME_TOPLEFT_X, lobby.y+lobby.h*0.1, 0, lobby.h*0.8};
+
+        currName = loadText(game->getUsername(), UI_FONT_SIZE, game->renderer());
+        name.w = name.h*UI_FONT_HEIGHT_TO_WIDTH*game->getUsername().length();
+
+        SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
+         game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
+        SDL_RenderFillRect(game->renderer(), &lobby);
+        SDL_RenderCopy(game->renderer(), currName, NULL, &name);
+        SDL_DestroyTexture(currName);
+        name.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
+        lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
+        for (int i = 0; i < GAME_MAX_PLAYERS-1; i++) {
+            SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
+             game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
+            if (i < game->getNumPlayers()) {
+                if (game->getCurrPlayers()[i].id == game->getID()) {
+                    SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
+                     game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
+                }
+                currName = loadText(game->getCurrPlayers()[i].username, UI_FONT_SIZE, game->renderer());
+                name.w = name.h*UI_FONT_HEIGHT_TO_WIDTH*game->getCurrPlayers()[i].username.length();
+                SDL_RenderFillRect(game->renderer(), &lobby);
+                SDL_RenderCopy(game->renderer(), currName, NULL, &name);
+                SDL_DestroyTexture(currName);
+                name.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
+            } else {
+                SDL_RenderFillRect(game->renderer(), &lobby);
+            }
+            lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
         }
     }
 }
@@ -2144,6 +2194,8 @@ void OptionPage::updateGame(Game* game) {
     configFile << CONFIG_PRIMCOLOR << "=" << game->primColor() << "\n";
     configFile << CONFIG_SECCOLOR << "=" << game->secColor() << "\n";
     configFile << CONFIG_USERNAME << "=" << game->getUsername() << "\n";
+    configFile << CONFIG_HOSTIP << "=" << game->hIP() << "\n";
+    configFile << CONFIG_ISHOST << "=" << game->hosting() << "\n";
     configFile.close();
 }
 

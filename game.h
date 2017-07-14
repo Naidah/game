@@ -119,6 +119,7 @@ const int SCREEN_FPS = 60; // desired framerate of the screen
 // constants used in setting up the game instance
 const int GAME_MAX_PLAYERS = 4;
 const string GAME_DEFAULT_USERNAME = "Steve";
+const int GAME_CONNECT_WAIT = 100;
 
 // values of the different colour schemes that can be used
 const colorSet COLOR_NONE = {0,0,0};
@@ -782,6 +783,8 @@ protected:
     UDPConnectionClient* client;
     bool connected;
 
+    int lastConnect;
+
 
     colorSet primaryColor;
     string primary;
@@ -822,7 +825,7 @@ public:
 
     void removePlayer(int playerip);
 
-    int getInput(void);
+    int getInput(bool inLobby);
     void sendUserActions(void);
     bool getClientAction(void);
     void sendUpdate(void);

@@ -1,5 +1,8 @@
 swidth=622
 sheight=350
 fullscreen=0
-primaryColor=yellow
+primaryColor=blue
 secondaryColor=red
+username=Naidah
+hostip=127.0.0.1
+ishost=0
