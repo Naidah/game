@@ -6,6 +6,8 @@
 MAJOR:
 -- Comment current work
 -- add tutorial
+
+-- reset winner
 */
 
 
@@ -127,7 +129,7 @@ int main(int argc, char const *argv[]) {
         if (game->hosting() == false) {
             int inputs = 0;
             while (messageType > 0) {
-                messageType = game->getInput(inLobby);
+                messageType = game->getInput(inLobby, inMenu);
                 if (messageType == MESSAGE_QUIT) {
                     inMenu = true;
                 } else if (messageType == MESSAGE_WALL) {
@@ -307,7 +309,7 @@ int main(int argc, char const *argv[]) {
                 gameOverTimer = GAME_WIN_DELAY;
             }
 
-            renderGameSpace(game, explosionList, playerMainX, playerMainY); // draw the game
+            renderGameSpace(game, explosionList, playerMainX, playerMainY, game->getWinner()); // draw the game
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
                 if ((*character)->getID() == game->getID()) {
                     renderGameUI(game, *character, hudInfoContainer, paused); // draw the HUD
@@ -574,6 +576,7 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 
 SDL_Texture* loadText(string content, int size, SDL_Renderer* renderer) {
     // creates a texture of text content from the games font at text size size
+    //cout << content << "\n";
     SDL_Texture* output = NULL;
     TTF_Font* font = TTF_OpenFont(UI_FONT_LOCATION.c_str(), size);
     if (font == NULL) {
@@ -588,7 +591,7 @@ SDL_Texture* loadText(string content, int size, SDL_Renderer* renderer) {
 
 
 void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
-    int playerMainX, int playerMainY) {
+    int playerMainX, int playerMainY, int winner) {
     if (DEBUG_SHOW_CURSOR == false) {
         SDL_ShowCursor(SDL_DISABLE);
     }
@@ -670,6 +673,29 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
                 SDL_RenderFillRect(game->renderer(), &debugRect);
             }
         }
+    }
+
+    if (winner != -1) {
+        SDL_Texture* winText = NULL;
+        int textLen = 0;
+        stringstream winString;
+        string winLabel;
+        for (auto player = game->players()->begin(); player != game->players()->end(); player++) {
+            if ((*player)->getID() == winner) {
+                winString << game->getUsername(winner) << " wins";
+                winLabel = winString.str();
+                textLen = winLabel.length();
+                winText = loadText(winLabel, UI_FONT_SIZE, game->renderer());
+            }
+        }
+        SDL_Rect winDisplay;
+        winDisplay.h = UI_WINDISPLAY_HEIGHT;
+        winDisplay.y = (GAMESPACE_HEIGHT-winDisplay.h)/2;
+        winDisplay.w = winDisplay.h*textLen*UI_FONT_HEIGHT_TO_WIDTH;
+        winDisplay.x = (GAMESPACE_WIDTH-winDisplay.w)/2;
+
+        SDL_RenderCopy(game->renderer(), winText, NULL, &winDisplay);
+        SDL_DestroyTexture(winText);
     }
 
     if (DEBUG_DRAW_MOUSE_POINT == true) { // draw the mouse location to the screen if enabled in debug
@@ -844,12 +870,13 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, b
     scoreboard[0] = game->getPlayerScore(0);
     for (int i=1; i < game->getNumPlayers(); i++) {
         playerScore sortScore = game->getPlayerScore(i);
+        scoreboard[i] = sortScore;
         for (int s=numScores; s>=0; s--) {
             if (scoreboard[s].score < sortScore.score) {
                 scoreboard[s+1] = scoreboard[s];
                 scoreboard[s] = sortScore;
             } else {
-                scoreboard[s+1] = sortScore;
+                //scoreboard[s+1] = sortScore;
             }
         }
         numScores++;
@@ -1232,7 +1259,13 @@ void Game::recieveConnection(void) {
                     currPlayers[numPlayers] = inboundConnection;
                     currPlayers[numPlayers].id = nextID;
                     currPlayers[numPlayers].weapon = stoi(inboundString.substr(1, 1));
-                    currPlayers[numPlayers].username = inboundString.substr(2, inboundString.length()-2);
+                    int index = 2;
+                    stringstream name;
+                    while (inboundString[index] != 0) {
+                        name << inboundString[index];
+                        index++;
+                    }
+                    currPlayers[numPlayers].username = name.str();
                     numPlayers++;
                     stringstream message;
                     message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
@@ -1269,6 +1302,7 @@ void Game::endSession(void) {
     server->send(to_string(MESSAGE_QUIT), currPlayers, numPlayers);
     numPlayers = 1;
     nextID = 1;
+    winner = -1;
     connected = false;
 
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1293,6 +1327,7 @@ void Game::endSession(void) {
 void Game::leaveMatch(void) {
     client->send(to_string(MESSAGE_QUIT));
     numPlayers = 0;
+    winner = -1;
     connected = false;
 
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1322,7 +1357,8 @@ void Game::initialize(int weapon) {
     playerList->clear();
     for (int i = 0; i<numPlayers; i++) {
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
-        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y, currPlayers[i].id, currPlayers[i].weapon));
+        playerList->push_front(new Player(this, initSpawn.x, initSpawn.y,
+         currPlayers[i].id, currPlayers[i].weapon));
         if (initSpawn.x == 0) {
             // if no valid spawn point was found (i.e. all points to close to players), kill them
             playerList->front()->killPlayer();
@@ -1409,7 +1445,7 @@ bool Game::getClientAction(void) {
     return message;
 }
 
-int Game::getInput(bool inLobby) {
+int Game::getInput(bool inLobby, bool inMenu) {
     int messageType = MESSAGE_NONE;
     string serverString;
     connection msg = client->recieve(&serverString);
@@ -1435,7 +1471,7 @@ int Game::getInput(bool inLobby) {
         } else if (messageType == MESSAGE_QUIT) {
             leaveMatch();
         } else if (messageType == MESSAGE_LOBBY) {
-            if (inLobby == true) {
+            if (inLobby == true || inMenu == false) {
                 updateLobby(serverString);
             } else {
                 connected = false;
@@ -1447,18 +1483,19 @@ int Game::getInput(bool inLobby) {
 
 void Game::removePlayer(int playerip) {
     int playerID = -1;
-    for (int i = 0; i < GAME_MAX_PLAYERS-1; i++) {
+    for (int i = 0; i < numPlayers; i++) {
+        if (currPlayers[i].ip == playerip && i < numPlayers) {
+            playerID = currPlayers[i].id;
+        }
         if (playerID >= 0) {
             if (i < GAME_MAX_PLAYERS-1) {
                 currPlayers[i] = currPlayers[i+1];
             }
-        } else if (currPlayers[i].ip == playerip && i < numPlayers) {
-            playerID = currPlayers[i].id;
-            numPlayers--;
         }
     }
 
     if (playerID >= 0) {
+        numPlayers--;
         forward_list<Player*> playerTemp = *playerList;
         playerList->clear();
         for (auto player = playerTemp.begin(); player != playerTemp.end(); player++) {
@@ -1470,6 +1507,8 @@ void Game::removePlayer(int playerip) {
         }
         cout << "Player " << playerID << " quit\n";
     }
+
+    sendLobby();
 }
 
 void Game::updateMap(string serverString) {
@@ -1490,6 +1529,8 @@ void Game::updatePlayers(string serverString) {
     int currIndex = 1; // start after the indentifying character
     playerState currState;
     bool found;
+
+    int foundIDs[GAME_MAX_PLAYERS];
     for (int pIndex = 0; pIndex < (serverString.length()-1)/MESSAGE_PLAYER_LEN; pIndex++) {
         currState.x = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
         currIndex += MESSAGE_LOC_CHAR;
@@ -1527,12 +1568,16 @@ void Game::updatePlayers(string serverString) {
         currIndex += MESSAGE_ID_CHAR;
         currState.weapID = stoi(serverString.substr(currIndex, 1));
         currIndex++;
+        currState.score = stoi(serverString.substr(currIndex, MESSAGE_STAT_CHAR));
+        currIndex += MESSAGE_STAT_CHAR;
         currState.ammo = stoi(serverString.substr(currIndex, MESSAGE_STAT_CHAR));
         currIndex += MESSAGE_STAT_CHAR;
         currState.reloadFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
         currIndex += MESSAGE_FRAMES_CHAR;
         currState.cooldownFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
         currIndex += MESSAGE_FRAMES_CHAR;
+
+        foundIDs[pIndex] = currState.id;
 
         found = false;
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1546,6 +1591,22 @@ void Game::updatePlayers(string serverString) {
              currState.id, currState.weapID));
         }
     }
+
+    forward_list<Player*> temp;
+    for (auto player = playerList->begin(); player != playerList->end(); player++) {
+        bool match = false;
+        for (int i = 0; i < GAME_MAX_PLAYERS; i++) {
+            if (foundIDs[i] == (*player)->getID()) {
+                match = true;
+            }
+        }
+        if (match == true) {
+            temp.push_front(*player);
+        } else {
+            delete *player;
+        }
+    }
+    *playerList = temp;
 }
 
 void Game::updateProjectiles(string serverString) {
@@ -1612,7 +1673,9 @@ void Game::updateLobby(string serverString) {
             currId = stoi(serverString.substr(currIndex, MESSAGE_ID_CHAR));
             currIndex += 3;
         } else {
-            name << serverString.substr(currIndex, 1);
+            if (serverString[currIndex] != 0) {
+                name << serverString[currIndex];
+            }
             currIndex++;
         }
     }
@@ -1720,6 +1783,16 @@ playerScore Game::getPlayerScore(int index) {
     return output;
 }
 
+string Game::getUsername(int id) {
+    string output = "";
+    for (int i=0; i<numPlayers; i++) {
+        if (currPlayers[i].id == id) {
+            output = currPlayers[i].username;
+        }
+    }
+    return output;
+}
+
 int Game::getWinner(void) {
     if (winner == -1) {
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1730,8 +1803,6 @@ int Game::getWinner(void) {
     }
     return winner;
 }
-
-
 
 
 Menu::Menu(Game* game) {
@@ -1855,9 +1926,9 @@ MainPage::MainPage(Game* game) {
 
     hostInfo = loadText(UI_HOST, UI_FONT_SIZE, game->renderer());
     hostSelect = new Button(BUTTON_HOST_TOPLEFT_X, BUTTON_HOST_TOPLEFT_Y,
-     BUTTON_HOST_WIDTH, BUTTON_HOST_HEIGHT, BUTTON_RADIO, "host", true, "images/ammoIcon.png", game);
+     BUTTON_HOST_WIDTH, BUTTON_HOST_HEIGHT, BUTTON_RADIO, "host", true, BUTTON_HOST_IMAGE, game);
     clientSelect = new Button(BUTTON_CLIENT_TOPLEFT_X, BUTTON_CLIENT_TOPLEFT_Y,
-     BUTTON_CLIENT_WIDTH, BUTTON_CLIENT_HEIGHT, BUTTON_RADIO, "client", true, "images/ammoIcon.png", game);
+     BUTTON_CLIENT_WIDTH, BUTTON_CLIENT_HEIGHT, BUTTON_RADIO, "client", true, BUTTON_CLIENT_IMAGE, game);
     hostSelect->setActive(true);
 
     weaponInfo = loadText(UI_WEAPON, UI_FONT_SIZE, game->renderer());
@@ -2033,7 +2104,7 @@ int LobbyPage::update(int x, int y, bool press, Game* game) {
         backButton->setActive(false);
     }
 
-    if (launchButton->mouseHover(x, y) == true && game->getNumPlayers() > 0) {
+    if (launchButton->mouseHover(x, y) == true && game->getNumPlayers() > 1) {
         if (press == true) {
             action = MENU_LAUNCH;
         }
@@ -2119,7 +2190,7 @@ OptionPage::OptionPage(Game* game) {
      BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
 
     fullscreenButton = new Button(BUTTON_FULL_TOPLEFT_X, BUTTON_FULL_TOPLEFT_Y,
-     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, BUTTON_RADIO, "fullscreen", true, "images/ammoIcon.png", game);
+     BUTTON_FULL_WIDTH, BUTTON_FULL_HEIGHT, BUTTON_RADIO, "fullscreen", true, BUTTON_FULL_IMAGE, game);
     fullscreenButton->setActive(game->isFullscreen());
 
     int shiftX;
@@ -2781,6 +2852,7 @@ void Player::updateState(playerState newState) {
     playerRect.y = newState.y;
     setPlayerCentre();
     angle = newState.angle;
+    score = newState.score;
 
     rolling = newState.rolling;
     rollFrames = newState.rollFrames;
@@ -2967,6 +3039,7 @@ string Player::getStateString(void) {
 
     statestring << strOfLen(id, MESSAGE_ID_CHAR);
     statestring << weapID;
+    statestring << strOfLen(score, MESSAGE_STAT_CHAR);
     statestring << strOfLen(weapon->getCurrAmmo(), MESSAGE_STAT_CHAR);
     statestring << strOfLen(weapon->getReloadFrames(), MESSAGE_FRAMES_CHAR);
     statestring << strOfLen(rollCooldown, MESSAGE_FRAMES_CHAR);

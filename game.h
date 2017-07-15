@@ -83,19 +83,25 @@ typedef struct _playerState {
     int x;
     int y;
     int angle;
+
     bool rolling;
     int rollFrames;
     int rollX;
     int rollY;
+
     bool invuln;
     int invulnFrames;
     bool alive;
     int health;
+
     int deathFrames;
     int dmX;
     int dmY;
+
     int id;
     int weapID;
+    int score;
+
     int ammo;
     int reloadFrames;
     int cooldownFrames;
@@ -462,6 +468,8 @@ const int UI_SCORE_GAP = SCREEN_HEIGHT_DEFAULT*0.02;
 const int UI_SCORE_MARGIN = SCREEN_WIDTH_DEFAULT*0.01;
 
 
+const int UI_WINDISPLAY_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.15;
+
 
 const int UI_BACKGROUND_ADDITION = 150; //number added during calculation of background color
                                         // multiplier on the primary color used in determining background color
@@ -514,11 +522,13 @@ const int BUTTON_HOST_WIDTH = SCREEN_WIDTH_DEFAULT*0.08;
 const int BUTTON_HOST_HEIGHT = BUTTON_HOST_WIDTH;
 const int BUTTON_HOST_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7;
 const int BUTTON_HOST_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.35;
+const string BUTTON_HOST_IMAGE = "images/tick.png";
 
 const int BUTTON_CLIENT_WIDTH = BUTTON_HOST_WIDTH;
 const int BUTTON_CLIENT_HEIGHT = BUTTON_HOST_HEIGHT;
 const int BUTTON_CLIENT_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.7+BUTTON_HOST_WIDTH+SCREEN_WIDTH_DEFAULT*0.05;
 const int BUTTON_CLIENT_TOPLEFT_Y = BUTTON_HOST_TOPLEFT_Y;
+const string BUTTON_CLIENT_IMAGE = "images/cross.png";
 
 const int BUTTON_PISTOL_WIDTH = SCREEN_WIDTH_DEFAULT*0.06;
 const int BUTTON_PISTOL_HEIGHT = BUTTON_PISTOL_WIDTH;
@@ -551,6 +561,7 @@ const int BUTTON_FULL_TOPLEFT_X = SCREEN_WIDTH_DEFAULT*0.3;
 const int BUTTON_FULL_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.82;
 const int BUTTON_FULL_WIDTH = SCREEN_HEIGHT_DEFAULT*0.15;
 const int BUTTON_FULL_HEIGHT = BUTTON_FULL_WIDTH;
+const string BUTTON_FULL_IMAGE = "images/fullscreen.png";
 
 const double BUTTON_MENU_COLOR_MULTIPLIER = 0.7;
 
@@ -733,7 +744,7 @@ const int MESSAGE_CLIENT_ACTION = 6;
 const int MESSAGE_LOBBY = 7;
 const int MESSAGE_QUIT = 8;
 
-const int MESSAGE_PLAYER_LEN = 57;
+const int MESSAGE_PLAYER_LEN = 59;
 
 // amounts of characters used to represent different variables types in networking strings
 const int MESSAGE_ID_CHAR = 3;
@@ -845,7 +856,7 @@ public:
 
     void removePlayer(int playerip);
 
-    int getInput(bool inLobby);
+    int getInput(bool inLobby, bool inMenu);
     void sendUserActions(void);
     bool getClientAction(void);
     void sendUpdate(void);
@@ -883,6 +894,7 @@ public:
     connection* getCurrPlayers(void) {return currPlayers;}
     int getNumPlayers(void) {return numPlayers;}
     string getUsername(void) {return username;}
+    string getUsername(int id);
     playerScore getPlayerScore(int index);
     int getWinner(void);
 
@@ -898,9 +910,6 @@ public:
     void setSize(int w, int h) {swidthActual = w; sheightActual = h;}
     void setID(int newID) {myID = newID;}
 };
-
-
-
 
 
 
@@ -1394,7 +1403,7 @@ int getInterceptY(int x1, int y1, int x2, int y2, int interceptX); // finds the 
 direction getDirections(void);
 bool checkExitMap(int x, int y, int r); //checks if an object pos (x, y) radius r is outside the map
 void renderGameSpace(Game* game, forward_list<BulletExplosion*> explosionList,
-    int playerMainX, int playerMainY); // render the gameplay area of the screen
+    int playerMainX, int playerMainY, int winner); // render the gameplay area of the screen
 void renderGameUI(Game* game, Player* userCharacter,
     hudInfo hudInfoContainer, bool paused); // render the HUD area of the screen
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints);
