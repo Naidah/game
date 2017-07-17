@@ -4,10 +4,7 @@
 // TODO
 /*
 MAJOR:
--- Comment current work
--- add tutorial
-
--- reset winner
+-- add controls
 */
 
 
@@ -42,8 +39,6 @@ using namespace std;
 int main(int argc, char const *argv[]) {
     if (DEBUG_ENABLE_DRIVERS == true) {
         testDistBetweenPoints();
-        testGetInterceptX();
-        testGetInterceptY();
         testCheckExitMap();
         testGenerateRandInt();
         testGenerateRandDouble();
@@ -64,28 +59,31 @@ int main(int argc, char const *argv[]) {
     SDL_Window* window = NULL; // window the game is displayed on, set in init function
     SDL_Renderer* renderer = NULL; // renderer for the window, set in init function
     SDL_Event eventHandler; // event handler for the game
-    int playerMainX;
-    int playerMainY;
     hudInfo hudInfoContainer; // stores elements needed for drawing the hud
 
-                              // store the start and end times of the frame
+    // store the start and end times of the frame
     int frameStart = 0;
     int frameEnd = 0;
 
+    // store the type of message sent by the client
     int messageType = 1;
 
+    // main storage structures
     forward_list<Wall*> wallContainer; // stores the game walls
     forward_list<coordSet> spawnPoints; // stores spawn point locations
     forward_list<Player*> playerList; // stores the players
     forward_list<Projectile*> projectileList; // stores the current set of projectiles
     forward_list<BulletExplosion*> explosionList; // stores explosions created by projectile collisions
+    forward_list<Projectile*> newList; // temporarily store projectiles that have not collided
+    forward_list<BulletExplosion*> explosionUpdated; // temporary store for active projectiles
+
     Game* game = new Game(&playerList, &wallContainer, &spawnPoints,
      &projectileList, &explosionList, &renderer, &window);
 
     init(&window, &renderer, game); // Initialize SDL and set the window and renderer for the game
 
 
-    Menu* menu = new Menu(game);
+    Menu* menu = new Menu(game); // create the menu screen
     game->setPatterns();
     game->setSockets();
 
@@ -93,31 +91,32 @@ int main(int argc, char const *argv[]) {
     hudInfoContainer.ammoIcon = loadImage(HUD_AMMO_ICON_LOCATION, renderer);
     hudInfoContainer.cooldownIcon = loadImage(HUD_COOLDOWN_ICON_LOCATION, renderer);
     hudInfoContainer.pauseText = loadText(UI_PAUSE_TEXT, UI_FONT_SIZE, renderer);
+    hudInfoContainer.winText = loadText(UI_WINCOND_TEXT, UI_FONT_SIZE, renderer);
 
+    // create the text elements for the pause menu
     hudInfoContainer.resume = new Button(BUTTON_RESUME_TOPLEFT_X, BUTTON_RESUME_TOPLEFT_Y,
      BUTTON_RESUME_WIDTH, BUTTON_RESUME_HEIGHT, BUTTON_MENU, "resume", false, "Resume Game", game);
     hudInfoContainer.quit = new Button(BUTTON_QUIT_TOPLEFT_X, BUTTON_QUIT_TOPLEFT_Y,
      BUTTON_QUIT_WIDTH, BUTTON_QUIT_HEIGHT, BUTTON_MENU, "quit", false, "Quit Game", game);
 
+    // load the image for the cursor
     SDL_Texture* gameCursor = loadImage(UI_GAME_CURSOR_LOCATION, renderer);
 
-
-
-
-    forward_list<Projectile*> newList; // temporarily store projectiles that have not collided
-    forward_list<BulletExplosion*> explosionUpdated; // temporary store for active projectiles
+    // store the coordinates of the current games character
+    int playerMainX;
+    int playerMainY;
 
 
     while (gameRunning == true) { // begin game loop
         messageType = 1;
-
         frameStart = SDL_GetTicks();
-        while (SDL_PollEvent(&eventHandler) != 0) { // check each event instance to ensure the game is not quit
+        while (SDL_PollEvent(&eventHandler) != 0) { // check if the game is closed or paused
             if (eventHandler.type == SDL_QUIT) { // If the windows exit button is pressed
                 gameRunning = false;
-            } else if (eventHandler.type == SDL_KEYDOWN) {
+            } else if (eventHandler.type == SDL_KEYDOWN && inMenu == false) {
+                // check for the escape key being pressed while ingame
                 if (eventHandler.key.keysym.sym == SDLK_ESCAPE) {
-                    if (paused == true) {
+                    if (paused == true) { // toggle the pause state
                         paused = false;
                     } else {
                         paused = true;
@@ -127,49 +126,56 @@ int main(int argc, char const *argv[]) {
         }
 
         if (game->hosting() == false) {
-            int inputs = 0;
-            while (messageType > 0) {
+            // recieve all inbound communications from the host
+            while (messageType != MESSAGE_NONE) { // check if a message was recieved
+                // recieve and perform action related to messages
                 messageType = game->getInput(inLobby, inMenu);
-                if (messageType == MESSAGE_QUIT) {
+                if (messageType == MESSAGE_QUIT) { // check if the game was quit
                     inMenu = true;
+                    paused = false;
                 } else if (messageType == MESSAGE_WALL) {
+                    // when the host sends map data, start the game and reset the menu for the game end
                     inMenu = false;
                     inLobby = false;
                     menu->reset();
                 }
-                inputs++;
             }
         }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, UI_COLOR_MAX_VALUE); // set the back of the entire page to black
         SDL_RenderClear(renderer); // clear the previous frame
 
-        if (inMenu == true) {
+        if (inMenu == true) { // perform menu actions
             int menuAction = MENU_NONE;
-            if (inLobby == true) {
-                if (game->hosting() == true) {
+            if (inLobby == true) { // while in the lobby, set up the match
+                if (game->hosting() == true) { // recieve inbound players as the host
                     game->recieveConnection();
                     game->sendLobby();
                 } else {
                     if (game->isConnected() == false) {
+                        // while not in a game, ping a join request to the host
                         game->attemptConnection(menu->getWeapon());
                     }
                 }
             }
+            // update the menu, and recieve any updates to it
             menuAction = menu->update(game);
             menu->render(game);
-            if (menuAction == MENU_QUIT) {
+            if (menuAction == MENU_QUIT) { // quit the game if the quit button is pressed
                 gameRunning = false;
             } else if (menuAction == MENU_LAUNCH) {
+                // start the game if the host presses the launch button
                 inMenu = false;
                 inLobby = false;
                 menu->reset();
                 game->initialize(menu->getWeapon());
             } else if (menuAction == MENU_SET_LOBBY_CLIENT || menuAction == MENU_SET_LOBBY_HOST) {
+                // enter the lobby if the play button is pressed
                 inLobby = true;
             }
 
             if (inLobby == true && menuAction == MENU_SET_MAIN) {
+                // leave the lobby if it is exited
                 inLobby = false;
                 if (game->hosting() == true) {
                     game->endSession();
@@ -177,48 +183,58 @@ int main(int argc, char const *argv[]) {
                     game->leaveMatch();
                 }
             }
-        } else {
+        } else { // if in the game, update the game
             if (game->hosting() == true) {
+                // get keyboard inputs from clients
                 bool haveMessage = true;
-                while (haveMessage == true) {
+                while (haveMessage == true) { // check if the last check recieved a message
                     haveMessage = game->getClientAction();
                 }
                 if (game->getNumPlayers() == 1) {
+                    // if all other players have left the match, and close if it has
                     cout << "All other players disconnected, exiting game\n";
                     game->endSession();
                     inMenu = true;
+                    paused = false;
                 }
                 // update the state of the controlled character
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
-                    if ((*character)->getID() == game->getID()) {
+                    if ((*character)->getID() == game->getID()) { // check if the current player is the controlled one
+                        (*character)->updateState(game, paused); // update the player
                         if (paused == false) {
                             mousePressed = false;
-                            (*character)->updateState(&eventHandler, game);
                         } else {
+                            // update the pause menu if it is open
                             coordSet mouseCoords = getMouseCoordinates(game);
                             int mX = mouseCoords.x;
                             int mY = mouseCoords.y;
                             bool press;
+
+                            // check if the mouse was pressed on this frame
                             bool mDown = SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT);
                             if (mDown == true && mousePressed == false) {
+                                // if the mouse was down this frame but not last
                                 press = true;
                             } else {
                                 press = false;
                             }
                             mousePressed = mDown;
-                            if (mDown == true && mousePressed == false);
                             if (hudInfoContainer.resume->mouseHover(mX, mY) == true) {
+                                // check if the resume button is being hovered, and change color if it is
                                 hudInfoContainer.resume->setActive(true);
                                 if (press == true) {
+                                    // if resume was pressed, close the pause menu
                                     paused = false;
                                 }
                             } else {
+                                // if not hovered, set resume to its normal state
                                 hudInfoContainer.resume->setActive(false);
                             }
 
                             if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
                                 hudInfoContainer.quit->setActive(true);
                                 if (press == true) {
+                                    // quit the game if the quit button was pressed
                                     gameOver = true;
                                 }
                             } else {
@@ -226,11 +242,13 @@ int main(int argc, char const *argv[]) {
                             }
                         }
                     } else {
+                        // get the keyboard state for the client player of a non-controlled player
+                        //  and use it to update their player
                         (*character)->updateState(game->getActions((*character)->getID()), game);
                     }
                 }
 
-                // move all players and projectiles
+                // move all players based on their state
                 for (auto character = playerList.begin(); character != playerList.end(); character++) {
                     (*character)->move(game->walls());
                 }
@@ -245,48 +263,57 @@ int main(int argc, char const *argv[]) {
                         BulletExplosion* newExplosion = new BulletExplosion(renderer,
                          (*bullet)->getLocation(), (*bullet)->getColors(), (*bullet)->getOwner());
                         explosionList.push_front(newExplosion);
-                        game->addNewExplosion(newExplosion);
+                        game->addNewExplosion(newExplosion); // put the new explosion in the list to send
                         delete *bullet;
                     }
                 }
                 projectileList = newList; // store remaining projectiles
-                game->sendUpdate();
-            } else if (paused == false) {
-                game->sendUserActions();
+                game->sendUpdate(); // send the current game state to the player
             } else {
-                coordSet mouseCoords = getMouseCoordinates(game);
-                int mX = mouseCoords.x;
-                int mY = mouseCoords.y;
-                bool press;
-                bool mDown = SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT);
-                if (mDown == true && mousePressed == false) {
-                    press = true;
-                } else {
-                    press = false;
-                }
-                mousePressed = mDown;
-                if (mDown == true && mousePressed == false);
-                if (hudInfoContainer.resume->mouseHover(mX, mY) == true) {
-                    hudInfoContainer.resume->setActive(true);
-                    if (press == true) {
-                        paused = false;
-                    }
-                } else {
-                    hudInfoContainer.resume->setActive(false);
-                }
+                // update the game for the client computers
+                game->sendUserActions(paused); // send the actions to the host
+                if (paused == true) {
+                    // update the pause screen if open
+                    coordSet mouseCoords = getMouseCoordinates(game);
+                    int mX = mouseCoords.x;
+                    int mY = mouseCoords.y;
+                    bool press;
 
-                if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
-                    hudInfoContainer.quit->setActive(true);
-                    if (press == true) {
-                        gameOver = true;
+                    // check if the mouse was pressed this frame
+                    bool mDown = SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT);
+                    if (mDown == true && mousePressed == false) {
+                        press = true;
+                    } else {
+                        press = false;
                     }
-                } else {
-                    hudInfoContainer.quit->setActive(false);
+                    mousePressed = mDown;
+                    if (hudInfoContainer.resume->mouseHover(mX, mY) == true) {
+                        hudInfoContainer.resume->setActive(true);
+                        if (press == true) {
+                            // unpause the if pressed
+                            paused = false;
+                        }
+                    } else {
+                        hudInfoContainer.resume->setActive(false);
+                    }
+
+                    if (hudInfoContainer.quit->mouseHover(mX, mY) == true) {
+                        hudInfoContainer.quit->setActive(true);
+                        if (press == true) {
+                            // quit the game if pressed
+                            inMenu = true;
+                            paused = false;
+                            game->leaveMatch();
+                        }
+                    } else {
+                        hudInfoContainer.quit->setActive(false);
+                    }
                 }
             }
 
             for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
                 if ((*character)->getID() == game->getID()) {
+                    // find the controlled player and get its coordinates
                     playerMainX = (*character)->getX();
                     playerMainY = (*character)->getY();
                 }
@@ -299,17 +326,20 @@ int main(int argc, char const *argv[]) {
                     delete *explosion;
                 }
                 else {
-                    explosionUpdated.push_front(*explosion);
+                    explosionUpdated.push_front(*explosion); // add explosions that are still existing to the temp
                 }
             }
             explosionList = explosionUpdated; // set the list of active explosions to those that remain
 
             if (game->getWinner() != -1 && gameOver == false) {
+                // if a winner exists, begin the game over
                 gameOver = true;
                 gameOverTimer = GAME_WIN_DELAY;
             }
 
-            renderGameSpace(game, explosionList, playerMainX, playerMainY, game->getWinner()); // draw the game
+
+            // render the game
+            renderGameSpace(game, explosionList, playerMainX, playerMainY, game->getWinner()); // draw the gamespace
             for (auto character = playerList.begin(); character != playerList.end(); character++) {
                 if ((*character)->getID() == game->getID()) {
                     renderGameUI(game, *character, hudInfoContainer, paused); // draw the HUD
@@ -324,6 +354,7 @@ int main(int argc, char const *argv[]) {
             int x = mouseCoords.x;
             int y = mouseCoords.y;
             
+            // set up to draw the cursor to the screen
             SDL_Rect cursorRect = { x - UI_CURSOR_WIDTH / 2, y - UI_CURSOR_HEIGHT / 2, UI_CURSOR_WIDTH, UI_CURSOR_HEIGHT };
             SDL_SetTextureColorMod(gameCursor, game->secondaryColors().red,
                 game->secondaryColors().green, game->secondaryColors().blue);
@@ -332,10 +363,11 @@ int main(int argc, char const *argv[]) {
         // update the screen to the renderers current state after adding the elements to the renderer
         SDL_RenderPresent(renderer);
 
-        if (gameOver == true) {
-            if (gameOverTimer > 0) {
+        if (gameOver == true) { // if the game is over
+            if (gameOverTimer > 0) { // decrease the timer tracking time before returning to the menu
                 gameOverTimer--;
             } else {
+                // once the timer runs out, reset the game variables and return to the menu
                 inMenu = true;
                 paused = false;
                 gameOver = false;
@@ -347,18 +379,18 @@ int main(int argc, char const *argv[]) {
             }
         }
 
+        // check if the duration of the frame is less than that needed for the desired framerate
         frameEnd = SDL_GetTicks();
         if (frameEnd - frameStart < SCREEN_TICKRATE) {
+            // if the frame has been to short, add a delay
             SDL_Delay(SCREEN_TICKRATE - (frameEnd - frameStart));
         }
     }
 
-    if (game->isConnected() == true) {
-        if (game->hosting() == true) {
-            game->endSession();
-        } else {
-            game->leaveMatch();
-        }
+    if (game->hosting() == true) { // close any connections before exiting the game
+        game->endSession();
+    } else {
+        game->leaveMatch();
     }
 
     quitGame(window, game, hudInfoContainer); // quit the game when the session finishes
@@ -367,116 +399,12 @@ int main(int argc, char const *argv[]) {
 }
 
 
-UDPConnectionClient::UDPConnectionClient(Game* game) {
-    socket = SDLNet_UDP_Open(game->cPort());
-    if (!socket) {
-        cout << "SDLNet_UDP_open: " << SDLNet_GetError() << "\n";
-    }
-    if (SDLNet_ResolveHost(&connectionIp, game->hIP().c_str(), game->hPort()) == -1) {
-        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
-    }
-    packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
-    packetOut = SDLNet_AllocPacket(CHARBUFF_LENGTH);
-    packetOut->address.host = connectionIp.host;
-    packetOut->address.port = connectionIp.port;
-}
-
-UDPConnectionClient::~UDPConnectionClient(void) {
-    SDLNet_UDP_Close(socket);
-    SDLNet_FreePacket(packetIn);
-    SDLNet_FreePacket(packetOut);
-}
-
-bool UDPConnectionClient::send(string msg) {
-    bool success = true;
-    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
-    packetOut->len = msg.length()+1;
-    SDLNet_UDP_Send(socket, -1, packetOut);
-    return success;
-}
-
-connection UDPConnectionClient::recieve(string* field) {
-    connection sender = {0, 0};
-    stringstream output;
-    if (SDLNet_UDP_Recv(socket, packetIn)) {
-        for (int i = 0; i < packetIn->len; i++) {
-            output << packetIn->data[i];
-        }
-        sender.ip = packetIn->address.host;
-        sender.port = packetIn->address.port;
-    }
-    *field = output.str();
-    return sender;
-}
-
-
-
-UDPConnectionServer::UDPConnectionServer(Game* game) {
-    socket = SDLNet_UDP_Open(game->hPort());
-    packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
-    packetOut = SDLNet_AllocPacket(CHARBUFF_LENGTH);
-    packetOut->address.host = 0;
-    packetOut->address.port = 0;
-}
-
-UDPConnectionServer::~UDPConnectionServer(void) {
-    SDLNet_UDP_Close(socket);
-    SDLNet_FreePacket(packetIn);
-    SDLNet_FreePacket(packetOut);
-}
-
-bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
-    bool success = true;
-    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
-    packetOut->len = msg.length()+1;
-    for (int i = 0; i < numIps; i++) {
-        if (ips[i].ip != 0) {
-            packetOut->address.host = ips[i].ip;
-            packetOut->address.port = ips[i].port;
-            if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
-                cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
-                success = false;
-            }
-        }
-    }
-    return success;
-}
-
-bool UDPConnectionServer::send(string msg, connection target) {
-    bool success = true;
-    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
-    packetOut->len = msg.length()+1;
-    packetOut->address.host = target.ip;
-    packetOut->address.port = target.port;
-    if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
-        cout << "SDLNet_UDP_Send server2: " << SDLNet_GetError() << "\n";
-        success = false;
-    }
-    return success;
-}
-
-connection UDPConnectionServer::recieve(string* field) {
-    connection sender = {0,0,0};
-    stringstream output;
-    if (SDLNet_UDP_Recv(socket, packetIn)) {
-        for (int i = 0; i < packetIn->len; i++) {
-            output << packetIn->data[i];
-        }
-        sender.ip = packetIn->address.host;
-        sender.port = packetIn->address.port;
-    }
-    if (field != NULL) {
-        *field = output.str();
-    }
-    return sender;
-}
-
-
 /* -------------------------- FUNCTIONS ------------------------- */
 
 void quitGame(SDL_Window* window, Game* game, hudInfo hudInfoContainer) {
     SDL_DestroyWindow(window); // destroy the window
-                               // go through all game objects, clearing any memory used and destroying them
+
+    // go through all game objects, clearing any memory used and destroying them
     for (auto character = game->players()->begin(); character != game->players()->end(); character++) {
         delete *character;
     }
@@ -495,7 +423,6 @@ void quitGame(SDL_Window* window, Game* game, hudInfo hudInfoContainer) {
     SDL_Quit();
     SDLNet_Quit();
     IMG_Quit();
-
 }
 
 bool init(SDL_Window** window, SDL_Renderer** renderer, Game* game) { // initialize important SDL functionalities
@@ -576,14 +503,13 @@ SDL_Texture* loadImage(string path, SDL_Renderer* renderer) {
 
 SDL_Texture* loadText(string content, int size, SDL_Renderer* renderer) {
     // creates a texture of text content from the games font at text size size
-    //cout << content << "\n";
     SDL_Texture* output = NULL;
     TTF_Font* font = TTF_OpenFont(UI_FONT_LOCATION.c_str(), size);
     if (font == NULL) {
         cout << "Error opening font: " << TTF_GetError() << "\n";
     } 
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, content.c_str(), {0,0,0});
-    output = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, content.c_str(), {0,0,0}); // create the surface
+    output = SDL_CreateTextureFromSurface(renderer, textSurface); // convert the surface to a texture
     SDL_FreeSurface(textSurface);
     TTF_CloseFont(font);
     return output;
@@ -616,7 +542,7 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
 
     SDL_RenderSetViewport(game->renderer(), &gamespaceViewport); // set the game viewport
 
-                                                                 // fill the gamespace background in with the colour set
+    // fill the gamespace background in with the colour set
     SDL_SetRenderDrawColor(game->renderer(),
         game->primaryColors().red*UI_BACKGROUND_MULTIPLIER + UI_BACKGROUND_ADDITION,
         game->primaryColors().green*UI_BACKGROUND_MULTIPLIER + UI_BACKGROUND_ADDITION,
@@ -675,13 +601,15 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
         }
     }
 
-    if (winner != -1) {
+    if (winner != -1) { // if a winner exists, draw a banner preseting them
         SDL_Texture* winText = NULL;
         int textLen = 0;
         stringstream winString;
         string winLabel;
         for (auto player = game->players()->begin(); player != game->players()->end(); player++) {
+            // go through each player and find the winner
             if ((*player)->getID() == winner) {
+                // create a text label based on the winners username
                 winString << game->getUsername(winner) << " wins";
                 winLabel = winString.str();
                 textLen = winLabel.length();
@@ -694,11 +622,13 @@ void renderGameSpace(Game*game, forward_list<BulletExplosion*> explosionList,
         winDisplay.w = winDisplay.h*textLen*UI_FONT_HEIGHT_TO_WIDTH;
         winDisplay.x = (GAMESPACE_WIDTH-winDisplay.w)/2;
 
+        // draw it to the centre of the screen
         SDL_RenderCopy(game->renderer(), winText, NULL, &winDisplay);
         SDL_DestroyTexture(winText);
     }
 
-    if (DEBUG_DRAW_MOUSE_POINT == true) { // draw the mouse location to the screen if enabled in debug
+    if (DEBUG_DRAW_MOUSE_POINT == true) {
+    // draw the mouse location in the gamespace frame to the screen if enabled in debug
         double ratio;
         int mouseX = 0;
         int mouseY = 0;
@@ -724,6 +654,7 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, b
     // draw the game HUD to the screen
     SDL_Rect elementRect; // rectangle object used to draw the different HUD boxes to the screen
 
+    // set the HUD viewport, and fill it in with a background color
     SDL_Rect hudViewport;
     hudViewport.x = 0;
     hudViewport.y = 0;
@@ -753,7 +684,7 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, b
 
     Weapon* userWeapon = userCharacter->getWeapon(); // store the users weapon used in referencing ammo
 
-                                                    // create a second bar over the first to show percent of ammo remaining
+    // create a second bar over the first to show percent of ammo remaining
     SDL_SetRenderDrawColor(game->renderer(),
         game->primaryColors().red*HUD_AMMO_BAR_COLOR_SCALE,
         game->primaryColors().green*HUD_AMMO_BAR_COLOR_SCALE,
@@ -845,7 +776,64 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, b
         SDL_RenderFillRect(game->renderer(), &elementRect);
     }
 
+    // render the scores
+    SDL_Rect name = {UI_SCORE_TOPLEFT_X, UI_SCORE_TOPLEFT_Y, 0, UI_SCORE_HEIGHT};
+    SDL_Rect score = {0, name.y, 0, UI_SCORE_HEIGHT};
+    SDL_Texture* currName;
+    SDL_Texture* currScore;
+    playerScore scoreboard[GAME_MAX_PLAYERS];
+    int numScores = 0;
+
+    scoreboard[0] = game->getPlayerScore(0); // set the first score
+    for (int i=1; i < game->getNumPlayers(); i++) {
+        // go through each other score and sort it into its position in the array by score
+        playerScore sortScore = game->getPlayerScore(i);
+        scoreboard[i] = sortScore;
+        for (int s=numScores; s>=0; s--) {
+            if (scoreboard[s].score < sortScore.score) {
+                scoreboard[s+1] = scoreboard[s];
+                scoreboard[s] = sortScore;
+            }
+        }
+        numScores++;
+
+    }
+
+    for (int i=0; i<game->getNumPlayers(); i++) {
+        // draw each scoreboard element to the screen
+        playerScore scoreSet = scoreboard[i];
+        if (scoreSet.id == game->getID()) {
+            // check if the current score is that of the owner, and highlight if if it is
+            SDL_Rect scoreHighlight = {0, name.y, HUD_WIDTH, name.h};
+            SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
+             game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
+            SDL_RenderFillRect(game->renderer(), &scoreHighlight); // draw a background
+        }
+
+        // create a texture based on the players username, and render it
+        currName = loadText(scoreSet.name.c_str(), UI_FONT_SIZE, game->renderer());
+        name.w = UI_SCORE_HEIGHT*scoreSet.name.length()*UI_FONT_HEIGHT_TO_WIDTH;
+        SDL_RenderCopy(game->renderer(), currName, NULL, &name);
+
+        // create a texture of the players score and render it to the right of the HUD
+        currScore = loadText(to_string(scoreSet.score).c_str(), UI_FONT_SIZE, game->renderer());
+        score.w = UI_SCORE_HEIGHT*getLength(scoreSet.score)*UI_FONT_HEIGHT_TO_WIDTH;
+        score.x = HUD_WIDTH-(score.w+UI_SCORE_MARGIN);
+        SDL_RenderCopy(game->renderer(), currScore, NULL, &score);
+
+        // destroy the previous texture and move the render rects to the next position
+        SDL_DestroyTexture(currName);
+        SDL_DestroyTexture(currScore);
+        name.y += UI_SCORE_HEIGHT + UI_SCORE_GAP;
+        score.y += UI_SCORE_HEIGHT + UI_SCORE_GAP;
+    }
+
+    // draw the score limit
+    SDL_Rect winCond = {UI_WINCOND_TOPLEFT_X, UI_WINCOND_TOPLEFT_Y, UI_WINCOND_WIDTH, UI_WINCOND_HEIGHT};
+    SDL_RenderCopy(game->renderer(), hudInfoContainer.winText, NULL, &winCond);
+
     if (paused == true) {
+        // draw the banner of the pause screen to the screen
         SDL_Rect pauseMenu = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
         SDL_RenderSetViewport(game->renderer(), &pauseMenu);
         SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red*UI_PAUSE_COLOR_MUL,
@@ -859,52 +847,6 @@ void renderGameUI(Game* game, Player* userCharacter, hudInfo hudInfoContainer, b
         hudInfoContainer.resume->render(game);
         hudInfoContainer.quit->render(game);
     }
-
-    // render the scores
-    SDL_Rect name = {UI_SCORE_TOPLEFT_X, UI_SCORE_TOPLEFT_Y, 0, UI_SCORE_HEIGHT};
-    SDL_Rect score = {0, name.y, 0, UI_SCORE_HEIGHT};
-    SDL_Texture* currName;
-    SDL_Texture* currScore;
-    playerScore scoreboard[GAME_MAX_PLAYERS];
-    int numScores = 0;
-    scoreboard[0] = game->getPlayerScore(0);
-    for (int i=1; i < game->getNumPlayers(); i++) {
-        playerScore sortScore = game->getPlayerScore(i);
-        scoreboard[i] = sortScore;
-        for (int s=numScores; s>=0; s--) {
-            if (scoreboard[s].score < sortScore.score) {
-                scoreboard[s+1] = scoreboard[s];
-                scoreboard[s] = sortScore;
-            } else {
-                //scoreboard[s+1] = sortScore;
-            }
-        }
-        numScores++;
-
-    }
-    for (int i=0; i<game->getNumPlayers(); i++) {
-        playerScore scoreSet = scoreboard[i];
-        if (scoreSet.id == game->getID()) {
-            SDL_Rect scoreHighlight = {0, name.y, HUD_WIDTH, name.h};
-            SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
-             game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
-            SDL_RenderFillRect(game->renderer(), &scoreHighlight);
-        }
-
-        currName = loadText(scoreSet.name.c_str(), UI_FONT_SIZE, game->renderer());
-        name.w = UI_SCORE_HEIGHT*scoreSet.name.length()*UI_FONT_HEIGHT_TO_WIDTH;
-        SDL_RenderCopy(game->renderer(), currName, NULL, &name);
-
-        currScore = loadText(to_string(scoreSet.score).c_str(), UI_FONT_SIZE, game->renderer());
-        score.w = UI_SCORE_HEIGHT*getLength(scoreSet.score)*UI_FONT_HEIGHT_TO_WIDTH;
-        score.x = HUD_WIDTH-(score.w+UI_SCORE_MARGIN);
-        SDL_RenderCopy(game->renderer(), currScore, NULL, &score);
-
-        SDL_DestroyTexture(currName);
-        SDL_DestroyTexture(currScore);
-        name.y += UI_SCORE_HEIGHT + UI_SCORE_GAP;
-        score.y += UI_SCORE_HEIGHT + UI_SCORE_GAP;
-    }
 }
 
 double distBetweenPoints(int x1, int y1, int x2, int y2) {
@@ -917,6 +859,7 @@ double distBetweenPoints(int x1, int y1, int x2, int y2) {
 }
 
 direction getDirections(void) {
+    // get the current direction based off the keyboard inputs
     direction output = MOVE_NONE; // set the default output to no keys pressed
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL); // load the array of keyboard states
 
@@ -1045,7 +988,7 @@ string strOfLen(int number, int len) {
 
 int getLength(int number) {
     // returns the number of digits in an int
-    // Returns 1 for 0 (specific for useage), does not consider negatives
+    // Returns 1 for 0 (specific for usage), does not consider negatives
     int length;
     if (number == 0) {
         length = 1;
@@ -1059,6 +1002,7 @@ int getLength(int number) {
 }
 
 int sizeOfProj(forward_list<Projectile*>* list) {
+    // get the number of elements in the given projectile forward list
     int size = 0;
     for (auto proj = list->begin(); proj != list->end(); proj++) {
         size++;
@@ -1067,6 +1011,7 @@ int sizeOfProj(forward_list<Projectile*>* list) {
 }
 
 coordSet getMouseCoordinates(Game* game) {
+    // get the coordinates of the mouse, scaled to the ingame screen resolution
     coordSet coords;
     SDL_GetMouseState(&coords.x, &coords.y);
     double ratio;
@@ -1116,8 +1061,12 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
     string value;
     ifstream configFile(CONFIG_FILE_LOCATION, ifstream::in); // open the config file
 
-    lastConnect = 0;
-    winner = -1;
+    lastConnect = 0; // stores the number of milliseconds into the game the last attempted connection was made at
+    winner = -1; // store the game winner if one is found
+
+    // store the previous mouse coordinates
+    lastMX = 0;
+    lastMY = 0;
 
     regex pattern("([a-zA-Z]+)=([a-zA-Z0-9\\.]+)"); // create a regex used to extract data from each line
     smatch matches; // datatype to store the regex matches
@@ -1221,6 +1170,7 @@ Game::Game(forward_list<Player*>* playerSet, forward_list<Wall*>* wallSet,
 }
 
 Game::~Game(void) {
+    // deconstructor for the game
     for (int p = 0; p < UI_BACKGROUND_PATTERN_COUNT; p++) {
         SDL_DestroyTexture(patterns[p]);
     }
@@ -1228,8 +1178,9 @@ Game::~Game(void) {
 }
 
 void Game::setSockets(void) {
+    // create the networking classes and other objects used in networking
     numPlayers = 1;
-    currPlayers[0] = {0, 0, CHARACTER_WEAPON_PISTOL, CHARACTER_MAIN_ID, username};
+    currPlayers[0] = {0, 0, CHARACTER_WEAPON_PISTOL, CHARACTER_MAIN_ID, username}; // set a default character for the host
     nextID = 1;
     if (isHost == true) {
         myID = CHARACTER_MAIN_ID;
@@ -1242,23 +1193,27 @@ void Game::setSockets(void) {
 }
 
 void Game::recieveConnection(void) {
+    // recieve inbound connection requests from clients as host
     int messageType = MESSAGE_NONE;
     string inboundString;
-    if (numPlayers < GAME_MAX_PLAYERS) {
-        connection inboundConnection = server->recieve(&inboundString);
-        if (inboundConnection.ip != 0) {
-            messageType = inboundString[0] - '0';
-            if (messageType == MESSAGE_CONF_CONNECTION) {
+    if (numPlayers < GAME_MAX_PLAYERS) { // check that the game can recieve another connection
+        connection inboundConnection = server->recieve(&inboundString); // get the connection
+        if (inboundConnection.ip != 0) { // check a message was recieved
+            messageType = inboundString[0] - '0'; // determine the type of message recieved
+            if (messageType == MESSAGE_CONF_CONNECTION) { // check the message was requesting to join
                 bool match = false;
+                // go through current connections and check if the player has joined already
                 for (int i = 0; i < numPlayers; i++) {
                     if (inboundConnection == currPlayers[i]) {
                         match = true;
                     }
                 }
-                if (match == false) {
+                if (match == false) { // if the player wasn't in the lobby previously
+                    // set the next lobby spot to the new player
                     currPlayers[numPlayers] = inboundConnection;
                     currPlayers[numPlayers].id = nextID;
                     currPlayers[numPlayers].weapon = stoi(inboundString.substr(1, 1));
+                    // search through the remainder of the message to recieve the characters username
                     int index = 2;
                     stringstream name;
                     while (inboundString[index] != 0) {
@@ -1266,13 +1221,15 @@ void Game::recieveConnection(void) {
                         index++;
                     }
                     currPlayers[numPlayers].username = name.str();
+
+                    // increase the number of players connected
                     numPlayers++;
-                    stringstream message;
+                    stringstream message; // reply to the new connection with their id in the game
                     message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
                     server->send(message.str(), inboundConnection);
-                    nextID++;
+                    nextID++; // increment the next id
                 }
-            } else if (messageType == MESSAGE_QUIT) {
+            } else if (messageType == MESSAGE_QUIT) { // if a player in the lobby tries to quit, remove them
                 removePlayer(inboundConnection.ip);
             }
         }
@@ -1280,16 +1237,19 @@ void Game::recieveConnection(void) {
 }
 
 void Game::sendLobby(void) {
+    // send the current players in the lobby to all clients
     stringstream players;
     players << MESSAGE_LOBBY;
     for (int i = 0; i < numPlayers; i++) {
+        // send a string with each players id and username
         players << strOfLen(currPlayers[i].id, MESSAGE_ID_CHAR) << currPlayers[i].username << "|";
     }
     server->send(players.str(), currPlayers, numPlayers);
 }
 
 void Game::attemptConnection(int weapon) {
-    if (SDL_GetTicks() - lastConnect > GAME_CONNECT_WAIT) {
+    // request a connection to a host
+    if (SDL_GetTicks() - lastConnect > GAME_CONNECT_WAIT) { // check the minimum time between requests has been met
         stringstream message;
         message << MESSAGE_CONF_CONNECTION << weapon << username;
         client->send(message.str());
@@ -1300,11 +1260,14 @@ void Game::attemptConnection(int weapon) {
 void Game::endSession(void) {
     // tell clients that the host is no longer playing
     server->send(to_string(MESSAGE_QUIT), currPlayers, numPlayers);
+
+    // reset game variables
     numPlayers = 1;
     nextID = 1;
     winner = -1;
     connected = false;
 
+    // clear all the game objects now the game is over
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
         delete *player;
     }
@@ -1325,11 +1288,16 @@ void Game::endSession(void) {
 }
 
 void Game::leaveMatch(void) {
+    // tell the host the client is leaving the match
     client->send(to_string(MESSAGE_QUIT));
+
+    // reset game variables
     numPlayers = 0;
     winner = -1;
     connected = false;
 
+
+    // delete the game objects
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
         delete *player;
     }
@@ -1351,11 +1319,15 @@ void Game::leaveMatch(void) {
 
 void Game::initialize(int weapon) {
     // starts a new game instance
+
+    // set the host to use their chosen weapon
     currPlayers[0].weapon = weapon;
+    currPlayers[0].id = CHARACTER_MAIN_ID;
     generateMap(wallContainer, spawnPoints); // generate a random set of walls and spawn points for the game
     coordSet initSpawn; // temporarily stores spawn points for each player
     playerList->clear();
     for (int i = 0; i<numPlayers; i++) {
+        // create each player based off each users id and weapon
         initSpawn = getSpawnPoint(spawnPoints, playerList); // set a spawn point for each player
         playerList->push_front(new Player(this, initSpawn.x, initSpawn.y,
          currPlayers[i].id, currPlayers[i].weapon));
@@ -1364,45 +1336,76 @@ void Game::initialize(int weapon) {
             playerList->front()->killPlayer();
         }
     }
+    // send the map and playerlist to each client to tell the game has started
     server->send(getMapString(), currPlayers, numPlayers);
     server->send(getPlayerString(), currPlayers, numPlayers);
 }
 
 void Game::sendUpdate(void) {
+    // send an update of each game element to the players
     server->send(getPlayerString(), currPlayers, numPlayers);
     server->send(getProjectileString(), currPlayers, numPlayers);
     server->send(getExplosionString(), currPlayers, numPlayers);
 }
 
 void Game::addNewExplosion(BulletExplosion* newExplosion) {
+    // add a new bullet explosion to the list of explosions
     explosionsToSend.push_front(newExplosion);
 }
 
-void Game::sendUserActions(void) {
-    direction currDirection = getDirections();
+void Game::sendUserActions(bool paused) {
+    // send the keyboard actions of the client to the host
+    direction currDirection;
+    if (paused == true) { // check the user is able move
+        currDirection = MOVE_NONE;
+    } else {
+        currDirection = getDirections();
+    }
     int x, y;
-    double ratio;
-    bool mouseDown = SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT);
-    if ((double)sheight / SCREEN_HEIGHT_DEFAULT < (double)swidth / SCREEN_WIDTH_DEFAULT) {
-        ratio = (double)sheight / SCREEN_HEIGHT_DEFAULT;
-    }
-    else {
-        ratio = (double)swidth / SCREEN_WIDTH_DEFAULT;
-    }
-    x -= GAMESPACE_TOPLEFT_X*ratio;
-    x /= ratio;
-    y /= ratio;
+    bool mouseDown;
 
-    if (x < 0) {
-        x = 0;
-    }
-    if (y < 0) {
-        y = 0;
-    }
-    const Uint8* keyboard = SDL_GetKeyboardState(NULL);
-    bool rDown = keyboard[SDL_SCANCODE_R];
-    bool shiftDown = keyboard[SDL_SCANCODE_LSHIFT];
+    if (paused == false) { // check the user can udpate their direction
+        double ratio;
+        mouseDown = SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT);
+        if ((double)sheight / SCREEN_HEIGHT_DEFAULT < (double)swidth / SCREEN_WIDTH_DEFAULT) {
+            ratio = (double)sheight / SCREEN_HEIGHT_DEFAULT;
+        }
+        else {
+            ratio = (double)swidth / SCREEN_WIDTH_DEFAULT;
+        }
+        x -= GAMESPACE_TOPLEFT_X*ratio;
+        x /= ratio;
+        y /= ratio;
 
+        if (x < 0) {
+            x = 0;
+        }
+        if (y < 0) {
+            y = 0;
+        }
+
+        // store the mouse coordinates for this frame incase they are not valid next frame
+        lastMX = x;
+        lastMY = y;
+    } else {
+        // if the player is paused, lock the mouse at the coordinates for the last valid frame
+        x = lastMX;
+        y = lastMY;
+        mouseDown = false;
+    }
+
+    bool rDown;
+    bool shiftDown;
+    if (paused == false) { // check if the player can make actions
+        const Uint8* keyboard = SDL_GetKeyboardState(NULL);
+        rDown = keyboard[SDL_SCANCODE_R];
+        shiftDown = keyboard[SDL_SCANCODE_LSHIFT];
+    } else {
+        rDown = false;
+        shiftDown = false;
+    }
+
+    // send the data to the host
     stringstream toServer;
     toServer << MESSAGE_CLIENT_ACTION;
     toServer << strOfLen(myID, MESSAGE_ID_CHAR);
@@ -1414,31 +1417,32 @@ void Game::sendUserActions(void) {
 }
 
 bool Game::getClientAction(void) {
+    // recieve client keyboard input
     bool message = false;
     string serverString;
     connection msg = server->recieve(&serverString);
-    if (msg.ip != 0) {
+    if (msg.ip != 0) { // check if a message was recieved
         int messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
-        if (messageType == MESSAGE_CLIENT_ACTION) {
+        if (messageType == MESSAGE_CLIENT_ACTION) { // ncheck the message involves a player action
             // update the action map
             userAction action;
+            // read in the data from the input string
             int id = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
             action.mouseX = stoi(serverString.substr(1+MESSAGE_ID_CHAR, MESSAGE_LOC_CHAR));
             action.mouseY = stoi(serverString.substr(1+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR,
              MESSAGE_LOC_CHAR));
-            action.mouseDown = stoi(serverString.substr(1+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
-             1));
-            action.rDown = stoi(serverString.substr(2+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
-             1));
-            action.shiftDown = stoi(serverString.substr(3+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
-             1));
-            action.moveHor = stoi(serverString.substr(4+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
-             1))-2;
-            action.moveVert = stoi(serverString.substr(5+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2,
-             1))-2;
+
+            action.mouseDown = stoi(serverString.substr(1+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2, 1));
+            action.rDown = stoi(serverString.substr(2+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2, 1));
+            action.shiftDown = stoi(serverString.substr(3+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2, 1));
+
+            action.moveHor = stoi(serverString.substr(4+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2, 1))-2;
+            action.moveVert = stoi(serverString.substr(5+MESSAGE_ID_CHAR+MESSAGE_LOC_CHAR*2, 1))-2;
+
             clientActions[id] = action;
             message = true;
         } else if (messageType == MESSAGE_QUIT) {
+            // remove the player if they quit the game
             removePlayer(msg.ip);
         }
     }
@@ -1446,20 +1450,23 @@ bool Game::getClientAction(void) {
 }
 
 int Game::getInput(bool inLobby, bool inMenu) {
+    // get messages from the host as client
     int messageType = MESSAGE_NONE;
     string serverString;
     connection msg = client->recieve(&serverString);
-    if (msg.ip != 0) {
+    if (msg.ip != 0) { // check a message was recieved
         messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
         connected = true;
-        if (messageType == MESSAGE_CONF_CONNECTION) {
+        if (messageType == MESSAGE_CONF_CONNECTION) { // check if the host confirmed the connection
             if (inLobby == true) {
+                // set the instance id to that recieved
                 myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
                 cout << "Connection established as player " << myID << "\n";
-            } else {
+            } else { // if the player wasn't looking for a match, leave it
                 leaveMatch();
                 connected = false;
             }
+        // find the type of message recieved and update that part of the game
         } else if (messageType == MESSAGE_WALL) {
             updateMap(serverString);
         } else if (messageType == MESSAGE_PLAYER) {
@@ -1471,7 +1478,7 @@ int Game::getInput(bool inLobby, bool inMenu) {
         } else if (messageType == MESSAGE_QUIT) {
             leaveMatch();
         } else if (messageType == MESSAGE_LOBBY) {
-            if (inLobby == true || inMenu == false) {
+            if (inLobby == true || inMenu == false) { // check if the player is able to update lobby
                 updateLobby(serverString);
             } else {
                 connected = false;
@@ -1482,41 +1489,51 @@ int Game::getInput(bool inLobby, bool inMenu) {
 }
 
 void Game::removePlayer(int playerip) {
+    // remove a player from the match
     int playerID = -1;
     for (int i = 0; i < numPlayers; i++) {
+        // find the connection of the player
         if (currPlayers[i].ip == playerip && i < numPlayers) {
             playerID = currPlayers[i].id;
         }
-        if (playerID >= 0) {
+        if (playerID >= 0) { // if the connection has been found, move all tailing connections forward
             if (i < GAME_MAX_PLAYERS-1) {
                 currPlayers[i] = currPlayers[i+1];
             }
         }
     }
 
-    if (playerID >= 0) {
+    if (playerID >= 0) { // if the player to remove was in the match, delete their player object
         numPlayers--;
+        // create a temp player list and clear the main one
         forward_list<Player*> playerTemp = *playerList;
         playerList->clear();
         for (auto player = playerTemp.begin(); player != playerTemp.end(); player++) {
             if ((*player)->getID() == playerID) {
+                // delete the player once found
                 delete *player;
             } else {
+                // re-add the player if they are not to be deleted
                 playerList->push_front(*player);
             }
         }
         cout << "Player " << playerID << " quit\n";
     }
 
-    sendLobby();
+    sendLobby(); // update the lobby for all players
 }
 
 void Game::updateMap(string serverString) {
+    // update the map based off the input string
+
+    // reset all main player objects for the new game
     wallContainer->clear();
     playerList->clear();
     projectileList->clear();
+
     int x, y, w, h;
     for (int wall = 0; wall < (serverString.length()-1)/(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS); wall++) {
+        // go through each wall instance, read the required variables and create a wall based off of the data
         x = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+1, MESSAGE_LOC_CHAR));
         y = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+MESSAGE_LOC_CHAR+1, MESSAGE_LOC_CHAR));
         w = stoi(serverString.substr(wall*(MESSAGE_LOC_CHAR*MAPBOX_NUM_CORNERS)+MESSAGE_LOC_CHAR*2+1, MESSAGE_LOC_CHAR));
@@ -1526,12 +1543,14 @@ void Game::updateMap(string serverString) {
 }
 
 void Game::updatePlayers(string serverString) {
+    // update all players based of the input string
     int currIndex = 1; // start after the indentifying character
     playerState currState;
     bool found;
 
     int foundIDs[GAME_MAX_PLAYERS];
     for (int pIndex = 0; pIndex < (serverString.length()-1)/MESSAGE_PLAYER_LEN; pIndex++) {
+        // read the data from the string
         currState.x = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
         currIndex += MESSAGE_LOC_CHAR;
         currState.y = stoi(serverString.substr(currIndex, MESSAGE_LOC_CHAR));
@@ -1577,21 +1596,24 @@ void Game::updatePlayers(string serverString) {
         currState.cooldownFrames = stoi(serverString.substr(currIndex, MESSAGE_FRAMES_CHAR));
         currIndex += MESSAGE_FRAMES_CHAR;
 
-        foundIDs[pIndex] = currState.id;
+        foundIDs[pIndex] = currState.id; // add the id found to the array of identified ids
 
         found = false;
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
             if ((*player)->getID() == currState.id) {
+                // check if the player of the id was already in existance, and update if they were
                 found = true;
                 (*player)->updateState(currState);
             }
         }
         if (found == false) {
+            // if the player had not been created, create them
             playerList->push_front(new Player(this, currState.x, currState.y,
              currState.id, currState.weapID));
         }
     }
 
+    // go through each player, and delete them if no update was made to them
     forward_list<Player*> temp;
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
         bool match = false;
@@ -1610,33 +1632,43 @@ void Game::updatePlayers(string serverString) {
 }
 
 void Game::updateProjectiles(string serverString) {
+    // update each projectile
+    // updates existing projectiles where possible to avoid a slow process from occuring
+
+    // find the number of projectiles currently active
     int numProj = (serverString.length()-1)/(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR);
     int moddedProj = 0;
     int x, y, id;
-    for (int bullet = 0; bullet < numProj; bullet++) {
+    for (int bullet = 0; bullet < numProj; bullet++) { 
+        // for each projectile, get the required data from the string
         x = stoi(serverString.substr(1+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*bullet, MESSAGE_LOC_CHAR));
         y = stoi(serverString.substr(1+MESSAGE_LOC_CHAR+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*bullet, MESSAGE_LOC_CHAR));
         id = stoi(serverString.substr(1+MESSAGE_LOC_CHAR*2+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*bullet, MESSAGE_ID_CHAR));
-        if (moddedProj < sizeOfProj(projectileList)) {
+        if (moddedProj < sizeOfProj(projectileList)) { 
+            // check if number of projectiles updated with new data has required the maximum possible
             int index = 0;
             for (auto toMod = projectileList->begin(); toMod != projectileList->end(); toMod++) {
-                if (index == bullet) {
+                if (index == bullet) { // go to the next bullet to update and give it the new data
                     (*toMod)->updateState(x, y, this, id);
                     moddedProj++;
                 }
                 index++;
             }
         } else {
+            // if more projectiles are required, create a new one
             projectileList->push_front(new Projectile(x, y, this, id));
         }
     }
     if (numProj < sizeOfProj(projectileList)) {
+        // if excess projectiles exist, copy the updated projectiles and delete the rest
         forward_list<Projectile*> newList = *projectileList;
         projectileList->clear();
         int index = 0;
         for (auto toMod = newList.begin(); toMod != newList.end(); toMod++) {
             if (index < moddedProj) {
                 projectileList->push_front(*toMod);
+            } else {
+                delete *toMod;
             }
             index++;
         }
@@ -1644,9 +1676,11 @@ void Game::updateProjectiles(string serverString) {
 }
 
 void Game::updateExplosions(string serverString) {
-    int numExpl = (serverString.length()-1)/(MESSAGE_LOC_CHAR*2+MESSAGE_ID_CHAR);
+    // recieve and new explosions
+    int numExpl = (serverString.length()-1)/(MESSAGE_LOC_CHAR*2+MESSAGE_ID_CHAR); // find the number created
     for (int expl = 0; expl < numExpl; expl++) {
         int x, y, id;
+        // extract any needed data and create a new explosion from the data
         x = stoi(serverString.substr(1+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_LOC_CHAR));
         y = stoi(serverString.substr(1+MESSAGE_LOC_CHAR+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_LOC_CHAR));
         id = stoi(serverString.substr(1+MESSAGE_LOC_CHAR*2+(2*MESSAGE_LOC_CHAR+MESSAGE_ID_CHAR)*expl, MESSAGE_ID_CHAR));
@@ -1655,25 +1689,27 @@ void Game::updateExplosions(string serverString) {
 }
 
 void Game::updateLobby(string serverString) {
+    // recieve new updates to the lobby as a client
     int currIndex = 1;
     int currId = -1;
     stringstream name;
     numPlayers = 0;
     while (currIndex < serverString.length()-1) {
-        if (serverString.substr(currIndex, 1) == "|") {
+        if (serverString.substr(currIndex, 1) == "|") { // check for a divide between insances
             currPlayers[numPlayers].id = currId;
             currPlayers[numPlayers].username = name.str();
             numPlayers++;
 
+            // reset variables for the next player
             currId = -1;
             name.str("");
             currIndex++;
 
-        } else if (currId == -1) {
+        } else if (currId == -1) { // if an id is required, extract it
             currId = stoi(serverString.substr(currIndex, MESSAGE_ID_CHAR));
             currIndex += 3;
         } else {
-            if (serverString[currIndex] != 0) {
+            if (serverString[currIndex] != 0) { // add valid characters to the characters username
                 name << serverString[currIndex];
             }
             currIndex++;
@@ -1695,6 +1731,7 @@ string Game::getMapString(void) {
 }
 
 string Game::getPlayerString(void) {
+    // create a string representing the state of each player needed for display
     stringstream playerString;
     playerString << MESSAGE_PLAYER;
     for (auto player = playerList->begin(); player != playerList->end(); player++) {
@@ -1704,6 +1741,7 @@ string Game::getPlayerString(void) {
 }
 
 string Game::getProjectileString(void) {
+    // get a string representing each projectiles state
     stringstream projString;
     projString << MESSAGE_PROJECTILE;
     for (auto bullet = projectileList->begin(); bullet != projectileList->end(); bullet++) {
@@ -1713,6 +1751,7 @@ string Game::getProjectileString(void) {
 }
 
 string Game::getExplosionString(void) {
+    // get a string containting data on each new explosion object
     stringstream explosionString;
     explosionString << MESSAGE_EXPLOSION;
     for (auto explosion = explosionsToSend.begin();
@@ -1724,17 +1763,19 @@ string Game::getExplosionString(void) {
 }
 
 void Game::setPatterns(void) {
-    // load the patterns
+    // load the patterns used to decorate the game board
     stringstream patternLocation;
     for (int i = 0; i < UI_BACKGROUND_PATTERN_COUNT; i++) {
         patternLocation.str("");
+        // generate the next string in the list
         patternLocation << UI_BACKGROUND_PATTERN_PREFIX << to_string(i) << UI_BACKGROUND_PATTERN_TYPE;
         patterns[i] = loadImage(patternLocation.str(), *gameRenderer);
 
-        if (!patterns[i]) {
+        if (!patterns[i]) { // check an image was loaded
             cout << IMG_GetError() << "\n";
         }
         else {
+            // modify the color of the pattern
             SDL_SetTextureAlphaMod(patterns[i], UI_BACKGROUND_PATTERN_ALPHA);
             SDL_SetTextureColorMod(patterns[i], primaryColor.red, primaryColor.green,
                 primaryColor.blue);
@@ -1743,16 +1784,19 @@ void Game::setPatterns(void) {
 }
 
 void Game::updatePrimColors(string newColor) {
+    // update the games primary colors to the new color
     primary = newColor;
     primaryColor = COLOR_VALUES[newColor];
 }
 
 void Game::updateSecColors(string newColor) {
+    // update the games secondary color
     secondary = newColor;
     secondaryColor = COLOR_VALUES[newColor];
 }
 
 void Game::updateWindow(int w, int h, bool full) {
+    // update the size and fullscreen state of the window
     SDL_SetWindowSize(*gameWindow, w, h);
     swidth = w;
     sheight = h;
@@ -1771,6 +1815,7 @@ void Game::updateWindow(int w, int h, bool full) {
 }
 
 playerScore Game::getPlayerScore(int index) {
+    // get the score and username of a player at a particular index in the currPlayers object
     assert(index < numPlayers);
     playerScore output;
     output.name = currPlayers[index].username;
@@ -1784,6 +1829,7 @@ playerScore Game::getPlayerScore(int index) {
 }
 
 string Game::getUsername(int id) {
+    // get the username of a player with a particular id
     string output = "";
     for (int i=0; i<numPlayers; i++) {
         if (currPlayers[i].id == id) {
@@ -1794,6 +1840,7 @@ string Game::getUsername(int id) {
 }
 
 int Game::getWinner(void) {
+    // check if the game has a winner, returning their id, or -1 if none has been found
     if (winner == -1) {
         for (auto player = playerList->begin(); player != playerList->end(); player++) {
             if ((*player)->getScore() >= GAME_WIN_SCORE) {
@@ -1806,17 +1853,20 @@ int Game::getWinner(void) {
 
 
 Menu::Menu(Game* game) {
-    currMenu = MENU_MAIN;
+    // initialize the menu and all the pages involved
+    currMenu = MENU_MAIN; // start on the main menu
+
     mainMenu = new MainPage(game);
     lobby = new LobbyPage(game);
     optionMenu = new OptionPage(game);
     tutorial = new TutorialPage(game);
     mouseDown = false;
 
-    weapon = CHARACTER_WEAPON_PISTOL;
+    weapon = CHARACTER_WEAPON_PISTOL; // default to the pistol
 }
 
 Menu::~Menu(void) {
+    // destroy the menu
     delete mainMenu;
     delete lobby;
     delete optionMenu;
@@ -1824,6 +1874,7 @@ Menu::~Menu(void) {
 }
 
 void Menu::reset(void) {
+    // reset the menu to its original state
     currMenu = MENU_MAIN;
     mainMenu->reset();
     lobby->reset();
@@ -1833,6 +1884,7 @@ void Menu::reset(void) {
 }
 
 int Menu::update(Game* game) {
+    // update the menu, and change its state depending on the actions taken by the user
     int action = MENU_NONE;
     coordSet mouseCoords = getMouseCoordinates(game);
     int x = mouseCoords.x;
@@ -1846,12 +1898,14 @@ int Menu::update(Game* game) {
     if (mousePress == true && mouseDown == false) {
         press = true;
     }
+
     mouseDown = mousePress;
 
 
+    // determine the current page of the menu, and update based off of it
     if (currMenu == MENU_MAIN) {
         action = mainMenu->update(x, y, press);
-        weapon = mainMenu->getCurrWeapon();
+        weapon = mainMenu->getCurrWeapon(); // update the current weapon to that selected
     } else if (currMenu == MENU_LOBBY) {
         action = lobby->update(x, y, press, game);
     } else if (currMenu == MENU_OPTIONS) {
@@ -1861,9 +1915,11 @@ int Menu::update(Game* game) {
     }
 
     if (currMenu == MENU_OPTIONS && action != MENU_NONE) {
+        // if the player leaves the option menu, update it based on the new settings
         optionMenu->updateGame(game);
     }
 
+    // if the player chose to move to a new page, update the state
     if (action == MENU_SET_MAIN) {
         currMenu = MENU_MAIN;
     } else if (action == MENU_SET_LOBBY_HOST) {
@@ -1909,8 +1965,11 @@ void Menu::render(Game* game) {
 
 
 MainPage::MainPage(Game* game) {
-    heading = loadText("Game", UI_FONT_SIZE, game->renderer());
+    // create the main page
+    // create the banner text
+    heading = loadText(MAIN_HEADER, UI_FONT_SIZE, game->renderer());
 
+    // create all needed buttons
     playButton = new Button(BUTTON_MAIN_TOPLEFT_X, BUTTON_MAIN_TOPLEFT_Y, BUTTON_MAIN_WIDTH,
      BUTTON_MAIN_HEIGHT, BUTTON_MENU, "play", false, "Play", game);
     optionButton = new Button(BUTTON_MAIN_TOPLEFT_X,
@@ -1924,13 +1983,15 @@ MainPage::MainPage(Game* game) {
      BUTTON_MAIN_HEIGHT, BUTTON_MENU, "quit", false, "Quit Game", game);
 
 
+    // create the host selection buttons
     hostInfo = loadText(UI_HOST, UI_FONT_SIZE, game->renderer());
     hostSelect = new Button(BUTTON_HOST_TOPLEFT_X, BUTTON_HOST_TOPLEFT_Y,
      BUTTON_HOST_WIDTH, BUTTON_HOST_HEIGHT, BUTTON_RADIO, "host", true, BUTTON_HOST_IMAGE, game);
     clientSelect = new Button(BUTTON_CLIENT_TOPLEFT_X, BUTTON_CLIENT_TOPLEFT_Y,
      BUTTON_CLIENT_WIDTH, BUTTON_CLIENT_HEIGHT, BUTTON_RADIO, "client", true, BUTTON_CLIENT_IMAGE, game);
-    hostSelect->setActive(true);
+    hostSelect->setActive(true); // default to being host
 
+    // create the weapons selection buttons
     weaponInfo = loadText(UI_WEAPON, UI_FONT_SIZE, game->renderer());
     pistolSelect = new Button(BUTTON_PISTOL_TOPLEFT_X, BUTTON_PISTOL_TOPLEFT_Y,
      BUTTON_PISTOL_WIDTH, BUTTON_PISTOL_HEIGHT, BUTTON_RADIO, "pistol", true, "images/characterPistol.png", game);
@@ -1938,24 +1999,30 @@ MainPage::MainPage(Game* game) {
      BUTTON_AR_WIDTH, BUTTON_AR_HEIGHT, BUTTON_RADIO, "rifle", true, "images/characterAssaultRifle.png", game);
     shotgunSelect = new Button(BUTTON_SHOTGUN_TOPLEFT_X, BUTTON_SHOTGUN_TOPLEFT_Y,
      BUTTON_SHOTGUN_WIDTH, BUTTON_SHOTGUN_HEIGHT, BUTTON_RADIO, "shotgun", true, "images/characterShotgun.png", game);
-    pistolSelect->setActive(true);
-
-    // ADD
-    /*
-    - Weapon selector
-    - Name?
-    - Host/client
-    */
+    pistolSelect->setActive(true); // default to using pistol
 }
 
 MainPage::~MainPage(void) {
+    // delete the main page
     delete playButton;
     delete optionButton;
     delete controlButton;
     delete quitButton;
+
+    delete hostSelect;
+    delete clientSelect;
+
+    delete pistolSelect;
+    delete rifleSelect;
+    delete shotgunSelect;
+
+    SDL_DestroyTexture(heading);
+    SDL_DestroyTexture(weaponInfo);
+    SDL_DestroyTexture(hostInfo);
 }
 
 void MainPage::reset(void) {
+    // reset the page
     playButton->setActive(false);
     optionButton->setActive(false);
     controlButton->setActive(false);
@@ -1963,6 +2030,7 @@ void MainPage::reset(void) {
 }
 
 int MainPage::getCurrWeapon(void) {
+    // get the weapon currently selected
     int weapon;
     if (pistolSelect->getActive() == true) {
         weapon = CHARACTER_WEAPON_PISTOL;
@@ -1975,8 +2043,10 @@ int MainPage::getCurrWeapon(void) {
 }
 
 int MainPage::update(int x, int y, bool press) {
+    //update the page if it is open
+
     int action = MENU_NONE;
-    if (playButton->mouseHover(x, y) == true) {
+    if (playButton->mouseHover(x, y) == true) { // check if the player enters lobby
         if (press == true) {
             if (hostSelect->getActive() == true) {
                 action = MENU_SET_LOBBY_HOST;
@@ -1989,6 +2059,7 @@ int MainPage::update(int x, int y, bool press) {
         playButton->setActive(false);
     }
 
+    // check if the player opens the options menu
     if (optionButton->mouseHover(x, y) == true) {
         if (press == true) {
             action = MENU_SET_OPTIONS;
@@ -1998,6 +2069,7 @@ int MainPage::update(int x, int y, bool press) {
         optionButton->setActive(false);
     }
 
+    // check if the player opens the tutorial
     if (controlButton->mouseHover(x, y) == true) {
         if (press == true) {
             action = MENU_SET_CONTROLS;
@@ -2007,6 +2079,7 @@ int MainPage::update(int x, int y, bool press) {
         controlButton->setActive(false);
     }
 
+    // check if the player quits the game
     if (quitButton->mouseHover(x, y) == true) {
         if (press == true) {
             action = MENU_QUIT;
@@ -2016,6 +2089,7 @@ int MainPage::update(int x, int y, bool press) {
         quitButton->setActive(false);
     }
 
+    // check whether the player choses either host or client, and update respectively
     if (hostSelect->mouseHover(x, y) == true && press == true) {
         hostSelect->setActive(true);
         clientSelect->setActive(false);
@@ -2024,6 +2098,8 @@ int MainPage::update(int x, int y, bool press) {
         clientSelect->setActive(true);
     }
 
+
+    // check if the user chooses a weapon, and disable others if they do
     if (pistolSelect->mouseHover(x, y) == true && press == true) {
         pistolSelect->setActive(true);
         rifleSelect->setActive(false);
@@ -2075,26 +2151,35 @@ void MainPage::render(Game* game) {
 
 
 LobbyPage::LobbyPage(Game* game) {
+    // create the lobby page
     backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
      BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
     launchButton = new Button(BUTTON_LAUNCH_TOPLEFT_X, BUTTON_LAUNCH_TOPLEFT_Y,
      BUTTON_LAUNCH_WIDTH, BUTTON_LAUNCH_HEIGHT, BUTTON_MENU, "launch", false, "Launch", game);
 
     waitingText = loadText(UI_WAITING, UI_FONT_SIZE, game->renderer());
+    hostInfo = loadText(UI_HOST_INFO, UI_FONT_SIZE, game->renderer());
 }
 
 LobbyPage::~LobbyPage(void) {
     delete backButton;
+    delete launchButton;
 
     SDL_DestroyTexture(waitingText);
+    SDL_DestroyTexture(hostInfo);
 }
 
 void LobbyPage::reset() {
+    // reset the page
     backButton->setActive(false);
+    launchButton->setActive(false);
 }
 
 int LobbyPage::update(int x, int y, bool press, Game* game) {
+    // update the lobby each frame
     int action = MENU_NONE;
+
+    // check if the plyaer leaves the lobby
     if (backButton->mouseHover(x, y) == true) {
         if (press == true) {
             action = MENU_SET_MAIN;
@@ -2104,7 +2189,9 @@ int LobbyPage::update(int x, int y, bool press, Game* game) {
         backButton->setActive(false);
     }
 
-    if (launchButton->mouseHover(x, y) == true && game->getNumPlayers() > 1) {
+    // check if the host launches the game, ensuring at least 2 players are in the game
+    if (launchButton->mouseHover(x, y) == true && game->getNumPlayers() > 1 &&
+         game->hosting() == true) {
         if (press == true) {
             action = MENU_LAUNCH;
         }
@@ -2116,6 +2203,7 @@ int LobbyPage::update(int x, int y, bool press, Game* game) {
 }
 
 void LobbyPage::render(Game* game) {
+    // draw the lobby to the screen
     backButton->render(game);
 
     if (game->hosting() == true) {
@@ -2123,31 +2211,43 @@ void LobbyPage::render(Game* game) {
     }
         // draw the lobby list
     if (game->hosting() == false) {
-        if (game->isConnected() == false) {
+        if (game->isConnected() == false) { // if the client hasn't connected to a game, render the wait text
             SDL_Rect waitRect = {UI_WAITING_TOPLEFT_X, UI_WAITING_TOPLEFT_Y,
              UI_WAITING_WIDTH, UI_WAITING_HEIGHT};
             SDL_RenderCopy(game->renderer(), waitingText, NULL, &waitRect);
         } else {
+            // indicate the host is waiting
+            SDL_Rect hostRect = {UI_HOST_INFO_TOPLEFT_X, UI_HOST_INFO_TOPLEFT_Y,
+             UI_HOST_INFO_WIDTH, UI_HOST_INFO_HEIGHT};
+            SDL_RenderCopy(game->renderer(), hostInfo, NULL, &hostRect);
+
+
             SDL_Texture* currName;
             SDL_Rect lobby = {UI_LOBBY_TOPLEFT_X, UI_LOBBY_TOPLEFT_Y, UI_LOBBY_WIDTH, UI_LOBBY_HEIGHT};
             SDL_Rect name = {UI_LOBBY_NAME_TOPLEFT_X, lobby.y+lobby.h*0.1, 0, lobby.h*0.8};
             for (int i = 0; i < GAME_MAX_PLAYERS; i++) {
+                // go through each player in the lobby
                 SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
                  game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
-                if (i < game->getNumPlayers()) {
-                    if (game->getCurrPlayers()[i].id == game->getID()) {
+                if (i < game->getNumPlayers()) { // if their is a player at the current index
+                    if (game->getCurrPlayers()[i].id == game->getID()) { // highlight the player if it is this instances id
                         SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
                          game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
                     }
+                    // create the texture for the player and render it
                     currName = loadText(game->getCurrPlayers()[i].username, UI_FONT_SIZE, game->renderer());
                     name.w = name.h*UI_FONT_HEIGHT_TO_WIDTH*game->getCurrPlayers()[i].username.length();
                     SDL_RenderFillRect(game->renderer(), &lobby);
                     SDL_RenderCopy(game->renderer(), currName, NULL, &name);
                     SDL_DestroyTexture(currName);
+
+                    // move the image down for the next frame
                     name.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
                 } else {
+                    // draw an empty box to present an empty place in the lobby
                     SDL_RenderFillRect(game->renderer(), &lobby);
                 }
+                // move the lobby rect down for the next frame
                 lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
             }
         }
@@ -2156,22 +2256,28 @@ void LobbyPage::render(Game* game) {
         SDL_Rect lobby = {UI_LOBBY_TOPLEFT_X, UI_LOBBY_TOPLEFT_Y, UI_LOBBY_WIDTH, UI_LOBBY_HEIGHT};
         SDL_Rect name = {UI_LOBBY_NAME_TOPLEFT_X, lobby.y+lobby.h*0.1, 0, lobby.h*0.8};
         for (int i = 0; i < GAME_MAX_PLAYERS; i++) {
+            // go through each player in the lobby
             SDL_SetRenderDrawColor(game->renderer(), game->primaryColors().red,
              game->primaryColors().green, game->primaryColors().blue, UI_COLOR_MAX_VALUE);
-            if (i < game->getNumPlayers()) {
-                if (game->getCurrPlayers()[i].id == game->getID()) {
+            if (i < game->getNumPlayers()) { // if their is a player at the current index
+                if (game->getCurrPlayers()[i].id == game->getID()) { // highlight the player if it is this instances id
                     SDL_SetRenderDrawColor(game->renderer(), game->secondaryColors().red,
                      game->secondaryColors().green, game->secondaryColors().blue, UI_COLOR_MAX_VALUE);
                 }
+                // create the texture for the player and render it
                 currName = loadText(game->getCurrPlayers()[i].username, UI_FONT_SIZE, game->renderer());
                 name.w = name.h*UI_FONT_HEIGHT_TO_WIDTH*game->getCurrPlayers()[i].username.length();
                 SDL_RenderFillRect(game->renderer(), &lobby);
                 SDL_RenderCopy(game->renderer(), currName, NULL, &name);
                 SDL_DestroyTexture(currName);
+
+                // move the image down for the next frame
                 name.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
             } else {
+                // draw an empty box to present an empty place in the lobby
                 SDL_RenderFillRect(game->renderer(), &lobby);
             }
+            // move the lobby rect down for the next frame
             lobby.y += UI_LOBBY_HEIGHT+UI_LOBBY_GAP;
         }
     }
@@ -2180,6 +2286,7 @@ void LobbyPage::render(Game* game) {
 
 
 OptionPage::OptionPage(Game* game) {
+    // create the options page
     heading = loadText(OPTIONS_HEADER, UI_FONT_SIZE, game->renderer());
     resTitle = loadText(OPTIONS_RESNAME, UI_FONT_SIZE, game->renderer());
 
@@ -2196,42 +2303,63 @@ OptionPage::OptionPage(Game* game) {
     int shiftX;
     int shiftY;
     for (int i = 0; i < COLOR_NUM; i++) {
-        shiftX = (i%3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
-        shiftY = (i/3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        // create a color button for each color option
+
+        // find the buttons coordinates relative to the first button
+        shiftX = (i%COLOR_NUM_ROW)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        shiftY = (i/COLOR_NUM_ROW)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+
+        // find the colors for the button
         colorSet primary = COLOR_VALUES[COLOR_NAMES[i]];
         colorSet secondary = COLOR_VALUES[COLOR_NAMES[i]]*BUTTON_COLOR_SEC_MULTIPLIER;
+
+        // create the button of a fixed color
         primSelector[i] = new Button(BUTTON_COLOR_PRIM_TOPLEFT_X+shiftX,
          BUTTON_COLOR_PRIM_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
         BUTTON_COLOR_WIDTH, primary, secondary, BUTTON_RADIO, COLOR_NAMES[i]);
 
+        // check if the button is that of the current color, activating it if it is
         if (COLOR_NAMES[i] == game->primColor()) {
             primSelector[i]->setActive(true);
         }
     }
 
     for (int j = 0; j < COLOR_NUM; j++) {
-        int shiftX = (j%3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
-        int shiftY = (j/3)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        // creaete a color button for each color option
+        int shiftX = (j%COLOR_NUM_ROW)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+        int shiftY = (j/COLOR_NUM_ROW)*(BUTTON_COLOR_GAP+BUTTON_COLOR_WIDTH);
+
+        // find the color for the button and assign it
         colorSet primary = COLOR_VALUES[COLOR_NAMES[j]];
         colorSet secondary = COLOR_VALUES[COLOR_NAMES[j]]*BUTTON_COLOR_SEC_MULTIPLIER;
+
+        // create the new button
         secSelector[j] = new Button(BUTTON_COLOR_SEC_TOPLEFT_X+shiftX,
          BUTTON_COLOR_SEC_TOPLEFT_Y+shiftY, BUTTON_COLOR_WIDTH,
         BUTTON_COLOR_WIDTH, primary, secondary, BUTTON_RADIO, COLOR_NAMES[j]);
 
+        // check if the button has the current color, and activate it if it does
         if (COLOR_NAMES[j] == game->secColor()) {
             secSelector[j]->setActive(true);
         }
     }
 
+    // create the buttons for resolution selection
     stringstream text;
     for (int k = 0; k < UI_RESOLUTION_NUM; k++) {
+        // create the text for the button
         text.str("");
         text << to_string(UI_RESOLUTIONS[k]) << " X " << to_string((int)(UI_RESOLUTIONS[k]*UI_RESOLUTION_MULTIPLIER));
+
+        // determine how far down the button is
         int shiftY = k*(BUTTON_RES_GAP+BUTTON_RES_HEIGHT);
+
+        // create the button
         resSelector[k] = new Button(BUTTON_RES_TOPLEFT_X, BUTTON_RES_TOPLEFT_Y+shiftY,
          BUTTON_RES_WIDTH, BUTTON_RES_HEIGHT, BUTTON_RADIO,
          to_string(UI_RESOLUTIONS[k]), false, text.str(), game);
 
+        // if the resolution matches the one currently in use, activate the button
         if (UI_RESOLUTIONS[k] == game->configScreenHeight()) {
             resSelector[k]->setActive(true);
         }
@@ -2239,19 +2367,28 @@ OptionPage::OptionPage(Game* game) {
 }
 
 OptionPage::~OptionPage(void) {
+    // destroy the option page
     delete backButton;
     for (int i = 0; i < COLOR_NUM; i++) {
         delete primSelector[i];
         delete secSelector[i];
     }
+
+    for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
+        delete resSelector[i];
+    }
 }
 
 void OptionPage::reset(void) {
+    // reset the option page
     backButton->setActive(false);
 }
 
 int OptionPage::update(int x, int y, bool press, Game* game) {
+    // update the option page for the frame
     int action = MENU_NONE;
+
+    // update the back button
     if (backButton->mouseHover(x, y) == true) {
         if (press == true) {
             action = MENU_SET_MAIN;
@@ -2261,16 +2398,19 @@ int OptionPage::update(int x, int y, bool press, Game* game) {
         backButton->setActive(false);
     }
 
+    // toggle the fullscreen button if it is pressed
     if (fullscreenButton->mouseHover(x, y) == true && press == true) {
         fullscreenButton->setActive(!fullscreenButton->getActive());
     }
 
     int selection = -1;
+    // go through each color button and check if it is pressed
     for (int i = 0; i < COLOR_NUM; i++) {
         if (primSelector[i]->mouseHover(x, y) == true && press == true) {
             selection = i;
         }
     }
+    // if a button was pressed, activate it and disable the rest
     if (selection >= 0) {
         for (int i = 0; i < COLOR_NUM; i++) {
             if (i == selection) {
@@ -2282,11 +2422,14 @@ int OptionPage::update(int x, int y, bool press, Game* game) {
     }
 
     selection = -1;
+    // check if a color button was pressed
     for (int i = 0; i < COLOR_NUM; i++) {
         if (secSelector[i]->mouseHover(x, y) == true && press == true) {
             selection = i;
         }
     }
+
+    // if one was pressed, activate it and disable the rest
     if (selection >= 0) {
         for (int i = 0; i < COLOR_NUM; i++) {
             if (i == selection) {
@@ -2298,11 +2441,13 @@ int OptionPage::update(int x, int y, bool press, Game* game) {
     }
 
     selection = -1;
+    // check if a resolution was chosen
     for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
         if (resSelector[i]->mouseHover(x, y) == true && press == true) {
             selection = i;
         }
     }
+    // if a button was pressed, activate it and disable the rest
     if (selection >= 0) {
         for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
             if (i == selection) {
@@ -2317,20 +2462,27 @@ int OptionPage::update(int x, int y, bool press, Game* game) {
 }
 
 void OptionPage::updateGame(Game* game) {
+    // update the game object based on the current settings
+
+    // find the current primary color and set it
     for (int i = 0; i < COLOR_NUM; i++) {
         if (primSelector[i]->getActive() == true) {
             game->updatePrimColors(primSelector[i]->getID());
         }
     }
 
+    // find the current secondary color and set it
     for (int i = 0; i < COLOR_NUM; i++) {
         if (secSelector[i]->getActive() == true) {
             game->updateSecColors(secSelector[i]->getID());
         }
     }
 
+    // default the width and height to the current size incase no button is active
     int w = game->configScreenWidth();
     int h = game->configScreenHeight();
+
+    // find the current resolution
     for (int i = 0; i < UI_RESOLUTION_NUM; i++) {
         if (resSelector[i]->getActive() == true) {
             h = stoi(resSelector[i]->getID());
@@ -2338,9 +2490,11 @@ void OptionPage::updateGame(Game* game) {
         }
     }
 
+    // find if the game is to be set in fullscreen, then update the window based on the resolution and fullscreen state
     bool fullscreen = fullscreenButton->getActive();
     game->updateWindow(w, h, fullscreen);
 
+    // update the config file with the current settings
     ofstream configFile;
     configFile.open(CONFIG_FILE_LOCATION);
     configFile << CONFIG_SWIDTH << "=" << game->configScreenWidth() << "\n";
@@ -2355,6 +2509,9 @@ void OptionPage::updateGame(Game* game) {
 }
 
 void OptionPage::render(Game* game) {
+    // render the option page
+
+    // draw the text objects to the screen
     SDL_Rect header = {OPTIONS_HEADER_TOPLEFT_X, OPTIONS_HEADER_TOPLEFT_Y,
      OPTIONS_HEADER_WIDTH, OPTIONS_HEADER_HEIGHT};
     SDL_RenderCopy(game->renderer(), heading, NULL, &header);
@@ -2374,6 +2531,7 @@ void OptionPage::render(Game* game) {
     backButton->render(game);
     fullscreenButton->render(game);
 
+    // go through each button in the arrays and render them
     for (int i = 0; i < COLOR_NUM; i++) {
         primSelector[i]->render(game);
     }
@@ -2388,20 +2546,26 @@ void OptionPage::render(Game* game) {
 }
 
 TutorialPage::TutorialPage(Game* game) {
+    // create the tutorial page
     backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
      BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
 }
 
 TutorialPage::~TutorialPage(void) {
+    // delete the tutorial page
     delete backButton;
 }
 
 void TutorialPage::reset(void) {
+    // reset the tutorial page
     backButton->setActive(false);
 }
 
 int TutorialPage::update(int x, int y, bool press) {
+    // update the tutorial page
     int action = MENU_NONE;
+
+    // update the back button
     if (backButton->mouseHover(x, y) == true) {
         if (press == true) {
             action = MENU_SET_MAIN;
@@ -2414,17 +2578,22 @@ int TutorialPage::update(int x, int y, bool press) {
 }
 
 void TutorialPage::render(Game* game) {
+    // render the tutorial page
     backButton->render(game);
 }
 
 
 Button::Button(int x, int y, int w, int h, const colorSet prim,
  const colorSet sec, int type, const string name) {
+    // create a button object, given a set color
+
+    // set the size parameters
     location.x = x;
     location.y = y;
     location.w = w;
     location.h = h;
 
+    // set the button parameters
     fixedColor = true;
     colorPrim = prim;
     colorSec = sec;
@@ -2433,12 +2602,14 @@ Button::Button(int x, int y, int w, int h, const colorSet prim,
     buttonType = type;
     id = name;
 
+    // have no text for the button
     displayText = NULL;
     textLen = 0;
 }
 
 Button::Button(int x, int y, int w, int h, int type, const string name,
  bool useImg, string text, Game* game) {
+    // create a button object, with either a text or image
     location.x = x;
     location.y = y;
     location.w = w;
@@ -2453,11 +2624,12 @@ Button::Button(int x, int y, int w, int h, int type, const string name,
     id = name;
 
     img = false;
-    if (text != "") {
-        if (useImg == false) {
+    if (text != "") { // check there is text to present the button with
+        if (useImg == false) { // if the button is to be presented with text, load a texture of it and set its length
             displayText = loadText(text, UI_FONT_SIZE, game->renderer());
             textLen = text.length();
         } else {
+            // load in the image to be used
             displayText = loadImage(text, game->renderer());
             textLen = 0;
             img = true;
@@ -2469,10 +2641,11 @@ Button::Button(int x, int y, int w, int h, int type, const string name,
 }
 
 Button::~Button(void) {
-
+    SDL_DestroyTexture(displayText);
 }
 
 bool Button::mouseHover(int x, int y) {
+    //  checks where the coordinate set is located within the button
     return location.x < x &&
         location.x + location.w > x &&
         location.y < y && 
@@ -2480,28 +2653,34 @@ bool Button::mouseHover(int x, int y) {
 }
 
 void Button::render(Game* game) {
+    // draw the button to the screen
+
+    // set the colors used in drawing the button
     colorSet prim;
     colorSet sec;
-    if (fixedColor == true) {
+    if (fixedColor == true) { // use the predefined set if the colors are fixed
         prim = colorPrim;
         sec = colorSec;
-    } else {
+    } else { // used the game set if the colors are variable
         prim = game->primaryColors();
         sec = game->secondaryColors();
     }
     if (buttonType == BUTTON_MENU) {
+        // modify the colors to their desired strength
         prim = prim * BUTTON_MENU_COLOR_MULTIPLIER;
         sec = sec * BUTTON_MENU_COLOR_MULTIPLIER;
-        if (selected == false) {
+        if (selected == false) { // choose to use primary or secondary colors based on the buttons state
             SDL_SetRenderDrawColor(game->renderer(), prim.red,
              prim.green, prim.blue, UI_COLOR_MAX_VALUE);
         } else {
             SDL_SetRenderDrawColor(game->renderer(), sec.red,
              sec.green, sec.blue, UI_COLOR_MAX_VALUE);
         }
+
+        // draw the button
         SDL_RenderFillRect(game->renderer(), &location);
     } else if (buttonType == BUTTON_RADIO) {
-        if (selected == true) {
+        if (selected == true) { // draw a outline around the button if they are active
             SDL_Rect outlineRect;
             outlineRect.x = location.x - BUTTON_OUTLINE_WIDTH;
             outlineRect.y = location.y - BUTTON_OUTLINE_WIDTH;
@@ -2511,12 +2690,13 @@ void Button::render(Game* game) {
              sec.green, sec.blue, UI_COLOR_MAX_VALUE);
             SDL_RenderFillRect(game->renderer(), &outlineRect);
         }
+        // draw the main button
         SDL_SetRenderDrawColor(game->renderer(), prim.red,
          prim.green, prim.blue, UI_COLOR_MAX_VALUE);
         SDL_RenderFillRect(game->renderer(), &location);
     }
 
-    if (displayText != NULL) {
+    if (displayText != NULL) { // if a texture is in place on the button, draw it
         SDL_Rect textBox;
         textBox.h = location.h*0.8;
         if (img == true) {
@@ -2626,7 +2806,7 @@ void Player::setPlayerCentre(void) {
     centreY = playerRect.y + radius;
 }
 
-void Player::updateState(SDL_Event* eventHandler, Game* game) {
+void Player::updateState(Game* game, bool paused) {
     const Uint8* keyboardState = SDL_GetKeyboardState(NULL);
     if (alive == true) {
         // get the keyboard state containing which keys are actively pressed
@@ -2636,14 +2816,17 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
         int mouseX = 0;
         int mouseY = 0;
         double ratio;
-        direction = getDirections(); // get the direction of movement for the player at the current frame
+        if (paused == false) {
+            direction = getDirections(); // get the direction of movement for the player at the current frame
+        }
         if (keyboardState[SDL_SCANCODE_LSHIFT] && rolling == false
-            && rollCooldown == 0 && direction != MOVE_NONE) { // if the player presses the roll key while they can start rolling
+            && rollCooldown == 0 && direction != MOVE_NONE && paused == false) { // if the player presses the roll key while they can start rolling
             rolling = true;
             rollFrames = CHARACTER_ROLL_DURATION;
             rollDirection = direction;
         }
-        if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false) { // reload when r is pressed
+        if (keyboardState[SDL_SCANCODE_R] && weapon->isReloading() == false
+         && paused == false) { // reload when r is pressed
             weapon->beginReload();
         }
 
@@ -2658,11 +2841,11 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
                 velx = rollDirection.x*CHARACTER_ROLL_SPEED;
                 vely = rollDirection.y*CHARACTER_ROLL_SPEED;
             }
-            else {
+            else { // if the player is moving diagonally, set their velocity to be limited
                 velx = rollDirection.x*CHARACTER_ROLL_SPEED / sqrt(2);
                 vely = rollDirection.y*CHARACTER_ROLL_SPEED / sqrt(2);
             }
-            if (rollFrames == 0) {
+            if (rollFrames == 0) { // if the player finishes rolling, stop it and put them on cooldown
                 rolling = false;
                 rollDirection = MOVE_NONE;
                 rollCooldown = CHARACTER_ROLL_COOLDOWN;
@@ -2709,26 +2892,29 @@ void Player::updateState(SDL_Event* eventHandler, Game* game) {
                 rollCooldown--;
             }
 
-            // rotate the player to look toward the mouse
-            // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
-            SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
+            if (paused == false) {
+                // rotate the player to look toward the mouse
+                // Scaling on the player position is used to get the players position relative to the mouse in the screen's scale
+                SDL_GetMouseState(&mouseX, &mouseY); // get the x and y coords of the mouse
 
-                                                 // scale the mouse coordinates to those of the viewport
-            if ((double)game->screenHeight() / (double)SCREEN_HEIGHT_DEFAULT <
-                (double)game->screenWidth() / (double)SCREEN_WIDTH_DEFAULT) {
-                ratio = (double)game->screenHeight() / (double)SCREEN_HEIGHT_DEFAULT;
-            }
-            else {
-                ratio = (double)game->screenWidth() / (double)SCREEN_WIDTH_DEFAULT;
-            }
-            mouseX -= GAMESPACE_TOPLEFT_X*ratio;
-            mouseX /= ratio;
-            mouseY /= ratio;
-            angle = atan2((double)(centreY - mouseY),
-                (double)(centreX - mouseX))*180.0 / M_PI; // find the angle between the character and the mouse
+                                                     // scale the mouse coordinates to those of the viewport
+                if ((double)game->screenHeight() / (double)SCREEN_HEIGHT_DEFAULT <
+                    (double)game->screenWidth() / (double)SCREEN_WIDTH_DEFAULT) {
+                    ratio = (double)game->screenHeight() / (double)SCREEN_HEIGHT_DEFAULT;
+                }
+                else {
+                    ratio = (double)game->screenWidth() / (double)SCREEN_WIDTH_DEFAULT;
+                }
+                // scale the mouse coords to be in the gamespace frame
+                mouseX -= GAMESPACE_TOPLEFT_X*ratio;
+                mouseX /= ratio;
+                mouseY /= ratio;
+                angle = atan2((double)(centreY - mouseY),
+                    (double)(centreX - mouseX))*180.0 / M_PI; // find the angle between the character and the mouse
 
-            
-            weapon->takeShot(game, this, eventHandler); // have the player shoot a projectile
+                
+                weapon->takeShot(game, this); // have the player shoot a projectile
+            }
         }
         if (invulnFrames > 0) { // if invulnerable, take a frame off the counter
             invulnFrames--;
@@ -2848,25 +3034,33 @@ void Player::updateState(userAction userInput, Game* game) {
 }
 
 void Player::updateState(playerState newState) {
+    // udpate the players state based on host data
+
+    // set position related variables
     playerRect.x = newState.x;
     playerRect.y = newState.y;
     setPlayerCentre();
     angle = newState.angle;
+    //set their current score
     score = newState.score;
 
+    // set roll related variables
     rolling = newState.rolling;
     rollFrames = newState.rollFrames;
     rollDirection.x = newState.rollX;
     rollDirection.y = newState.rollY;
 
+    // set life related varaibles
     invulnerable = newState.invuln;
     invulnFrames = newState.invulnFrames;
     alive = newState.alive;
     health = newState.health;
 
+    // update the death state
     deathFrames = newState.deathFrames;
     deathMarker->updateState(deathFrames, newState.dmX, newState.dmY);
 
+    // update cooldowns and weapons
     weapon->setAmmo(newState.ammo);
     weapon->setReloadFrames(newState.reloadFrames);
     rollCooldown = newState.cooldownFrames;
@@ -2924,7 +3118,7 @@ bool Player::successfulShot(void) {
     return kill;
 }
 
-void Player::killPlayer(void) { // kill the player, and create a object to show their death location
+void Player::killPlayer(void) { // kill the player, and begin their death animation
     alive = false;
     deathFrames = CHARACTER_DEATH_DURATION;
     velx = 0;
@@ -3006,6 +3200,7 @@ void Player::render(Game* game) {
         }
     }
     else {
+        // draw the death image in place of the player if they are dead
         deathMarker->render(renderer);
     }
 }
@@ -3014,8 +3209,7 @@ string Player::getStateString(void) {
     // gets a string representing the players variables for sending throuhg the network
     /* format:
     x, y, angle, rolling state, roll frames, roll dirx, roll diry, invuln state, invuln frames,
-     alive state, health, death frames, deathmarkerX, deathmarkerY, id, weapon type, reload frames, cooldown frames
-    NEED TO ADD WEAPON
+     alive state, health, death frames, deathmarkerX, deathmarkerY, id, weapon type, score, ammo, reload frames, cooldown frames
     */
     stringstream statestring;
     statestring << strOfLen(playerRect.x, MESSAGE_LOC_CHAR);
@@ -3057,6 +3251,8 @@ DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
     circleRect.y = playerCoordinates.y;
     circleRect.w = playerCoordinates.w;
     circleRect.h = playerCoordinates.h;
+
+    // set the color to be that of the player
     circleColors.red = playerColors.red;
     circleColors.blue = playerColors.blue;
     circleColors.green = playerColors.green;
@@ -3064,6 +3260,7 @@ DeathObject::DeathObject(SDL_Renderer* renderer, SDL_Rect playerCoordinates,
 }
 
 void DeathObject::reset(SDL_Rect playerCoordinates) {
+    // reset the object for display on player death
     circleRect.x = playerCoordinates.x;
     circleRect.y = playerCoordinates.y;
     circleColors.alpha = UI_COLOR_MAX_VALUE;
@@ -3075,12 +3272,13 @@ void DeathObject::updateState(void) {
 }
 
 void DeathObject::updateState(int framesLeft, int x, int y) {
+    // update the image based on host data
     circleRect.x = x;
     circleRect.y = y;
     circleColors.alpha = UI_COLOR_MAX_VALUE*((double)framesLeft / CHARACTER_DEATH_DURATION);
 }
 
-void DeathObject::render(SDL_Renderer* renderer) { // draw the marker to its starting position
+void DeathObject::render(SDL_Renderer* renderer) { // draw the marker to its current location
     SDL_SetTextureColorMod(circleImage, circleColors.red,
         circleColors.green, circleColors.blue);
     SDL_SetTextureAlphaMod(circleImage, circleColors.alpha);
@@ -3096,9 +3294,11 @@ DeathObject::~DeathObject(void) { // delete the marker when it expires
 // Weapon object functions
 
 Weapon::~Weapon(void) {
+    //pure virtual
 }
 
 AssaultRifle::AssaultRifle(void) : Weapon() {
+    // create an assault rile
     mouseDown = true;
     reloading = false;
     currAmmo = AR_CLIP_SIZE;
@@ -3107,11 +3307,35 @@ AssaultRifle::AssaultRifle(void) : Weapon() {
 }
 
 AssaultRifle::~AssaultRifle(void) {
-
+    // delete an assault rifle
 }
 
-void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
-    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
+void AssaultRifle::takeShot(Game* game, Player* player) {
+    // called each frame by host to see if a shot is taken
+    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) { // get the current mouse state
+        mouseDown = true;
+    } else {
+        mouseDown = false;
+    }
+    // set the projectiles angle to be in a certain range
+    double projectileAngle = player->getAngle() + generateRandDouble(-AR_MAX_BULLET_SPREAD / 2, AR_MAX_BULLET_SPREAD / 2);
+    if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) { // check if a shot is able to be taken
+        if (currAmmo > 0) {
+            // create a projectile and set the weapon to have taken a shot
+            game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
+             projectileAngle, AR_PROJECTILE_SPEED, game, player));
+            shotDelay = AR_SHOT_DELAY;
+            currAmmo--;
+        }
+    }
+    if (currAmmo == 0 && reloadFramesLeft == 0) { // reload the player weapon if they are out of ammo
+        beginReload();
+    }
+}
+
+void AssaultRifle::takeShot(Game* game, Player* player, userAction userInput) {
+    // take a shot based on input from the host
+    if (userInput.mouseDown) {
         mouseDown = true;
     } else {
         mouseDown = false;
@@ -3120,28 +3344,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, SDL_Event* eventHandler)
     if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
         if (currAmmo > 0) {
             game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                projectileAngle, AR_PROJECTILE_SPEED, game, player));
-            shotDelay = AR_SHOT_DELAY;
-            currAmmo--;
-        }
-    }
-    if (currAmmo == 0 && reloadFramesLeft == 0) {
-        beginReload();
-    }
-}
-
-void AssaultRifle::takeShot(Game* game, Player* player, userAction userInput) {
-    if (userInput.mouseDown) {
-        mouseDown = true;
-    }
-    else {
-        mouseDown = false;
-    }
-    double projectileAngle = player->getAngle() + generateRandDouble(-AR_MAX_BULLET_SPREAD / 2, AR_MAX_BULLET_SPREAD / 2);
-    if (mouseDown == true && shotDelay == 0 && reloadFramesLeft == 0) {
-        if (currAmmo > 0) {
-            game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                projectileAngle, AR_PROJECTILE_SPEED, game, player));
+             projectileAngle, AR_PROJECTILE_SPEED, game, player));
             shotDelay = AR_SHOT_DELAY;
             currAmmo--;
         }
@@ -3152,6 +3355,7 @@ void AssaultRifle::takeShot(Game* game, Player* player, userAction userInput) {
 }
 
 void AssaultRifle::beginReload(void) {
+    // reload the weapon if it requires ammo
     if (currAmmo < AR_CLIP_SIZE) {
         reloading = true;
         reloadFramesLeft = AR_RELOAD_FRAMES;
@@ -3159,10 +3363,11 @@ void AssaultRifle::beginReload(void) {
 }
 
 void AssaultRifle::updateGun(void) {
-    if (shotDelay > 0) {
+    // update the guns state each frame
+    if (shotDelay > 0) { // if the weapon is on cooldown, decrement the delay
         shotDelay--;
     }
-    if (reloading == true) {
+    if (reloading == true) { // update the reload state
         reloadFramesLeft--;
         if (reloadFramesLeft == 0) {
             reloading = false;
@@ -3172,6 +3377,7 @@ void AssaultRifle::updateGun(void) {
 }
 
 void AssaultRifle::setReloadFrames(int frames) {
+    // set the reload frames to that in the data from the host
     reloadFramesLeft = frames;
     if (frames != 0) {
         reloading = true;
@@ -3181,6 +3387,7 @@ void AssaultRifle::setReloadFrames(int frames) {
 }
 
 void AssaultRifle::resetGun(void) {
+    // reset the gun on respawn
     currAmmo = AR_CLIP_SIZE;
     reloadFramesLeft = 0;
     shotDelay = 0;
@@ -3189,6 +3396,7 @@ void AssaultRifle::resetGun(void) {
 }
 
 void AssaultRifle::debugRender(Game* game, int x, int y, double a) {
+    // draw a debug image for the possible angles of weapon projectiles
     double a1 = (a + 180) - AR_MAX_BULLET_SPREAD / 2;
     double a2 = (a + 180) + AR_MAX_BULLET_SPREAD / 2;
     lineRGBA(game->renderer(), x, y, x + cos(a1*M_PI / 180)*DEBUG_WEAPONARC_RADIUS, y + sin(a1*M_PI / 180)*DEBUG_WEAPONARC_RADIUS, 0, 0, 0, UI_COLOR_MAX_VALUE);
@@ -3198,6 +3406,7 @@ void AssaultRifle::debugRender(Game* game, int x, int y, double a) {
 
 
 Pistol::Pistol(void) : Weapon() {
+    // create a pistol object
     mouseDown = false;
     reloading = false;
     currRecoil = PISTOL_MIN_BULLET_SPREAD;
@@ -3206,37 +3415,50 @@ Pistol::Pistol(void) : Weapon() {
 }
 
 Pistol::~Pistol(void) {
-
+    // delete a pistol
 }
 
-void Pistol::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
+void Pistol::takeShot(Game* game, Player* player) {
+    // take a shot if with the weapon
+
+    // get an angle for the projectiel
     double projectileAngle = player->getAngle() + generateRandDouble(-currRecoil / 2, currRecoil / 2);
-    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
-        if (mouseDown != true && reloadFramesLeft == 0) {
+    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) { // check if the mouse is down
+        if (mouseDown != true && reloadFramesLeft == 0) { // check if the pklayer is able to take a shot
             if (currAmmo > 0) {
+                // update the weapon to have taken a shot
                 mouseDown = true;
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
+
+                // add the projectile to the list
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
                     projectileAngle, PISTOL_PROJECTILE_SPEED, game, player));
             }
         }
     } else {
+        // if the mouse isn't being pressed this frame, store it
         mouseDown = false;
     }
-    if (currAmmo == 0 && reloadFramesLeft == 0) {
+    if (currAmmo == 0 && reloadFramesLeft == 0) { // reload if out of ammo
         beginReload();
     }
 }
 
 void Pistol::takeShot(Game* game, Player* player, userAction userInput) {
+    // take a shot based on client input
+
+    // get a shot angle
     double projectileAngle = player->getAngle() + generateRandDouble(-currRecoil / 2, currRecoil / 2);
-    if (userInput.mouseDown == true) {
-        if (mouseDown != true && reloadFramesLeft == 0) {
+    if (userInput.mouseDown == true) { // check if the mouse is pressed
+        if (mouseDown != true && reloadFramesLeft == 0) { // check if the player is able to shoot
             if (currAmmo > 0) {
+                // update the weapons state
                 mouseDown = true;
                 currAmmo--;
                 currRecoil += PISTOL_RECOIL_INCREASE_PER_SHOT;
+
+                // add a projectile
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
                     projectileAngle, PISTOL_PROJECTILE_SPEED, game, player));
             }
@@ -3244,12 +3466,13 @@ void Pistol::takeShot(Game* game, Player* player, userAction userInput) {
     } else {
         mouseDown = false;
     }
-    if (currAmmo == 0 && reloadFramesLeft == 0) {
+    if (currAmmo == 0 && reloadFramesLeft == 0) { // reload if out of ammo
         beginReload();
     }
 }
 
 void Pistol::beginReload(void) {
+    // reload the gun if out of ammo
     if (currAmmo < PISTOL_CLIP_SIZE) {
         reloading = true;
         reloadFramesLeft = PISTOL_RELOAD_FRAMES;
@@ -3257,6 +3480,7 @@ void Pistol::beginReload(void) {
 }
 
 void Pistol::setReloadFrames(int frames) {
+    // update the guns state based on host input
     reloadFramesLeft = frames;
     if (frames != 0) {
         reloading = true;
@@ -3266,19 +3490,18 @@ void Pistol::setReloadFrames(int frames) {
 }
 
 void Pistol::updateGun(void) {
-    if (currRecoil > PISTOL_MIN_BULLET_SPREAD) {
+    // update the gun each frame
+    if (currRecoil > PISTOL_MIN_BULLET_SPREAD) { // decrease the weapons recoil each frame
         currRecoil -= PISTOL_RECOIL_RECOVERY_PER_FRAME;
-        if (currRecoil < PISTOL_MIN_BULLET_SPREAD) {
+        if (currRecoil < PISTOL_MIN_BULLET_SPREAD) { // check if the decrease took it below the minimum
             currRecoil = PISTOL_MIN_BULLET_SPREAD;
         }
     }
-    if (currRecoil > PISTOL_MAX_BULLET_SPREAD) {
+    if (currRecoil > PISTOL_MAX_BULLET_SPREAD) { // if the weapon has recoiled to far, set it to the max
         currRecoil = PISTOL_MAX_BULLET_SPREAD;
     }
-    else if (currRecoil < 0) {
-        currRecoil = 0;
-    }
     if (reloading == true) {
+        // update the guns reload if they are in that state
         reloadFramesLeft--;
         if (reloadFramesLeft == 0) {
             reloading = false;
@@ -3288,6 +3511,7 @@ void Pistol::updateGun(void) {
 }
 
 void Pistol::resetGun(void) {
+    // reset the gun on player respawn
     currAmmo = PISTOL_CLIP_SIZE;
     reloadFramesLeft = 0;
     reloading = false;
@@ -3296,6 +3520,7 @@ void Pistol::resetGun(void) {
 }
 
 void Pistol::debugRender(Game* game, int x, int y, double a) {
+    // debug render the weapons projectile arc
     double a1 = (a + 180) - currRecoil / 2;
     double a2 = (a + 180) + currRecoil / 2;
     lineRGBA(game->renderer(), x, y, x + cos(a1*M_PI / 180)*DEBUG_WEAPONARC_RADIUS, y + sin(a1*M_PI / 180)*DEBUG_WEAPONARC_RADIUS, 0, 0, 0, UI_COLOR_MAX_VALUE);
@@ -3306,26 +3531,34 @@ void Pistol::debugRender(Game* game, int x, int y, double a) {
 
 
 Shotgun::Shotgun(void) : Weapon() {
+    // create a shotgun
     mouseDown = false;
     shotDelay = 0;
 }
 
 Shotgun::~Shotgun(void) {
-
+    // delete a shotgun
 }
 
-void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
+void Shotgun::takeShot(Game* game, Player* player) {
+    // check if a shot is taken
+
+    // set the base angle for the weapons spread
     double projectileAngle = player->getAngle() - SHOTGUN_SPREAD_RANGE / 2;
     double shotAngle;
-    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) {
-        if (mouseDown != true && shotDelay == 0) {
+    if (SDL_GetMouseState(NULL, NULL) && SDL_BUTTON(SDL_BUTTON_LEFT)) { // check if the mouse is pressed
+        if (mouseDown != true && shotDelay == 0) { // check if a shot is able to be taken
             mouseDown = true;
-            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
+            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) { // generate a projectile for each bullet in a shot
+                // create an angle for a projectile between its base angle and its max spread
                 shotAngle = generateRandDouble(projectileAngle, projectileAngle + SHOTGUN_PROJECTILE_SPREAD);
+                // create the projectile
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player));
+                 shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player));
+                // increment the angle for the next shot
                 projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
             }
+            // put the gun on delay
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
     }
@@ -3335,17 +3568,22 @@ void Shotgun::takeShot(Game* game, Player* player, SDL_Event* eventHandler) {
 }
 
 void Shotgun::takeShot(Game* game, Player* player, userAction userInput) {
+    // take a shot based on client data
     double projectileAngle = player->getAngle() - SHOTGUN_SPREAD_RANGE / 2;
     double shotAngle;
-    if (userInput.mouseDown) {
-        if (mouseDown != true && shotDelay == 0) {
+    if (userInput.mouseDown) { // check if the mouse is down
+        if (mouseDown != true && shotDelay == 0) { // check if a shot is able to be taken
             mouseDown = true;
-            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) {
+            for (int n = 0; n < SHOTGUN_PROJECTILES_PER_SHOT; n++) { // create a bullet for every shot in the spread
+                // generate the shots angle
                 shotAngle = generateRandDouble(projectileAngle, projectileAngle + SHOTGUN_PROJECTILE_SPREAD);
+                // create the projectile
                 game->projectiles()->push_front(new Projectile(player->getX(), player->getY(),
-                    shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player));
+                 shotAngle, SHOTGUN_PROJECTILE_SPEED, game, player));
+                // increment the angle
                 projectileAngle += SHOTGUN_PROJECTILE_SPREAD;
             }
+            // put the weapon on delay
             shotDelay = SHOTGUN_SHOT_DELAY;
         }
     }
@@ -3359,17 +3597,20 @@ void Shotgun::beginReload(void) {
 }
 
 void Shotgun::updateGun(void) {
+    // update the gun each frame
     if (shotDelay > 0) {
         shotDelay--;
     }
 }
 
 void Shotgun::resetGun() {
+    // reset for respawn
     shotDelay = 0;
     mouseDown = false;
 }
 
 void Shotgun::debugRender(Game* game, int x, int y, double a) {
+    // draw the weapons debug arc, with a subsection for each projectile
     double a1 = (a + 180) - SHOTGUN_SPREAD_RANGE / 2;
     double a2 = (a + 180) + SHOTGUN_SPREAD_RANGE / 2;
     thickLineRGBA(game->renderer(), x, y, x + cos(a1*M_PI / 180)*DEBUG_WEAPONARC_RADIUS,
@@ -3388,8 +3629,8 @@ void Shotgun::debugRender(Game* game, int x, int y, double a) {
 
 
 // Functions related to the wall class
-Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
-                                         // set the coordinates and size of the player
+Wall::Wall(int x, int y, int w, int h) { 
+    // Initializer for the wall class
     wallLocation.x = x;
     wallLocation.y = y;
     wallLocation.w = w;
@@ -3397,18 +3638,18 @@ Wall::Wall(int x, int y, int w, int h) { // Initializer for the wall class
 }
 
 Wall::~Wall(void) {
-
+    // delete a wall
 }
 
 bool Wall::checkCollision(int x, int y, int radius) {
     // checks to see whether an object has collided with the wall
     bool collision = false; // whether a collision has been detected
 
-                            /*
-                            goes through and compares the players coordinates to the sides of the
-                            wall to find the object is located next to. Then, for each case a check
-                            is made to see if the object is touching the wall
-                            */
+    /*
+    goes through and compares the objects coordinates to the sides of the
+    wall to find if the object is located next to. Then, for each case a check
+    is made to see if the object is touching the wall
+    */
     if (x >= wallLocation.x && x <= (wallLocation.x + wallLocation.w)) {
         if (y < wallLocation.y) { // above wall
             if (y >(wallLocation.y - radius)) {
@@ -3619,6 +3860,7 @@ void Wall::renderShadow(int x, int y, Game* game) {
             }
         }
     }
+    // set the color to be based on the game's primary color
     int r = game->primaryColors().red*SHADOW_COLOR_SCALE;
     int g = game->primaryColors().green*SHADOW_COLOR_SCALE;
     int b = game->primaryColors().blue*SHADOW_COLOR_SCALE;
@@ -3651,6 +3893,11 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, P
     velx = -speed * cos(angle*M_PI / 180);
     vely = -speed * sin(angle*M_PI / 180);
 
+    // set the projectiles owner
+    owner = player;
+    ownerID = player->getID();
+
+    // set the projectiles color to be based off whether the owner is that of this game's instance
     if (ownerID == game->getID()) {
         projectileColors.red = game->primaryColors().red;
         projectileColors.blue = game->primaryColors().blue;
@@ -3663,15 +3910,8 @@ Projectile::Projectile(int x, int y, double a, const double speed, Game* game, P
     }
 
 
-    owner = player;
-    ownerID = player->getID();
-
     // load the spritesheet to memory
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
-}
-
-Projectile::~Projectile(void) {
-    SDL_DestroyTexture(projectileImage);
 }
 
 Projectile::Projectile(int x, int y, Game* game, int id) {
@@ -3714,7 +3954,12 @@ Projectile::Projectile(int x, int y, Game* game, int id) {
     projectileImage = loadImage(PROJECTILE_IMAGE_LOCATION, game->renderer());
 }
 
+Projectile::~Projectile(void) {
+    SDL_DestroyTexture(projectileImage);
+}
+
 void Projectile::setProjectileCentre(void) {
+    // set the projectiles new centre
     centreX = projectileRect.x + radius;
     centreY = projectileRect.y + radius;
 }
@@ -3743,6 +3988,8 @@ int Projectile::checkCollision(Game* game) {
 }
 
 string Projectile::getStateString(void) {
+    // get a string representing the projectile
+    // format: x, y, ownerID
     stringstream currState;
     currState << strOfLen(projectileRect.x, MESSAGE_LOC_CHAR)
      << strOfLen(projectileRect.y, MESSAGE_LOC_CHAR) << strOfLen(ownerID, MESSAGE_ID_CHAR);
@@ -3759,6 +4006,7 @@ void Projectile::updateState(int x, int y, Game* game, int id) {
     projectileRect.y = y;
     setProjectileCentre();
 
+    // set the projectiles new color
     if (id == game->getID()) {
         projectileColors.red = game->primaryColors().red;
         projectileColors.blue = game->primaryColors().blue;
@@ -3770,7 +4018,7 @@ void Projectile::updateState(int x, int y, Game* game, int id) {
         projectileColors.green = game->secondaryColors().green;
     }
 
-
+    // set the projectiles new owner
     ownerID = id;
 }
 
@@ -3800,7 +4048,7 @@ bool Projectile::move(Game* game) {
 }
 
 void Projectile::render(SDL_Renderer* renderer) {
-
+    // render the projectile
     SDL_SetTextureColorMod(projectileImage, projectileColors.red,
         projectileColors.green, projectileColors.blue); // modulates the color based on the players settings
     SDL_RenderCopyEx(renderer, projectileImage, NULL, &projectileRect,
@@ -3809,31 +4057,42 @@ void Projectile::render(SDL_Renderer* renderer) {
 
 BulletExplosion::BulletExplosion(SDL_Renderer* renderer, SDL_Rect projectileLocation,
     colorSet projectileColors, int id) {
+    // create a new explosion object
+
+    // load the image
     explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, renderer);
 
+    // set the objects position based on its parent projectile
     explosionLocation.w = PROJECTILE_EXPLOSION_START_RADIUS * 2;
     explosionLocation.h = PROJECTILE_EXPLOSION_START_RADIUS * 2;
     explosionLocation.x = projectileLocation.x - explosionLocation.w / 2;
     explosionLocation.y = projectileLocation.y - explosionLocation.h / 2;
     radius = PROJECTILE_EXPLOSION_START_RADIUS;
 
+    // set the colors to depend on the projectiles colors
     explosionColors.red = projectileColors.red;
     explosionColors.blue = projectileColors.blue;
     explosionColors.green = projectileColors.green;
     explosionColors.alpha = UI_COLOR_MAX_VALUE;
 
+    // set the owner
     ownerID = id;
 }
 
 BulletExplosion::BulletExplosion(Game* game, int x, int y, int id) {
+    // create a bullet explosion off of host input
+
+    // load the image
     explosionImage = loadImage(PROJECTILE_EXPLOSION_IMAGE, game->renderer());
 
+    // set the explosions coordinates
     explosionLocation.w = PROJECTILE_EXPLOSION_START_RADIUS * 2;
     explosionLocation.h = PROJECTILE_EXPLOSION_START_RADIUS * 2;
     explosionLocation.x = x;
     explosionLocation.y = y;
     radius = PROJECTILE_EXPLOSION_START_RADIUS;
 
+    // set the color depending on whether the owner was the player of this game instance
     if (id == game->getID()) {
         explosionColors.red = game->primaryColors().red;
         explosionColors.blue = game->primaryColors().blue;
@@ -3845,14 +4104,16 @@ BulletExplosion::BulletExplosion(Game* game, int x, int y, int id) {
     }
     explosionColors.alpha = UI_COLOR_MAX_VALUE;
 
+    // set the owner
     ownerID = id;
 }
 
-BulletExplosion::~BulletExplosion(void) {
+BulletExplosion::~BulletExplosion(void) { // destroy the object
     SDL_DestroyTexture(explosionImage);
 }
 
 string BulletExplosion::getStateString(void) {
+    // get a string representing the objects state
     stringstream output;
     output << strOfLen(explosionLocation.x, MESSAGE_LOC_CHAR)
      << strOfLen(explosionLocation.y, MESSAGE_LOC_CHAR)
@@ -3861,22 +4122,30 @@ string BulletExplosion::getStateString(void) {
 }
 
 bool BulletExplosion::updateState(void) {
+    // update the explosion each frame
     bool expired = false;
+    // find the increase in radius and add it to the current
     double dradius = ((double)(PROJECTILE_EXPLOSION_END_RADIUS - PROJECTILE_EXPLOSION_START_RADIUS) /
         (double)PROJECTILE_EXPLOSION_DURATION);
     radius += dradius;
+
+    // update the alpha to the new color
     explosionColors.alpha -= (double)UI_COLOR_MAX_VALUE / (double)PROJECTILE_EXPLOSION_DURATION;
+
+    // update the objects position parameter
     explosionLocation.h = radius * 2;
     explosionLocation.w = radius * 2;
     explosionLocation.x -= (int)dradius;
     explosionLocation.y -= (int)dradius;
-    if (explosionColors.alpha < 0) {
+
+    if (explosionColors.alpha < 0) { // if the object disappears, tell the game to delete it
         expired = true;
     }
     return expired;
 }
 
 void BulletExplosion::render(SDL_Renderer* renderer) {
+    // render the explosion objects
     SDL_SetTextureColorMod(explosionImage, explosionColors.red,
         explosionColors.green, explosionColors.blue);
     SDL_SetTextureAlphaMod(explosionImage, explosionColors.alpha);
@@ -3884,6 +4153,7 @@ void BulletExplosion::render(SDL_Renderer* renderer) {
 }
 
 MapBox::MapBox(int xin, int yin, int win, int hin, int iters, int divChance) {
+    // create a new box using the given parameters
     x = xin;
     y = yin;
     w = win;
@@ -3893,10 +4163,11 @@ MapBox::MapBox(int xin, int yin, int win, int hin, int iters, int divChance) {
 }
 
 MapBox::~MapBox(void) {
-
+    // clear memory used
 }
 
 coordSet MapBox::getCentre(void) {
+    // find the centre coordinates of the box
     coordSet output;
     output.x = x + w / 2;
     output.y = y + h / 2;
@@ -3904,58 +4175,68 @@ coordSet MapBox::getCentre(void) {
 }
 
 list<MapBox*> MapBox::divideBox(void) {
+    // split a box into two randomly sized pieces, of at least minimum size
     list<MapBox*> output;
+    // roll to determine the direction of the divide
     int num = generateRandInt(0, MAPBOX_DIVIDE_ROLL_MAX);
     bool invalid = false;
     double roll;
-    if (num >= divideChance) {
-        if (h / 2 >= MAPBOX_MINIMUM_HEIGHT) {
+    if (num >= divideChance) { // check if the object is chosen to divide vertically or horizontally
+        if (h / 2 >= MAPBOX_MINIMUM_HEIGHT) { // check the object is able to divide
             roll = generateRandDouble((double)MAPBOX_MINIMUM_HEIGHT / h,
-                1 - (double)MAPBOX_MINIMUM_HEIGHT / h);
-            output.push_front(new MapBox(x, y, w, h*roll, iterations - 1, divideChance + 25));
-            output.push_front(new MapBox(x, y + h*roll, w, h*(1 - roll), iterations - 1, divideChance + 15));
+                1 - (double)MAPBOX_MINIMUM_HEIGHT / h); // generate a fraction to divide the box at along its height
+            // create new boxes with 1 less possible iteration, that are less likely to divide along their height
+            output.push_front(new MapBox(x, y, w, h*roll, iterations - 1, divideChance + MAPBOX_DIVIDE_CHANCE_CHANGE)); // create a new box for the bottom piece
+            output.push_front(new MapBox(x, y + h*roll, w, h*(1 - roll), iterations - 1, divideChance + MAPBOX_DIVIDE_CHANCE_CHANGE)); // create a new box for the top piece
         }
-        else {
+        else { // tell the game the box can no longer divide
             invalid = true;
         }
     }
     else {
-        if (w / 2 >= MAPBOX_MINIMUM_WIDTH) {
+        if (w / 2 >= MAPBOX_MINIMUM_WIDTH) { // check the box is able to be divided width-wise
             roll = generateRandDouble((double)MAPBOX_MINIMUM_WIDTH / w,
-                1 - (double)MAPBOX_MINIMUM_WIDTH / w);
-            output.push_front(new MapBox(x, y, w*roll, h, iterations - 1, divideChance - 25));
-            output.push_front(new MapBox(x + w*roll, y, w*(1 - roll), h, iterations - 1, divideChance - 15));
+                1 - (double)MAPBOX_MINIMUM_WIDTH / w); // find the point of the divide
+            // create new boxes less likely to split along their width
+            output.push_front(new MapBox(x, y, w*roll, h, iterations - 1, divideChance - MAPBOX_DIVIDE_CHANCE_CHANGE));
+            output.push_front(new MapBox(x + w*roll, y, w*(1 - roll), h, iterations - 1, divideChance - MAPBOX_DIVIDE_CHANCE_CHANGE));
         }
         else {
+            // tell the game the box can no longer divide
             invalid = true;
         }
     }
     if (invalid == true) {
+        // put a new box unable to split into the output
         output.push_front(new MapBox(x, y, w, h, 0, 0));
     }
     return output;
 }
 
 Wall* MapBox::generateWall(void) {
+    // create a wall with the boxes parameters
     return new Wall(x, y, w, h);
 }
 
 bool MapBox::checkConnection(MapBox* box) {
+    // check if two boxes are within minimum distance of each other
     bool connected = false;
     int cx;
     int cy;
-    for (int corner = 0; corner<MAPBOX_NUM_CORNERS; corner++) {
+    for (int corner = 0; corner<MAPBOX_NUM_CORNERS; corner++) { // for each corner in the box
+        // get the coordinates of the corner
         cx = x + w*(corner % 2);
         cy = y + h*(corner / 2);
         if (box->getX() - MAPBOX_MINIMUM_GAP < cx
-            && cx < box->getX() + box->getWidth() + MAPBOX_MINIMUM_GAP) {
+         && cx < box->getX() + box->getWidth() + MAPBOX_MINIMUM_GAP) { // if the corners x is potentially colliding
             if (box->getY() - MAPBOX_MINIMUM_GAP < cy
-                && cy < box->getY() + box->getHeight() + MAPBOX_MINIMUM_GAP) {
+                && cy < box->getY() + box->getHeight() + MAPBOX_MINIMUM_GAP) { // and the corners y is potentially colliding
+                // the point is inside the other box, and is invalid
                 connected = true;
             }
         }
     }
-    for (int corner = 0; corner<MAPBOX_NUM_CORNERS; corner++) {
+    for (int corner = 0; corner<MAPBOX_NUM_CORNERS; corner++) { // repeat the process for the other box
         cx = box->getX() + box->getWidth()*(corner % 2);
         cy = box->getY() + box->getHeight()*(corner / 2);
         if (x - MAPBOX_MINIMUM_GAP < cx && cx < x + w + MAPBOX_MINIMUM_GAP) {
@@ -3968,6 +4249,7 @@ bool MapBox::checkConnection(MapBox* box) {
 }
 
 bool MapBox::checkSameBox(MapBox* box) {
+    // check if two map boxes are identical
     bool same = false;
     if (box->getX() == x && box->getY() == y && box->getWidth() == w &&
         box->getHeight() == h) {
@@ -3977,15 +4259,15 @@ bool MapBox::checkSameBox(MapBox* box) {
 }
 
 MapBox* MapBox::copyBox(void) {
+    // create a copy of a box with the same parameters
     return new MapBox(x, y, w, h, iterations, divideChance);
 }
 
 
 void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spawnPoints) {
-    int w;
-    int h;
-    int x;
-    int y;
+    // create a new map and put its components into the provided forward lists
+        
+    // create the storage containers used in the process
     list<MapBox*> mapBoxes;
     list<MapBox*> boxesComplete;
     list<MapBox*> boxesFinal;
@@ -3993,60 +4275,77 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
     wallContainer->clear();
     spawnPoints->clear();
 
-    for (int i = 0; i<4; i++) {
+
+    int w;
+    int h;
+    int x;
+    int y;
+    for (int i = 0; i<4; i++) { // divide the starting area into 4 even quarters
         w = (GAMESPACE_WIDTH - 2 * GAMESPACE_MARGIN) / 2;
         h = (GAMESPACE_HEIGHT - 2 * GAMESPACE_MARGIN) / 2;
         x = GAMESPACE_MARGIN + w*(i % 2);
         y = GAMESPACE_MARGIN + h*(i / 2);
         mapBoxes.push_front(new MapBox(x, y, w, h, MAPBOX_START_ITERATIONS,
-            MAPBOX_DIVIDE_ROLL_MAX / 2));
+            MAPBOX_DIVIDE_ROLL_MAX/2));
     }
+
     MapBox* currBox;
-    while (mapBoxes.size() > 0) {
+    while (mapBoxes.size() > 0) { // while there are still boxes to divide
+        // get the first one and remove it from the list
         currBox = mapBoxes.front();
         mapBoxes.pop_front();
-        if (currBox->getIterations() == 0) {
+        if (currBox->getIterations() == 0) { // check the box is still valid for dividing
+            // if its invalid, add a copy to the list of finished boxes
             boxesComplete.push_front(currBox->copyBox());
         }
         else {
+            // otherwise, get a list of boxes created from dividing it, and add them to the list to divide
             boxesSplit = currBox->divideBox();
             for (auto subBox = boxesSplit.begin(); subBox != boxesSplit.end(); subBox++) {
                 mapBoxes.push_back(*subBox);
             }
         }
+        // delete the box now it has been used
         delete currBox;
     }
 
-    MapBox* boxSelected = new MapBox(100, 100, SCREEN_WIDTH_DEFAULT - 200, SCREEN_HEIGHT_DEFAULT - 200, 0, 0);
+    // add a set of boxes to the set that will be used to create the walls
+    MapBox* boxSelected;
     list<MapBox*> mapBoxesTemp;
     int boxSelection;
     int index;
-    while (boxesComplete.size() > 0) {
+    while (boxesComplete.size() > 0) { // while there are still boxes that can be added
         mapBoxesTemp.clear();
-        boxSelection = generateRandInt(0, boxesComplete.size() - 1);
+        boxSelection = generateRandInt(0, boxesComplete.size() - 1); // chose a box from the list
         index = 0;
-        for (auto box = boxesComplete.begin(); box != boxesComplete.end(); box++) {
+        for (auto box = boxesComplete.begin(); box != boxesComplete.end(); box++) { // search through the boxes till the desired one is found
             if (index == boxSelection) {
+                // add the box to the possible selection
                 boxSelected = (*box)->copyBox();
                 boxesFinal.push_front(boxSelected);
             }
             index++;
         }
+
+        // go through the remaining boxes and preserve the boxes that can still be used
         for (auto box = boxesComplete.begin(); box != boxesComplete.end(); box++) {
-            if (boxSelected->checkConnection(*box) == false) {
+            if (boxSelected->checkConnection(*box) == false) { // check the box is not to close to the current box
+                // preserve it if it is still valid
                 mapBoxesTemp.push_front(*box);
-            }
-            else if (boxSelected->checkSameBox(*box) == false) {
+            } else if (boxSelected->checkSameBox(*box) == false) {
+                // if the box wasn't the one last added, put its centre into the list of spawn points
                 spawnPoints->push_front((*box)->getCentre());
                 delete *box;
-            }
-            else {
+            } else {
+                // delete the box if it was used
                 delete *box;
             }
         }
         boxesComplete.clear();
         boxesComplete = mapBoxesTemp;
     }
+
+    // go through each box and put it wall representing it into the list of walls
     for (auto box = boxesFinal.begin(); box != boxesFinal.end(); box++) {
         wallContainer->push_front((*box)->generateWall());
         delete *box;
@@ -4054,8 +4353,135 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
 }
 
 
+UDPConnectionClient::UDPConnectionClient(Game* game) {
+    // create a object to use in netcode as a client
+    socket = SDLNet_UDP_Open(game->cPort()); // open a port
+    if (!socket) {
+        cout << "SDLNet_UDP_open: " << SDLNet_GetError() << "\n";
+    }
+    if (SDLNet_ResolveHost(&connectionIp, game->hIP().c_str(), game->hPort()) == -1) { // translate the hosts ip to a usable value
+        cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
+    }
+    // create packets for input and output between the host
+    packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    // set the output packet to send to the host
+    packetOut->address.host = connectionIp.host;
+    packetOut->address.port = connectionIp.port;
+}
+
+UDPConnectionClient::~UDPConnectionClient(void) {
+    // delete the client object
+    SDLNet_UDP_Close(socket);
+    SDLNet_FreePacket(packetIn);
+    SDLNet_FreePacket(packetOut);
+}
+
+bool UDPConnectionClient::send(string msg) {
+    // send a message to the host
+    bool success = true;
+    memcpy(packetOut->data, msg.c_str(), msg.length()+1);
+    packetOut->len = msg.length()+1;
+    SDLNet_UDP_Send(socket, -1, packetOut);
+    return success;
+}
+
+connection UDPConnectionClient::recieve(string* field) {
+    // recieve a message from the host and put it into field
+    // put the sender address into sender to confirm a message was recieved
+    connection sender = {0, 0};
+    stringstream output;
+    if (SDLNet_UDP_Recv(socket, packetIn)) {
+        for (int i = 0; i < packetIn->len; i++) {
+            output << packetIn->data[i];
+        }
+        sender.ip = packetIn->address.host;
+        sender.port = packetIn->address.port;
+    }
+    *field = output.str();
+    return sender;
+}
+
+
+
+UDPConnectionServer::UDPConnectionServer(Game* game) {
+    // create a host object for networking
+    socket = SDLNet_UDP_Open(game->hPort()); // open the port
+
+    // create the packets for sending messages
+    packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut = SDLNet_AllocPacket(CHARBUFF_LENGTH);
+    packetOut->address.host = 0;
+    packetOut->address.port = 0;
+}
+
+UDPConnectionServer::~UDPConnectionServer(void) {
+    // delete the server object
+    SDLNet_UDP_Close(socket);
+    SDLNet_FreePacket(packetIn);
+    SDLNet_FreePacket(packetOut);
+}
+
+bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
+    // send a message to all clients
+    bool success = true;
+    memcpy(packetOut->data, msg.c_str(), msg.length()+1); // load in the message
+    packetOut->len = msg.length()+1;
+    for (int i = 0; i < numIps; i++) { // go through each connection and send them the message
+        if (ips[i].ip != 0) {
+            packetOut->address.host = ips[i].ip;
+            packetOut->address.port = ips[i].port;
+            if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+                cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
+                success = false;
+            }
+        }
+    }
+    return success;
+}
+
+bool UDPConnectionServer::send(string msg, connection target) {
+    // send a message to a single client
+    bool success = true;
+    memcpy(packetOut->data, msg.c_str(), msg.length()+1); // load the message
+    packetOut->len = msg.length()+1;
+
+    // set the destination
+    packetOut->address.host = target.ip;
+    packetOut->address.port = target.port;
+
+    if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) { // send the message and check it worked
+        cout << "SDLNet_UDP_Send server2: " << SDLNet_GetError() << "\n";
+        success = false;
+    }
+    return success;
+}
+
+connection UDPConnectionServer::recieve(string* field) {
+    // recieve a message to the server
+    connection sender = {0,0,0};
+    stringstream output;
+    if (SDLNet_UDP_Recv(socket, packetIn)) { // get a message
+        for (int i = 0; i < packetIn->len; i++) {// load the message into the output string
+            output << packetIn->data[i];
+        }
+
+        // get the sender address
+        sender.ip = packetIn->address.host;
+        sender.port = packetIn->address.port;
+    }
+
+    // get the output into the desired field
+    if (field != NULL) {
+        *field = output.str();
+    }
+    return sender;
+}
+
+
 
 void testDistBetweenPoints() {
+    // test distance between points
     assert(distBetweenPoints(0, 0, 1, 1) == sqrt(2));
     assert(distBetweenPoints(0, 0, 0, 0) == sqrt(0));
     assert(distBetweenPoints(1, 0, 1, 1) == 1);
@@ -4071,15 +4497,8 @@ void testDistBetweenPoints() {
     cout << "distBetweenPoints passed all tests\n";
 }
 
-void testGetInterceptX(void) {
-
-}
-
-void testGetInterceptY(void) {
-
-}
-
 void testCheckExitMap(void) {
+    // test check exit map
     assert(checkExitMap(0, 0, 10) == true);
     assert(checkExitMap(GAMESPACE_WIDTH, GAMESPACE_HEIGHT, 10) == true);
     assert(checkExitMap(GAMESPACE_WIDTH / 2, GAMESPACE_HEIGHT / 2, 10) == false);
@@ -4162,6 +4581,7 @@ void testGenerateRandDouble(void) {
 }
 
 void testStrOfLen(void) {
+    // test str of len
     assert(strOfLen(123, 4) == "0123");
     assert(strOfLen(0, 4) == "0000");
     assert(strOfLen(8989, 4) == "8989");
@@ -4178,6 +4598,7 @@ void testStrOfLen(void) {
 }
 
 void testGetLength(void) {
+    // test get length
     assert(getLength(123) == 3);
     assert(getLength(4444) == 4);
     assert(getLength(12) == 2);

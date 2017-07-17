@@ -51,6 +51,7 @@ typedef struct _hudInfo {
     SDL_Texture* ammoIcon;
     SDL_Texture* cooldownIcon;
     SDL_Texture* pauseText;
+    SDL_Texture* winText;
     Button* resume;
     Button* quit;
 } hudInfo;
@@ -135,7 +136,7 @@ const int GAME_USERNAME_MAX_LEN = 8;
 const string GAME_DEFAULT_USERNAME = "Twelve";
 const int GAME_CONNECT_WAIT = 100;
 
-const int GAME_WIN_SCORE = 3;
+const int GAME_WIN_SCORE = 10;
 const int GAME_WIN_DELAY_SEC = 3;
 const int GAME_WIN_DELAY = GAME_WIN_DELAY_SEC*SCREEN_FPS;
 
@@ -203,6 +204,8 @@ const int COLOR_GREY_GREEN = 155;
 const int COLOR_GREY_BLUE = 155;
 
 const int COLOR_NUM = 9;
+const int COLOR_NUM_ROW = 3;
+
 const string COLOR_NAMES[] = {
     COLOR_RED_NAME,
      COLOR_GREEN_NAME,
@@ -398,8 +401,8 @@ const int SCREEN_WIDTH_DEFAULT = 1366; // width of screen to scale against
 const int SCREEN_HEIGHT_DEFAULT = 768; // height of screen to scale against
 const char* SCREEN_NAME = "Game"; // Name of window seen at the top of the screen
 
-const int SCREEN_WIDTH = SCREEN_WIDTH_DEFAULT; // size of screen when no value is in the config file
-const int SCREEN_HEIGHT = SCREEN_HEIGHT_DEFAULT;
+const int SCREEN_WIDTH = 1156; // size of screen when no value is in the config file
+const int SCREEN_HEIGHT = 650;
 
 
 // Gamespace parameters
@@ -466,6 +469,12 @@ const int UI_SCORE_TOPLEFT_Y = SCREEN_WIDTH_DEFAULT*0.01;
 const int UI_SCORE_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.06;
 const int UI_SCORE_GAP = SCREEN_HEIGHT_DEFAULT*0.02;
 const int UI_SCORE_MARGIN = SCREEN_WIDTH_DEFAULT*0.01;
+
+const string UI_HOST_INFO = "Waiting for host";
+const int UI_HOST_INFO_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
+const int UI_HOST_INFO_WIDTH = UI_HOST_INFO_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH*UI_HOST_INFO.length();
+const int UI_HOST_INFO_TOPLEFT_X = SCREEN_WIDTH_DEFAULT-(SCREEN_WIDTH_DEFAULT*0.03+UI_HOST_INFO_WIDTH);
+const int UI_HOST_INFO_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT-(SCREEN_WIDTH_DEFAULT*0.03+UI_HOST_INFO_HEIGHT);
 
 
 const int UI_WINDISPLAY_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.15;
@@ -594,7 +603,7 @@ const int BUTTON_QUIT_TOPLEFT_X = BUTTON_RESUME_TOPLEFT_X;
 const int BUTTON_QUIT_TOPLEFT_Y = BUTTON_RESUME_TOPLEFT_Y+BUTTON_RESUME_HEIGHT+SCREEN_HEIGHT_DEFAULT*0.05;
 
 
-const string MAIN_HEADER = "Game";
+const string MAIN_HEADER = SCREEN_NAME;
 const int MAIN_HEADER_LEN = MAIN_HEADER.length();
 const int MAIN_HEADER_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.25;
 const int MAIN_HEADER_WIDTH = MAIN_HEADER_LEN*MAIN_HEADER_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH;
@@ -637,6 +646,7 @@ const int OPTIONS_SECTEXT_TOPLEFT_Y = BUTTON_COLOR_SEC_TOPLEFT_Y
 // Constants related to map generation
 const int MAPBOX_START_ITERATIONS = 4;
 const int MAPBOX_DIVIDE_ROLL_MAX = 100;
+const int MAPBOX_DIVIDE_CHANCE_CHANGE = 15;
 const int MAPBOX_NUM_CORNERS = 4;
 
 const int MAPBOX_MINIMUM_WIDTH = CHARACTER_WIDTH*1.4;
@@ -717,9 +727,16 @@ const int HUD_HEALTH_DIVIDE_RED = 100;
 const int HUD_HEALTH_DIVIDE_GREEN = 0;
 const int HUD_HEALTH_DIVIDE_BLUE = 0;
 
+const string UI_WINCOND_PREFIX = "Score to win: ";
+const string UI_WINCOND_TEXT = UI_WINCOND_PREFIX + to_string(GAME_WIN_SCORE);
+const int UI_WINCOND_TOPLEFT_X = SCREEN_HEIGHT_DEFAULT*0.01;
+const int UI_WINCOND_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.05;
+const int UI_WINCOND_TOPLEFT_Y = HUD_HEALTH_TOPLEFT_Y-UI_WINCOND_HEIGHT;
+const int UI_WINCOND_WIDTH = UI_WINCOND_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH*UI_WINCOND_TEXT.length();
+
 // constants used in using the config file
 // location of the config file
-const string CONFIG_FILE_LOCATION = "config.gabisbad";
+const string CONFIG_FILE_LOCATION = "config.txt";
 const string CONFIG_SWIDTH = "swidth";
 const string CONFIG_SHEIGHT = "sheight";
 const string CONFIG_FULLSCREEN = "fullscreen";
@@ -756,7 +773,7 @@ const int MESSAGE_STAT_CHAR = 2;
 
 
 // constants used in debugging
-const bool DEBUG_ENABLE_DRIVERS = true;
+const bool DEBUG_ENABLE_DRIVERS = false;
 const bool DEBUG_HIDE_SHADOWS = false;
 const bool DEBUG_KILL_PLAYER = false;
 const bool DEBUG_SHOW_CURSOR = false;
@@ -765,8 +782,6 @@ const bool DEBUG_DRAW_SPAWN_POINTS = false;
 const bool DEBUG_DRAW_VALID_SPAWNS_ONLY = false;
 const bool DEBUG_DRAW_WEAPONARC = false;
 const int DEBUG_WEAPONARC_RADIUS = 500;
-const int DEBUG_NUM_PLAYERS = 4;
-const int DEBUG_MAX_INPUTS_PF = 5;
 
 const bool DEBUG_IS_HOST = true;
 const Uint16 DEBUG_HOST_PORT = 2880;
@@ -814,6 +829,8 @@ protected:
     bool connected;
 
     int lastConnect;
+    int lastMX;
+    int lastMY;
 
     int winner;
 
@@ -857,7 +874,7 @@ public:
     void removePlayer(int playerip);
 
     int getInput(bool inLobby, bool inMenu);
-    void sendUserActions(void);
+    void sendUserActions(bool paused);
     bool getClientAction(void);
     void sendUpdate(void);
     void sendLobby(void);
@@ -973,6 +990,7 @@ protected:
     Button* launchButton;
 
     SDL_Texture* waitingText;
+    SDL_Texture* hostInfo;
 public:
     LobbyPage(Game* game);
     ~LobbyPage(void);
@@ -1120,7 +1138,7 @@ public:
     string getStateString(void);
 
     // functions to update the players state
-    void updateState(SDL_Event* eventHandler, Game* game);
+    void updateState(Game* game, bool paused);
     void updateState(userAction userInput, Game* game);
     void updateState(playerState newState);
     void move(forward_list<Wall*>* wallContainer); // moves the player based on their velocity
@@ -1168,7 +1186,7 @@ public:
     virtual void setAmmo(int ammo) = 0;
     virtual void setReloadFrames(int frames) = 0;
 
-    virtual void takeShot(Game* game, Player* player, SDL_Event* eventHandler) = 0;
+    virtual void takeShot(Game* game, Player* player) = 0;
     virtual void takeShot(Game* game, Player* player, userAction userInput) = 0;
     virtual void beginReload(void) = 0;
     virtual void updateGun() = 0;
@@ -1195,7 +1213,7 @@ public:
     void setAmmo(int ammo) {currAmmo = ammo;};
     void setReloadFrames(int frames);
 
-    void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player);
     void takeShot(Game* game, Player* player, userAction userInput);
     void beginReload(void);
     void updateGun(void);
@@ -1220,7 +1238,7 @@ public:
     void setAmmo(int ammo) {currAmmo = ammo;}
     void setReloadFrames(int frames);
 
-    void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player);
     void takeShot(Game* game, Player* player, userAction userInput);
     void beginReload(void);
     void updateGun(void);
@@ -1245,7 +1263,7 @@ public:
     void setAmmo(int ammo) {}
     void setReloadFrames(int frames) {shotDelay = frames;}
 
-    void takeShot(Game* game, Player* player, SDL_Event* eventHandler);
+    void takeShot(Game* game, Player* player);
     void takeShot(Game* game, Player* player, userAction userInput);
     void beginReload(void);
     void updateGun(void);
@@ -1418,8 +1436,6 @@ coordSet getMouseCoordinates(Game* game);
 
 //drivers
 void testDistBetweenPoints(void);
-void testGetInterceptX(void);
-void testGetInterceptY(void);
 void testCheckExitMap(void);
 void testGenerateRandInt(void);
 void testGenerateRandDouble(void);
