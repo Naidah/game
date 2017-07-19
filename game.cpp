@@ -103,8 +103,8 @@ int main(int argc, char const *argv[]) {
     SDL_Texture* gameCursor = loadImage(UI_GAME_CURSOR_LOCATION, renderer);
 
     // store the coordinates of the current games character
-    int playerMainX;
-    int playerMainY;
+    int playerMainX = 0;
+    int playerMainY = 0;
 
 
     while (gameRunning == true) { // begin game loop
@@ -1182,25 +1182,21 @@ void Game::setSockets(void) {
     numPlayers = 1;
     currPlayers[0] = {0, 0, CHARACTER_WEAPON_PISTOL, CHARACTER_MAIN_ID, username}; // set a default character for the host
     nextID = 1;
-    if (isHost == true) {
-        myID = CHARACTER_MAIN_ID;
-        nextID = myID + 1;
-        server = new UDPConnectionServer(this);
-    }
-    else {
-        client = new UDPConnectionClient(this);
-    }
+    myID = CHARACTER_MAIN_ID;
+    nextID = myID + 1;
+    server = new UDPConnectionServer(this);
+    client = new UDPConnectionClient(this);
 }
 
 void Game::recieveConnection(void) {
     // recieve inbound connection requests from clients as host
     int messageType = MESSAGE_NONE;
     string inboundString;
-    if (numPlayers < GAME_MAX_PLAYERS) { // check that the game can recieve another connection
-        connection inboundConnection = server->recieve(&inboundString); // get the connection
-        if (inboundConnection.ip != 0) { // check a message was recieved
-            messageType = inboundString[0] - '0'; // determine the type of message recieved
-            if (messageType == MESSAGE_CONF_CONNECTION) { // check the message was requesting to join
+    connection inboundConnection = server->recieve(&inboundString); // get the connection
+    if (inboundConnection.ip != 0) { // check a message was recieved
+        messageType = inboundString[0] - '0'; // determine the type of message recieved
+        if (messageType == MESSAGE_CONF_CONNECTION) { // check the message was requesting to join
+            if (numPlayers < GAME_MAX_PLAYERS) { // check that the game can recieve another connection
                 bool match = false;
                 // go through current connections and check if the player has joined already
                 for (int i = 0; i < numPlayers; i++) {
@@ -1226,13 +1222,13 @@ void Game::recieveConnection(void) {
                     numPlayers++;
                     stringstream message; // reply to the new connection with their id in the game
                     message << MESSAGE_CONF_CONNECTION << strOfLen(nextID, MESSAGE_ID_CHAR);
-                    server->send(message.str(), inboundConnection);
+                    server->send(message.str(), MESSAGE_RESEND_TIMES, inboundConnection);
                     nextID++; // increment the next id
                 }
-            } else if (messageType == MESSAGE_QUIT) { // if a player in the lobby tries to quit, remove them
-                removePlayer(inboundConnection.ip);
-            }
-        }
+            } 
+        } else if (messageType == MESSAGE_QUIT) { // if a player in the lobby tries to quit, remove them
+			removePlayer(inboundConnection);
+		}
     }
 }
 
@@ -1244,7 +1240,7 @@ void Game::sendLobby(void) {
         // send a string with each players id and username
         players << strOfLen(currPlayers[i].id, MESSAGE_ID_CHAR) << currPlayers[i].username << "|";
     }
-    server->send(players.str(), currPlayers, numPlayers);
+    server->send(players.str(),MESSAGE_RESEND_TIMES, currPlayers, numPlayers);
 }
 
 void Game::attemptConnection(int weapon) {
@@ -1252,14 +1248,14 @@ void Game::attemptConnection(int weapon) {
     if (SDL_GetTicks() - lastConnect > GAME_CONNECT_WAIT) { // check the minimum time between requests has been met
         stringstream message;
         message << MESSAGE_CONF_CONNECTION << weapon << username;
-        client->send(message.str());
+        client->send(message.str(), 1);
         lastConnect = SDL_GetTicks();
     }
 }
 
 void Game::endSession(void) {
     // tell clients that the host is no longer playing
-    server->send(to_string(MESSAGE_QUIT), currPlayers, numPlayers);
+    server->send(to_string(MESSAGE_QUIT), MESSAGE_RESEND_TIMES, currPlayers, numPlayers);
 
     // reset game variables
     numPlayers = 1;
@@ -1289,7 +1285,7 @@ void Game::endSession(void) {
 
 void Game::leaveMatch(void) {
     // tell the host the client is leaving the match
-    client->send(to_string(MESSAGE_QUIT));
+    client->send(to_string(MESSAGE_QUIT), MESSAGE_RESEND_TIMES);
 
     // reset game variables
     numPlayers = 0;
@@ -1337,15 +1333,15 @@ void Game::initialize(int weapon) {
         }
     }
     // send the map and playerlist to each client to tell the game has started
-    server->send(getMapString(), currPlayers, numPlayers);
-    server->send(getPlayerString(), currPlayers, numPlayers);
+    server->send(getMapString(), MESSAGE_RESEND_TIMES, currPlayers, numPlayers);
+    server->send(getPlayerString(), MESSAGE_RESEND_TIMES, currPlayers, numPlayers);
 }
 
 void Game::sendUpdate(void) {
     // send an update of each game element to the players
-    server->send(getPlayerString(), currPlayers, numPlayers);
-    server->send(getProjectileString(), currPlayers, numPlayers);
-    server->send(getExplosionString(), currPlayers, numPlayers);
+    server->send(getPlayerString(), 1, currPlayers, numPlayers);
+    server->send(getProjectileString(), 1, currPlayers, numPlayers);
+    server->send(getExplosionString(), 1, currPlayers, numPlayers);
 }
 
 void Game::addNewExplosion(BulletExplosion* newExplosion) {
@@ -1367,21 +1363,21 @@ void Game::sendUserActions(bool paused) {
     if (paused == false) { // check the user can udpate their direction
         double ratio;
         mouseDown = SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT);
-        if ((double)sheight / SCREEN_HEIGHT_DEFAULT < (double)swidth / SCREEN_WIDTH_DEFAULT) {
-            ratio = (double)sheight / SCREEN_HEIGHT_DEFAULT;
+        if ((double)sheightActual / SCREEN_HEIGHT_DEFAULT < (double)swidthActual / SCREEN_WIDTH_DEFAULT) {
+            ratio = (double)sheightActual / SCREEN_HEIGHT_DEFAULT;
         }
         else {
-            ratio = (double)swidth / SCREEN_WIDTH_DEFAULT;
+            ratio = (double)swidthActual / SCREEN_WIDTH_DEFAULT;
         }
         x -= GAMESPACE_TOPLEFT_X*ratio;
         x /= ratio;
         y /= ratio;
 
         if (x < 0) {
-            x = 0;
+            x = lastMX;
         }
         if (y < 0) {
-            y = 0;
+            y = lastMY;
         }
 
         // store the mouse coordinates for this frame incase they are not valid next frame
@@ -1413,7 +1409,7 @@ void Game::sendUserActions(bool paused) {
     toServer << mouseDown << rDown << shiftDown;
     toServer << currDirection.x + 2 << currDirection.y + 2;
 
-    client->send(toServer.str());
+    client->send(toServer.str(), 1);
 }
 
 bool Game::getClientAction(void) {
@@ -1443,7 +1439,7 @@ bool Game::getClientAction(void) {
             message = true;
         } else if (messageType == MESSAGE_QUIT) {
             // remove the player if they quit the game
-            removePlayer(msg.ip);
+            removePlayer(msg);
         }
     }
     return message;
@@ -1456,12 +1452,12 @@ int Game::getInput(bool inLobby, bool inMenu) {
     connection msg = client->recieve(&serverString);
     if (msg.ip != 0) { // check a message was recieved
         messageType = serverString[0] - '0'; // convert the number as ASCII to decimal
-        connected = true;
         if (messageType == MESSAGE_CONF_CONNECTION) { // check if the host confirmed the connection
             if (inLobby == true) {
                 // set the instance id to that recieved
                 myID = stoi(serverString.substr(1, MESSAGE_ID_CHAR));
                 cout << "Connection established as player " << myID << "\n";
+                connected = true;
             } else { // if the player wasn't looking for a match, leave it
                 leaveMatch();
                 connected = false;
@@ -1488,12 +1484,12 @@ int Game::getInput(bool inLobby, bool inMenu) {
     return messageType;
 }
 
-void Game::removePlayer(int playerip) {
+void Game::removePlayer(connection playerip) {
     // remove a player from the match
     int playerID = -1;
     for (int i = 0; i < numPlayers; i++) {
         // find the connection of the player
-        if (currPlayers[i].ip == playerip && i < numPlayers) {
+        if (currPlayers[i] == playerip && i < numPlayers) {
             playerID = currPlayers[i].id;
         }
         if (playerID >= 0) { // if the connection has been found, move all tailing connections forward
@@ -1797,14 +1793,20 @@ void Game::updateSecColors(string newColor) {
 
 void Game::updateWindow(int w, int h, bool full) {
     // update the size and fullscreen state of the window
+
+	// update window size
     SDL_SetWindowSize(*gameWindow, w, h);
     swidth = w;
     sheight = h;
+
+	// set fullscreen
     if (full == true) {
         SDL_SetWindowFullscreen(*gameWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
     } else {
         SDL_SetWindowFullscreen(*gameWindow, 0);
     }
+
+	// set resolution used in actual game calculation (will vary with fullscreen)
     if (full == true) {
         SDL_GetWindowSize(*gameWindow, &swidthActual, &sheightActual);
     } else {
@@ -2497,14 +2499,17 @@ void OptionPage::updateGame(Game* game) {
     // update the config file with the current settings
     ofstream configFile;
     configFile.open(CONFIG_FILE_LOCATION);
+    
     configFile << CONFIG_SWIDTH << "=" << game->configScreenWidth() << "\n";
     configFile << CONFIG_SHEIGHT << "=" << game->configScreenHeight() << "\n";
     configFile << CONFIG_FULLSCREEN << "=" << game->isFullscreen() << "\n";
+
     configFile << CONFIG_PRIMCOLOR << "=" << game->primColor() << "\n";
     configFile << CONFIG_SECCOLOR << "=" << game->secColor() << "\n";
+
     configFile << CONFIG_USERNAME << "=" << game->getUsername() << "\n";
     configFile << CONFIG_HOSTIP << "=" << game->hIP() << "\n";
-    configFile << CONFIG_ISHOST << "=" << game->hosting() << "\n";
+
     configFile.close();
 }
 
@@ -2547,6 +2552,9 @@ void OptionPage::render(Game* game) {
 
 TutorialPage::TutorialPage(Game* game) {
     // create the tutorial page
+	header = loadText(UI_CONTROLS_HEADER, UI_FONT_SIZE, game->renderer());
+	content = loadImage(UI_CONTROLS_CONTENT_LOCATION, game->renderer());
+
     backButton = new Button(BUTTON_BACK_TOPLEFT_X, BUTTON_BACK_TOPLEFT_Y,
      BUTTON_BACK_WIDTH, BUTTON_BACK_HEIGHT, BUTTON_MENU, "back", false, "Back", game);
 }
@@ -2579,6 +2587,14 @@ int TutorialPage::update(int x, int y, bool press) {
 
 void TutorialPage::render(Game* game) {
     // render the tutorial page
+	SDL_Rect headerRect = { UI_CONTROLS_HEADER_TOPLEFT_X, UI_CONTROLS_HEADER_TOPLEFT_Y,
+	 UI_CONTROLS_HEADER_WIDTH, UI_CONTROLS_HEADER_HEIGHT };
+	SDL_RenderCopy(game->renderer(), header, NULL, &headerRect);
+
+	SDL_Rect contentRect = {0, 0, SCREEN_WIDTH_DEFAULT, SCREEN_HEIGHT_DEFAULT};
+	SDL_SetTextureColorMod(content, game->primaryColors().red, game->primaryColors().green, game->primaryColors().blue);
+	SDL_RenderCopy(game->renderer(), content, NULL, &contentRect);
+
     backButton->render(game);
 }
 
@@ -3744,10 +3760,10 @@ void Wall::renderShadow(int x, int y, Game* game) {
         else { // below wall
             n = 4;
             coordsX[0] = wallLocation.x;
-            coordsY[0] = wallLocation.y + wallLocation.h;
+            coordsY[0] = wallLocation.y + wallLocation.h-1;
 
             coordsX[1] = wallLocation.x + wallLocation.w;
-            coordsY[1] = wallLocation.y + wallLocation.h;
+            coordsY[1] = wallLocation.y + wallLocation.h-1;
 
             coordsX[2] = getInterceptX(x, y, wallLocation.x + wallLocation.w, wallLocation.y + wallLocation.h, 0);
             coordsY[2] = 0;
@@ -3773,10 +3789,10 @@ void Wall::renderShadow(int x, int y, Game* game) {
         }
         else { // right of wall
             n = 4;
-            coordsX[0] = wallLocation.x + wallLocation.w;
+            coordsX[0] = wallLocation.x + wallLocation.w-1;
             coordsY[0] = wallLocation.y;
 
-            coordsX[1] = wallLocation.x + wallLocation.w;
+            coordsX[1] = wallLocation.x + wallLocation.w-1;
             coordsY[1] = wallLocation.y + wallLocation.h;
 
             coordsX[2] = 0;
@@ -4310,7 +4326,7 @@ void generateMap(forward_list<Wall*>* wallContainer, forward_list<coordSet>* spa
     }
 
     // add a set of boxes to the set that will be used to create the walls
-    MapBox* boxSelected;
+    MapBox* boxSelected = new MapBox(0, 0, 0, 0, 0, 0);
     list<MapBox*> mapBoxesTemp;
     int boxSelection;
     int index;
@@ -4357,7 +4373,7 @@ UDPConnectionClient::UDPConnectionClient(Game* game) {
     // create a object to use in netcode as a client
     socket = SDLNet_UDP_Open(game->cPort()); // open a port
     if (!socket) {
-        cout << "SDLNet_UDP_open: " << SDLNet_GetError() << "\n";
+        cout << "SDLNet_UDP_open client: " << SDLNet_GetError() << "\n";
     }
     if (SDLNet_ResolveHost(&connectionIp, game->hIP().c_str(), game->hPort()) == -1) { // translate the hosts ip to a usable value
         cout << "SDLNet_ResolveHost: " << SDLNet_GetError() << "\n";
@@ -4377,12 +4393,17 @@ UDPConnectionClient::~UDPConnectionClient(void) {
     SDLNet_FreePacket(packetOut);
 }
 
-bool UDPConnectionClient::send(string msg) {
+bool UDPConnectionClient::send(string msg, int times) {
     // send a message to the host
     bool success = true;
     memcpy(packetOut->data, msg.c_str(), msg.length()+1);
     packetOut->len = msg.length()+1;
-    SDLNet_UDP_Send(socket, -1, packetOut);
+    for (int j = 0; j < times; j++) { // send the message multiple times to reduce the chance of it being lost
+        if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+            cout << "SDLNet_UDP_Send client: " << SDLNet_GetError() << "\n";
+            success = false;
+        }
+    }
     return success;
 }
 
@@ -4407,6 +4428,9 @@ connection UDPConnectionClient::recieve(string* field) {
 UDPConnectionServer::UDPConnectionServer(Game* game) {
     // create a host object for networking
     socket = SDLNet_UDP_Open(game->hPort()); // open the port
+    if (!socket) {
+        cout << "SDLNet_UDP_open server: " << SDLNet_GetError() << "\n";
+    }
 
     // create the packets for sending messages
     packetIn = SDLNet_AllocPacket(CHARBUFF_LENGTH);
@@ -4422,7 +4446,7 @@ UDPConnectionServer::~UDPConnectionServer(void) {
     SDLNet_FreePacket(packetOut);
 }
 
-bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
+bool UDPConnectionServer::send(string msg, int times, connection* ips, int numIps) {
     // send a message to all clients
     bool success = true;
     memcpy(packetOut->data, msg.c_str(), msg.length()+1); // load in the message
@@ -4431,16 +4455,18 @@ bool UDPConnectionServer::send(string msg, connection* ips, int numIps) {
         if (ips[i].ip != 0) {
             packetOut->address.host = ips[i].ip;
             packetOut->address.port = ips[i].port;
-            if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
-                cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
-                success = false;
+            for (int j = 0; j < times; j++) { // send the message multiple times to reduce the chance of it being lost
+                if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+                    cout << "SDLNet_UDP_Send server1: " << SDLNet_GetError() << "\n";
+                    success = false;
+                }
             }
         }
     }
     return success;
 }
 
-bool UDPConnectionServer::send(string msg, connection target) {
+bool UDPConnectionServer::send(string msg, int times, connection target) {
     // send a message to a single client
     bool success = true;
     memcpy(packetOut->data, msg.c_str(), msg.length()+1); // load the message
@@ -4450,9 +4476,11 @@ bool UDPConnectionServer::send(string msg, connection target) {
     packetOut->address.host = target.ip;
     packetOut->address.port = target.port;
 
-    if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) { // send the message and check it worked
-        cout << "SDLNet_UDP_Send server2: " << SDLNet_GetError() << "\n";
-        success = false;
+    for (int j = 0; j < times; j++) { // send the message multiple times to reduce the chance of it being lost
+        if (SDLNet_UDP_Send(socket, -1, packetOut) == 0) {
+            cout << "SDLNet_UDP_Send server2: " << SDLNet_GetError() << "\n";
+            success = false;
+        }
     }
     return success;
 }

@@ -157,8 +157,8 @@ const int COLOR_GREEN_BLUE = 0;
 
 // blue
 const string COLOR_BLUE_NAME = "blue";
-const int COLOR_BLUE_RED = 0;
-const int COLOR_BLUE_GREEN = 0;
+const int COLOR_BLUE_RED = 50;
+const int COLOR_BLUE_GREEN = 50;
 const int COLOR_BLUE_BLUE = 255;
 
 // purple
@@ -300,34 +300,34 @@ enum CHARACTER_WEAPONS {
 
 // Weapon Related Constants
 // ASSAULT RIFLE
-const int AR_CLIP_SIZE = 18; // number of shots before AR reloads
-const double AR_MAX_BULLET_SPREAD = 13; // max angle bullets can deflect by
-const double AR_RELOAD_SEC = 1.6;
+const int AR_CLIP_SIZE = 24; // number of shots before AR reloads
+const double AR_MAX_BULLET_SPREAD = 14; // max angle bullets can deflect by
+const double AR_RELOAD_SEC = 1.4;
 const double AR_RELOAD_FRAMES = AR_RELOAD_SEC*SCREEN_FPS; // number of frames in reload animation
 const double AR_SHOT_DELAY_SEC = 0.2;
 const double AR_SHOT_DELAY = AR_SHOT_DELAY_SEC*SCREEN_FPS; //number of frames between each projectile firing
-const double AR_PROJECTILE_SPEED_PS = 1000;
+const double AR_PROJECTILE_SPEED_PS = 900;
 const double AR_PROJECTILE_SPEED = AR_PROJECTILE_SPEED_PS / SCREEN_FPS; // speed of an AR projectile
 
                                                                         // PISTOL
 const int PISTOL_CLIP_SIZE = 8;
 const int PISTOL_MIN_BULLET_SPREAD = 5;
-const int PISTOL_MAX_BULLET_SPREAD = 40;
-const double PISTOL_RELOAD_SEC = 0.9;
+const int PISTOL_MAX_BULLET_SPREAD = 50;
+const double PISTOL_RELOAD_SEC = 1.2;
 const double PISTOL_RELOAD_FRAMES = PISTOL_RELOAD_SEC*SCREEN_FPS;
-const double PISTOL_RECOIL_INCREASE_PER_SHOT = 30;
-const double PISTOL_RECOIL_RECOVERY_PS = 90;
+const double PISTOL_RECOIL_INCREASE_PER_SHOT = 20;
+const double PISTOL_RECOIL_RECOVERY_PS = 55;
 const double PISTOL_RECOIL_RECOVERY_PER_FRAME = PISTOL_RECOIL_RECOVERY_PS / SCREEN_FPS;
-const double PISTOL_PROJECTILE_SPEED_PS = 1100;
+const double PISTOL_PROJECTILE_SPEED_PS = 1020;
 const double PISTOL_PROJECTILE_SPEED = PISTOL_PROJECTILE_SPEED_PS / SCREEN_FPS;
 
 // SHOTGUN
-const int SHOTGUN_PROJECTILES_PER_SHOT = 6;
-const double SHOTGUN_SPREAD_RANGE = 45;
+const int SHOTGUN_PROJECTILES_PER_SHOT = 5;
+const double SHOTGUN_SPREAD_RANGE = 42;
 const double SHOTGUN_PROJECTILE_SPREAD = SHOTGUN_SPREAD_RANGE / SHOTGUN_PROJECTILES_PER_SHOT;
-const double SHOTGUN_SHOT_DELAY_SEC = 1.5;
+const double SHOTGUN_SHOT_DELAY_SEC = 1.3;
 const double SHOTGUN_SHOT_DELAY = SHOTGUN_SHOT_DELAY_SEC*SCREEN_FPS;
-const double SHOTGUN_PROJECTILE_SPEED_PS = 500;
+const double SHOTGUN_PROJECTILE_SPEED_PS = 1000;
 const double SHOTGUN_PROJECTILE_SPEED = SHOTGUN_PROJECTILE_SPEED_PS / SCREEN_FPS;
 
 
@@ -475,6 +475,14 @@ const int UI_HOST_INFO_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.08;
 const int UI_HOST_INFO_WIDTH = UI_HOST_INFO_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH*UI_HOST_INFO.length();
 const int UI_HOST_INFO_TOPLEFT_X = SCREEN_WIDTH_DEFAULT-(SCREEN_WIDTH_DEFAULT*0.03+UI_HOST_INFO_WIDTH);
 const int UI_HOST_INFO_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT-(SCREEN_WIDTH_DEFAULT*0.03+UI_HOST_INFO_HEIGHT);
+
+const string UI_CONTROLS_HEADER = "Controls";
+const int UI_CONTROLS_HEADER_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.13;
+const int UI_CONTROLS_HEADER_WIDTH = UI_CONTROLS_HEADER_HEIGHT*UI_FONT_HEIGHT_TO_WIDTH*UI_CONTROLS_HEADER.length();
+const int UI_CONTROLS_HEADER_TOPLEFT_X = (SCREEN_WIDTH_DEFAULT-UI_CONTROLS_HEADER_WIDTH)/2;
+const int UI_CONTROLS_HEADER_TOPLEFT_Y = SCREEN_HEIGHT_DEFAULT*0.03;
+
+const string UI_CONTROLS_CONTENT_LOCATION = "images/controlsMenu.png";
 
 
 const int UI_WINDISPLAY_HEIGHT = SCREEN_HEIGHT_DEFAULT*0.15;
@@ -711,13 +719,13 @@ const int HUD_HEALTH_HEIGHT = HUD_HEIGHT*0.05;
 const int HUD_HEALTH_TOPLEFT_X = 0;
 const int HUD_HEALTH_TOPLEFT_Y = HUD_HEIGHT - (HUD_AMMO_HEIGHT + HUD_HEALTH_HEIGHT);
 
-const int HUD_HEALTH_BOX_RED = 175;
+const int HUD_HEALTH_BOX_RED = 150;
 const int HUD_HEALTH_BOX_BLUE = 0;
 const int HUD_HEALTH_BOX_GREEN = 0;
 
 const int HUD_HEALTH_BAR_RED = 255;
-const int HUD_HEALTH_BAR_GREEN = 0;
-const int HUD_HEALTH_BAR_BLUE = 0;
+const int HUD_HEALTH_BAR_GREEN = 20;
+const int HUD_HEALTH_BAR_BLUE = 20;
 
 const int HUD_HEALTH_DIVIDE_WIDTH = HUD_WIDTH*0.01;
 const int HUD_HEALTH_DIVIDE_HEIGHT = HUD_HEALTH_HEIGHT;
@@ -769,6 +777,10 @@ const int MESSAGE_LOC_CHAR = 4;
 const int MESSAGE_ANGLE_CHAR = 3;
 const int MESSAGE_FRAMES_CHAR = 5;
 const int MESSAGE_STAT_CHAR = 2;
+
+// the number of times single send messages are sent
+const int MESSAGE_RESEND_TIMES = 3;
+
 
 
 
@@ -871,7 +883,7 @@ public:
     string getProjectileString(void);
     string getExplosionString(void);
 
-    void removePlayer(int playerip);
+    void removePlayer(connection playerip);
 
     int getInput(bool inLobby, bool inMenu);
     void sendUserActions(bool paused);
@@ -1026,6 +1038,9 @@ public:
 
 class TutorialPage {
 protected:
+	SDL_Texture* header;
+	SDL_Texture* content;
+
     Button* backButton;
 public:
     TutorialPage(Game* game);
@@ -1390,7 +1405,7 @@ private:
 public:
     UDPConnectionClient(Game* game);
     ~UDPConnectionClient(void);
-    bool send(string msg);
+    bool send(string msg, int times);
     connection recieve(string* field);
 };
 
@@ -1404,8 +1419,8 @@ private:
 public:
     UDPConnectionServer(Game* game);
     ~UDPConnectionServer(void);
-    bool send(string msg, connection* ips, int numIps);
-    bool send(string msg, connection target);
+    bool send(string msg, int times, connection* ips, int numIps);
+    bool send(string msg, int times, connection target);
     connection recieve(string* field);
 };
 

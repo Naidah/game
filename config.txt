@@ -1,8 +1,8 @@
-swidth=622
-sheight=350
+swidth=1156
+sheight=650
 fullscreen=0
-primaryColor=blue
-secondaryColor=red
+primaryColor=pink
+secondaryColor=white
 username=Twelve
 hostip=127.0.0.1
-ishost=1
+clientport=2881

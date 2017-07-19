@@ -1,9 +1,0 @@
-swidth=675
-sheight=325
-fullscreen=0
-primaryColor=pink
-secondaryColor=green
-ishost=1
-hostip=127.0.0.1
-hostport=3456
-clientport=6543
